@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Contract §8: no raw data, artifacts, model weights or secrets in git
+data/samples/*/
+!data/samples/*/normalized_telemetry.csv
+!data/samples/*/normalized_telemetry.meta.json
+!data/samples/*/*.truth.json
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.SRT
+!tests/fixtures/*.srt
+data/projects/
+.env

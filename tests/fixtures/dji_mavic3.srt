@@ -1,0 +1,23 @@
+1
+00:00:00,000 --> 00:00:00,033
+<font size="28">SrtCnt : 1, DiffTime : 33ms
+2026-08-20 09:14:02,417,860
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [ct : 5314] [color_md : default] [focal_len : 240] [latitude: 18.5204100] [longitude: 73.8567400] [rel_alt: 30.100 abs_alt: 590.300] </font>
+
+2
+00:00:00,033 --> 00:00:00,066
+<font size="28">SrtCnt : 2, DiffTime : 33ms
+2026-08-20 09:14:02,450,860
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [ct : 5314] [color_md : default] [focal_len : 240] [latitude: 18.5204190] [longitude: 73.8567480] [rel_alt: 30.200 abs_alt: 590.400] </font>
+
+3
+00:00:00,066 --> 00:00:00,100
+<font size="28">SrtCnt : 3, DiffTime : 33ms
+2026-08-20 09:14:02,483,860
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [ct : 5314] [color_md : default] [focal_len : 240] [latitude: 18.5204280] [longitude: 73.8567560] [rel_alt: 30.250 abs_alt: 590.450] </font>
+
+4
+00:00:00,100 --> 00:00:00,133
+<font size="28">SrtCnt : 4, DiffTime : 33ms
+2026-08-20 09:14:02,517,860
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [ct : 5314] [color_md : default] [focal_len : 240] [latitude: 18.5204370] [longitude: 73.8567640] [rel_alt: 30.300 abs_alt: 590.500] </font>
