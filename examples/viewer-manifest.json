@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "project_id": "prj_example",
+  "run_id": "run_example",
+  "synthetic_fixture": true,
+  "cloud": {
+    "url": "/api/runs/run_example/artifacts/sparse/sparse_local.ply",
+    "format": "PLY",
+    "coordinate_frame": "LOCAL_ENU_METRES"
+  },
+  "camera_path": {
+    "url": "/api/runs/run_example/artifacts/camera_poses.csv",
+    "coordinate_frame": "LOCAL_ENU_METRES"
+  },
+  "selected_frames": {
+    "url": "/api/runs/run_example/artifacts/keyframes.json"
+  },
+  "confidence_legend": [
+    {"label": "OBSERVED_HIGH", "color": "#20bf6b", "measurement": "ALLOWED"},
+    {"label": "OBSERVED_MEDIUM", "color": "#f5a30b", "measurement": "CAUTION"},
+    {"label": "OBSERVED_LOW", "color": "#ef4444", "measurement": "CONFIRM"},
+    {"label": "AI_ASSISTED_NOT_MEASURABLE", "color": "#a855f7", "measurement": "DISABLED"},
+    {"label": "UNSEEN", "color": "#64748b", "measurement": "DISABLED"}
+  ],
+  "measurement_reference": {
+    "label": "Independent known distance",
+    "reference_m": 10.0,
+    "measured_m": 10.6,
+    "percent_error": 6.0,
+    "synthetic_fixture": true
+  },
+  "quality_report_url": "/api/runs/run_example/artifacts/quality_report.json"
+}

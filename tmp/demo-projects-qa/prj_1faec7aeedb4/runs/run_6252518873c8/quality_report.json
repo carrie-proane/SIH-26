@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "project_id": "prj_1faec7aeedb4",
+  "run_id": "run_6252518873c8",
+  "stage": "REPORTING",
+  "status": "COMPLETED",
+  "created_at": "2026-08-25T09:19:23.894982+00:00",
+  "config_version": "1.0",
+  "run_configuration": {
+    "config_version": "1.0",
+    "profile": "smoke",
+    "matcher": "SIFT",
+    "execution_mode": "SYNTHETIC_DEMO",
+    "camera_model": "SIMPLE_RADIAL",
+    "sequential_overlap": 10,
+    "use_gpu": false,
+    "known_distance_m": 10.0,
+    "measured_distance_m": 10.6,
+    "local_origin": null,
+    "preprocessing_run": null
+  },
+  "synthetic_fixture": true,
+  "metrics": {
+    "eligible_frames": 10,
+    "registered_frames": 9,
+    "registered_frame_rate": 0.9,
+    "registered_frame_gate_80_percent": true,
+    "median_reprojection_error_px": 0.9,
+    "p95_reprojection_error_px": 1.4,
+    "reprojection_gate_1_5_px": true,
+    "runtime_s": 0.01,
+    "known_distance": {
+      "status": "MEASURED",
+      "reference_m": 10.0,
+      "measured_m": 10.6,
+      "absolute_error_m": 0.5999999999999996,
+      "signed_error_m": 0.5999999999999996,
+      "percent_error": 5.9999999999999964,
+      "passes_10_percent_gate": true
+    },
+    "coverage": {
+      "status": "NOT_EVALUATED",
+      "reason": "Reference visible-region mask not supplied."
+    }
+  },
+  "confidence_contract": [
+    "OBSERVED_HIGH",
+    "OBSERVED_MEDIUM",
+    "OBSERVED_LOW",
+    "AI_ASSISTED_NOT_MEASURABLE",
+    "UNSEEN"
+  ],
+  "warnings": [
+    {
+      "code": "FFPROBE_SKIPPED",
+      "message": "Synthetic demo did not inspect a real codec."
+    }
+  ],
+  "limitations": [
+    "Geometry is defensible only where observed by multiple source frames.",
+    "Ordinary GNSS is a soft alignment prior and is not survey-grade ground truth.",
+    "AI-assisted geometry is excluded from verified measurement.",
+    "Unseen surfaces are not reconstructed or claimed as measured."
+  ]
+}

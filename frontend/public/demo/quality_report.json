@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "project_id": "prj_offline_ui_fixture",
+  "run_id": "run_offline_ui_fixture",
+  "stage": "REPORTING",
+  "status": "COMPLETED",
+  "created_at": "2026-08-25T09:24:12.151945+00:00",
+  "config_version": "1.0",
+  "synthetic_fixture": true,
+  "metrics": {
+    "eligible_frames": 10,
+    "registered_frames": 9,
+    "registered_frame_rate": 0.9,
+    "registered_frame_gate_80_percent": true,
+    "median_reprojection_error_px": 0.9,
+    "p95_reprojection_error_px": 1.4,
+    "reprojection_gate_1_5_px": true,
+    "runtime_s": 0.01,
+    "metric_alignment": { "scale": 1.0, "camera_pairs": 10 },
+    "known_distance": {
+      "status": "MEASURED",
+      "reference_m": 10.0,
+      "measured_m": 10.6,
+      "percent_error": 6.0,
+      "passes_10_percent_gate": true
+    },
+    "coverage": { "status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied." }
+  },
+  "confidence_contract": [
+    "OBSERVED_HIGH",
+    "OBSERVED_MEDIUM",
+    "OBSERVED_LOW",
+    "AI_ASSISTED_NOT_MEASURABLE",
+    "UNSEEN"
+  ],
+  "warnings": [
+    { "code": "SYNTHETIC_FIXTURE", "message": "Offline fixture is for deterministic UI verification only." },
+    { "code": "SOURCE_IMAGES_UNAVAILABLE", "message": "No real selected-frame images are declared in this fixture." }
+  ],
+  "limitations": [
+    "Geometry is defensible only where observed by multiple source frames.",
+    "Ordinary GNSS is a soft alignment prior and is not survey-grade ground truth.",
+    "AI-assisted geometry is excluded from verified measurement.",
+    "Unseen surfaces are not reconstructed or claimed as measured."
+  ]
+}

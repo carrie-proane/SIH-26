@@ -1,0 +1,40 @@
+{
+  "coordinate_frame": "LOCAL_ENU_METRES",
+  "inlier_count": 10,
+  "residuals_m": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "rotation": [
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "scale": 1.0,
+  "synthetic_fixture": true,
+  "translation_m": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

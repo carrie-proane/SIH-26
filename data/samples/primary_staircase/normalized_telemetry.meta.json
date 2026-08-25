@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "source_file": "data/samples/primary_staircase/synthetic_telemetry.srt",
+  "source_format": "dji_srt",
+  "source_dialect": "mavic3_bracket",
+  "parser_version": "0.1.0",
+  "row_count": 162,
+  "duration_s": 16.1,
+  "sample_rate_hz_estimated": 10.0,
+  "time_origin": "srt_cue_start",
+  "coordinate_frame": "WGS84",
+  "altitude_reference": "relative_to_launch",
+  "warnings": [
+    {
+      "code": "SHORT_DURATION",
+      "detail": "16.1s telemetry; contract targets a 30-60s scene",
+      "count": 1
+    }
+  ],
+  "field_coverage": {
+    "lat": 1.0,
+    "lon": 1.0,
+    "alt_m": 1.0
+  },
+  "checksum_sha256_source": "5fb14e8e59dc253a634769df2503fe60575167d44864c7df15e209da019271dd"
+}

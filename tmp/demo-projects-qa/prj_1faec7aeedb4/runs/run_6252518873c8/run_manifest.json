@@ -1,0 +1,128 @@
+{
+  "artifacts": [
+    {
+      "created_at": "2026-08-25T09:19:23.893835+00:00",
+      "media_type": "text/csv",
+      "name": "camera_poses.csv",
+      "relative_path": "camera_poses.csv",
+      "sha256": "14f63c5a060ca439634cad6fbfe7167843608f99851c00795c19b11e9692bf47",
+      "size_bytes": 344
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.893121+00:00",
+      "media_type": "text/csv",
+      "name": "frame_scores.csv",
+      "relative_path": "frame_scores.csv",
+      "sha256": "02260d17bdb5c7a1db0d6f64a78866d3afab416f036e0368fad9646c1c944675",
+      "size_bytes": 260
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.892373+00:00",
+      "media_type": "application/json",
+      "name": "ingest_report.json",
+      "relative_path": "ingest_report.json",
+      "sha256": "c84da1d674b400e3314928a5bc6adc699ca2c74df27d5a2c129103276e9f8c13",
+      "size_bytes": 1078
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.893052+00:00",
+      "media_type": "application/json",
+      "name": "keyframes.json",
+      "relative_path": "keyframes.json",
+      "sha256": "19a1025597939c4ce8d2556e55f0f11a9d0904c9030f199b1e1cae97f93cc764",
+      "size_bytes": 1250
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.894486+00:00",
+      "media_type": "application/json",
+      "name": "matcher_benchmark.json",
+      "relative_path": "matcher_benchmark.json",
+      "sha256": "43977b557cc1dd81961f2183d62cfe3472019b84ef873fb8d15065c7ec59cb1b",
+      "size_bytes": 489
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.895234+00:00",
+      "media_type": "application/json",
+      "name": "quality_report.json",
+      "relative_path": "quality_report.json",
+      "sha256": "e36916ba613740fcaa6472903f70edcebb6e5cb4bdab2267f4154a4998fdaf24",
+      "size_bytes": 1899
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.893771+00:00",
+      "media_type": "application/octet-stream",
+      "name": "sparse.ply",
+      "relative_path": "sparse/sparse.ply",
+      "sha256": "bf608b844f4ae536407d74dff6c1fdd81702847794fc3fbb9f4e9edc2a1e658f",
+      "size_bytes": 402
+    },
+    {
+      "created_at": "2026-08-25T09:19:23.894416+00:00",
+      "media_type": "application/json",
+      "name": "sparse_metrics.json",
+      "relative_path": "sparse_metrics.json",
+      "sha256": "701eebdf1be803b2fbd9c46076cd9ae90c8f7aa1d23d9b4974654d2aaaf27bf7",
+      "size_bytes": 250
+    }
+  ],
+  "config": {
+    "camera_model": "SIMPLE_RADIAL",
+    "config_version": "1.0",
+    "execution_mode": "SYNTHETIC_DEMO",
+    "known_distance_m": 10.0,
+    "local_origin": null,
+    "matcher": "SIFT",
+    "measured_distance_m": 10.6,
+    "preprocessing_run": null,
+    "profile": "smoke",
+    "sequential_overlap": 10,
+    "use_gpu": false
+  },
+  "config_version": "1.0",
+  "created_at": "2026-08-25T09:19:23.891380+00:00",
+  "events": [
+    {
+      "message": "Inspecting immutable input assets.",
+      "progress": 10,
+      "stage": "INGESTING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:19:23.891769+00:00"
+    },
+    {
+      "message": "Validating selected-frame handoff.",
+      "progress": 30,
+      "stage": "PREPROCESSING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:19:23.892580+00:00"
+    },
+    {
+      "message": "Running sparse reconstruction.",
+      "progress": 55,
+      "stage": "RECONSTRUCTING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:19:23.893304+00:00"
+    },
+    {
+      "message": "Generating trust and known-distance report.",
+      "progress": 85,
+      "stage": "REPORTING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:19:23.894754+00:00"
+    },
+    {
+      "message": "Run completed.",
+      "progress": 100,
+      "stage": "COMPLETED",
+      "status": "COMPLETED",
+      "timestamp": "2026-08-25T09:19:23.895490+00:00"
+    }
+  ],
+  "failure_reason": null,
+  "progress": 100,
+  "project_id": "prj_1faec7aeedb4",
+  "run_id": "run_6252518873c8",
+  "stage": "COMPLETED",
+  "status": "COMPLETED",
+  "synthetic_fixture": true,
+  "updated_at": "2026-08-25T09:19:23.895493+00:00"
+}

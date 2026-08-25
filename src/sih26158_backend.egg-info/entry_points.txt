@@ -1,0 +1,2 @@
+[console_scripts]
+sih26158 = sih26158.cli:main

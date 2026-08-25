@@ -1,0 +1,157 @@
+{
+  "schema_version": "1.0",
+  "bundle_id": "primary_staircase",
+  "subject": "Hostel staircase - single flight, 9 steps, metal railing, entrance door at top landing",
+  "captured": "2026-08-25",
+  "captured_by": "Yosha",
+  "video": {
+    "filename": "20260825_154043.mp4",
+    "duration_s": 16.16,
+    "resolution": "1920x1080",
+    "display_rotation_deg": -90,
+    "effective_orientation": "portrait (1080x1920 after rotation)",
+    "fps": 30,
+    "codec": "h264 High",
+    "bitrate_mbps": 17.23,
+    "frame_count": 483,
+    "note": "Rotation is carried in a Display Matrix side-data flag, not baked into the stream. Extraction MUST honour it explicitly or frames come out sideways. See extract command in SAMPLES.md."
+  },
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "measured",
+      "what": "step rise (vertical height of one step)",
+      "value_m": 0.175,
+      "instrument": "ruler",
+      "tolerance_m": 0.0025,
+      "endpoints": "tread surface to tread surface of the step above",
+      "baseline_class": "short",
+      "measurement_allowed": false,
+      "note": "10% of this is 1.75 cm, at or below expected point-cloud edge noise for phone video. Kept as a scale-sensitivity data point for the trust report, NOT as a headline verified measurement."
+    },
+    {
+      "id": "M2",
+      "kind": "measured",
+      "what": "step tread (horizontal depth of one step)",
+      "value_m": 0.275,
+      "instrument": "ruler",
+      "tolerance_m": 0.0025,
+      "endpoints": "front edge (nosing) to the riser face behind it",
+      "baseline_class": "short",
+      "measurement_allowed": false,
+      "note": "Same scale caveat as M1."
+    },
+    {
+      "id": "M3",
+      "kind": "measured",
+      "what": "railing height (metal bar top, above tread)",
+      "value_m": 1.04,
+      "instrument": "ruler",
+      "tolerance_m": 0.005,
+      "endpoints": "tread surface up to top surface of the metal top rail",
+      "baseline_class": "medium",
+      "measurement_allowed": true,
+      "note": "Longest DIRECTLY measured span available. Vertical, so the lower endpoint sits on a tread the operator walked over - tread surfaces reconstruct less cleanly than the rail itself. Prefer M6 as the headline.",
+      "role": "validation_reference",
+      "role_note": "Independently validates the scale set by M6. Chosen because it is directly measured (not derived) and spans a different axis \u2014 vertical, versus M6 along the incline."
+    }
+  ],
+  "derived": [
+    {
+      "id": "M4",
+      "kind": "derived",
+      "what": "total rise across all 9 steps",
+      "value_m": 1.575,
+      "formula": "9 x M1",
+      "assumption": "all 9 steps have equal rise",
+      "assumption_basis": "Staircases are built to a uniform rise by building code; visual inspection of the footage shows no obvious irregular step.",
+      "error_budget_m": {
+        "random": 0.0075,
+        "systematic": 0.0225
+      },
+      "error_budget_pct": {
+        "random": 0.48,
+        "systematic": 1.43
+      },
+      "baseline_class": "long",
+      "measurement_allowed": true,
+      "note": "NOT independently measured. Inherits the equal-step assumption and compounds ruler error 9x. Must be labelled DERIVED wherever it is shown."
+    },
+    {
+      "id": "M5",
+      "kind": "derived",
+      "what": "total run across all 9 steps",
+      "value_m": 2.475,
+      "formula": "9 x M2",
+      "assumption": "all 9 steps have equal tread depth",
+      "error_budget_m": {
+        "random": 0.0075,
+        "systematic": 0.0225
+      },
+      "error_budget_pct": {
+        "random": 0.3,
+        "systematic": 0.91
+      },
+      "baseline_class": "long",
+      "measurement_allowed": true
+    },
+    {
+      "id": "M6",
+      "kind": "derived",
+      "what": "flight slope length (bottom step front edge to top step front edge, along the incline)",
+      "value_m": 2.934,
+      "formula": "hypot(9 x M2, 9 x M1) = hypot(2.475, 1.575)",
+      "assumption": "uniform steps; flight is straight with no intermediate landing",
+      "error_budget_pct": {
+        "random": 0.35,
+        "systematic": 1.05
+      },
+      "baseline_class": "long",
+      "measurement_allowed": true,
+      "is_primary_reference": true,
+      "note": "RECOMMENDED HEADLINE MEASUREMENT. Longest baseline available at 293.4 cm, so the contract's 10% gate is +/-29.3 cm rather than +/-1.75 cm on a single step - well clear of point-cloud noise. Endpoints are step nosings, which are high-contrast edges and the sharpest click targets in the scene.",
+      "derived_geometry": {
+        "pitch_deg": 32.5
+      },
+      "role": "scale_reference",
+      "role_note": "Consumed to fix the cloud scale factor. Because it is consumed, it CANNOT also serve as the validation check \u2014 that would yield 0% error by construction."
+    }
+  ],
+  "click_guidance": {
+    "M6": "Click the front edge (nosing) of the bottom step at the wall side, then the front edge of the top step at the same wall side. Staying on one side avoids picking up the flight's width as an error term.",
+    "M3": "Click the top surface of the metal rail, then straight down to the tread directly below it. Pick a rail section away from a post so the top bar is unambiguous.",
+    "general": "Prefer nosings and the metal rail over flat concrete. Both are high-contrast edges; flat tread interiors are low-texture and noisy in the cloud."
+  },
+  "limitations": [
+    "Only three primitives were physically measured. Every long baseline here is derived from them under a uniform-step assumption, not independently tape-measured.",
+    "Ruler at ruler precision (~2.5 mm) over short spans; systematic bias compounds 9x into the derived values. Systematic error is the dominant term, at roughly 1% of the derived lengths.",
+    "No printed fiducial markers with a surveyed separation, so there is no measurement in this bundle that is independent of the uniform-step assumption.",
+    "Video is 16.2 s against the contract's 30-60 s target, limiting retained-keyframe count.",
+    "Portrait orientation narrows horizontal field of view, reducing scene context per frame."
+  ],
+  "honesty_note": "M4/M5/M6 are DERIVED, not measured. The quality report and the UI must both say so. Presenting a derived length as an independently verified measurement would breach contract section 1 - we do not overstate what has been verified.",
+  "scale_and_validation": {
+    "why_two_are_needed": "Monocular SfM is scale-ambiguous: COLMAP recovers shape but not absolute size. One known length must be consumed to fix metres-per-cloud-unit. Validating against that same length returns 0% error by construction and proves nothing.",
+    "scale_reference": "M6",
+    "validation_reference": "M3",
+    "gate_pct": 10.0,
+    "command": "python scripts/known_distance_check.py --ground-truth data/samples/primary_staircase/ground_truth.json --scale-id M6 --validate-id M3 --scale-points X,Y,Z X,Y,Z --validate-points X,Y,Z X,Y,Z"
+  },
+  "open_question": {
+    "railing_height_discrepancy": "Two values were reported for railing height: 74 cm and 104 cm. M3 currently uses 104 cm (stated as 'the metal bar'). If 74 cm was rail-above-tread and 104 cm is a different span (e.g. from a landing, or including posts), both should be recorded separately and the click guidance for M3 corrected. UNRESOLVED \u2014 confirm before M3 is used as the validation reference."
+  },
+  "gps": {
+    "present_in_video": false,
+    "checked": "format tags, stream tags, and a raw scan for the \u00a9xyz / ISO6709 location atoms Android uses. No location atom, no udta/meta block.",
+    "why_absent": "Indoor stairwell \u2014 no GPS fix available; location tagging likely off.",
+    "why_it_does_not_matter": "Scale comes from tape-measured dimensions, not telemetry. Consumer GPS error is metre-scale, larger than most of the spans being measured here, so it could not set scale even if present.",
+    "synthetic_track": {
+      "file": "synthetic_telemetry.srt",
+      "placeholder_coords": [
+        18.5204,
+        73.8567
+      ],
+      "placeholder_warning": "These coordinates are INVENTED \u2014 a generic Pune point. They are not the hostel's location and must never be presented as recorded position. Replace with real coordinates from Google Maps if a plausible map pin is wanted; purely cosmetic."
+    }
+  }
+}

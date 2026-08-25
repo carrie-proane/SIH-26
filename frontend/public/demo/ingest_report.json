@@ -1,0 +1,30 @@
+{
+  "project_id": "prj_offline_ui_fixture",
+  "run_id": "run_offline_ui_fixture",
+  "synthetic_fixture": true,
+  "input_assets": [
+    {
+      "role": "video",
+      "original_name": "synthetic_demo.mp4",
+      "relative_path": "input/video_synthetic_demo.mp4",
+      "size_bytes": 32,
+      "sha256": "7e6dfe75f25202fb0ba175dcc5c8245751a919873eb1c5ba9b8771897bd052af",
+      "media_type": "video/mp4"
+    },
+    {
+      "role": "telemetry",
+      "original_name": "synthetic_telemetry.csv",
+      "relative_path": "input/telemetry_synthetic_telemetry.csv",
+      "size_bytes": 70,
+      "sha256": "9afc2199ed8fabf459608d52a908c4c9a79c315462a686d46a44624618f22a6a",
+      "media_type": "text/csv"
+    }
+  ],
+  "video_probe": {
+    "format": { "filename": "synthetic_demo.mp4", "format_name": "synthetic_fixture" },
+    "streams": []
+  },
+  "warnings": [
+    { "code": "FFPROBE_SKIPPED", "message": "Synthetic demo did not inspect a real codec." }
+  ]
+}
