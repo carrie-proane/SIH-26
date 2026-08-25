@@ -1,0 +1,10 @@
+{
+  "config_version": "1.0",
+  "profile": "balanced",
+  "matcher": "SIFT",
+  "execution_mode": "COLMAP",
+  "camera_model": "SIMPLE_RADIAL",
+  "sequential_overlap": 12,
+  "use_gpu": false
+}
+

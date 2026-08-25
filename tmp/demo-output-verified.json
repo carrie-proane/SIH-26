@@ -1,0 +1,172 @@
+{
+  "project_id": "prj_0cbd916d62ce",
+  "run_id": "run_75cc8440ab7e",
+  "stage": "COMPLETED",
+  "status": "COMPLETED",
+  "progress": 100,
+  "created_at": "2026-08-25T09:24:12.147166+00:00",
+  "updated_at": "2026-08-25T09:24:12.152424+00:00",
+  "config_version": "1.0",
+  "config": {
+    "config_version": "1.0",
+    "profile": "smoke",
+    "matcher": "SIFT",
+    "execution_mode": "SYNTHETIC_DEMO",
+    "camera_model": "SIMPLE_RADIAL",
+    "sequential_overlap": 10,
+    "use_gpu": false,
+    "known_distance_m": 10.0,
+    "measured_distance_m": 10.6,
+    "local_origin": null,
+    "preprocessing_run": null
+  },
+  "environment": {
+    "colmap": null,
+    "fastapi": "0.141.1",
+    "ffprobe": null,
+    "numpy": "2.3.5",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "pydantic": "2.13.4",
+    "python": "3.12.13"
+  },
+  "failure_reason": null,
+  "events": [
+    {
+      "stage": "INGESTING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:24:12.147694+00:00",
+      "progress": 10,
+      "message": "Inspecting immutable input assets."
+    },
+    {
+      "stage": "PREPROCESSING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:24:12.148405+00:00",
+      "progress": 30,
+      "message": "Validating selected-frame handoff."
+    },
+    {
+      "stage": "RECONSTRUCTING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:24:12.149462+00:00",
+      "progress": 55,
+      "message": "Running sparse reconstruction."
+    },
+    {
+      "stage": "REPORTING",
+      "status": "STARTED",
+      "timestamp": "2026-08-25T09:24:12.151589+00:00",
+      "progress": 85,
+      "message": "Generating trust and known-distance report."
+    },
+    {
+      "stage": "COMPLETED",
+      "status": "COMPLETED",
+      "timestamp": "2026-08-25T09:24:12.152422+00:00",
+      "progress": 100,
+      "message": "Run completed."
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "camera_poses.csv",
+      "relative_path": "camera_poses.csv",
+      "media_type": "text/csv",
+      "size_bytes": 344,
+      "sha256": "14f63c5a060ca439634cad6fbfe7167843608f99851c00795c19b11e9692bf47",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/camera_poses.csv",
+      "created_at": "2026-08-25T09:24:12.149906+00:00"
+    },
+    {
+      "name": "frame_scores.csv",
+      "relative_path": "frame_scores.csv",
+      "media_type": "text/csv",
+      "size_bytes": 260,
+      "sha256": "02260d17bdb5c7a1db0d6f64a78866d3afab416f036e0368fad9646c1c944675",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/frame_scores.csv",
+      "created_at": "2026-08-25T09:24:12.149188+00:00"
+    },
+    {
+      "name": "ingest_report.json",
+      "relative_path": "ingest_report.json",
+      "media_type": "application/json",
+      "size_bytes": 1078,
+      "sha256": "9130cbe2385ac60b9f3ac49e48026b217c13b848a6e76b2e6e9bc57512b04ce5",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/ingest_report.json",
+      "created_at": "2026-08-25T09:24:12.148238+00:00"
+    },
+    {
+      "name": "keyframes.json",
+      "relative_path": "keyframes.json",
+      "media_type": "application/json",
+      "size_bytes": 1250,
+      "sha256": "19a1025597939c4ce8d2556e55f0f11a9d0904c9030f199b1e1cae97f93cc764",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/keyframes.json",
+      "created_at": "2026-08-25T09:24:12.149095+00:00"
+    },
+    {
+      "name": "local_transform.json",
+      "relative_path": "local_transform.json",
+      "media_type": "application/json",
+      "size_bytes": 432,
+      "sha256": "48c965f59cc9170921ffd42182062d5e49c9c06574d8a92677e00ce6d67bc9c2",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/local_transform.json",
+      "created_at": "2026-08-25T09:24:12.150488+00:00"
+    },
+    {
+      "name": "matcher_benchmark.json",
+      "relative_path": "matcher_benchmark.json",
+      "media_type": "application/json",
+      "size_bytes": 489,
+      "sha256": "43977b557cc1dd81961f2183d62cfe3472019b84ef873fb8d15065c7ec59cb1b",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/matcher_benchmark.json",
+      "created_at": "2026-08-25T09:24:12.151292+00:00"
+    },
+    {
+      "name": "normalized_telemetry.csv",
+      "relative_path": "normalized_telemetry.csv",
+      "media_type": "text/csv",
+      "size_bytes": 389,
+      "sha256": "10f6d8fd5125fe350d62afea8a2363a81cf22e7795a22207332bed709ad66858",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/normalized_telemetry.csv",
+      "created_at": "2026-08-25T09:24:12.149273+00:00"
+    },
+    {
+      "name": "quality_report.json",
+      "relative_path": "quality_report.json",
+      "media_type": "application/json",
+      "size_bytes": 2144,
+      "sha256": "64601b01c2f723aea5066e87b701c699f5208029a2923f51ac48071b7d40c112",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/quality_report.json",
+      "created_at": "2026-08-25T09:24:12.152120+00:00"
+    },
+    {
+      "name": "sparse.ply",
+      "relative_path": "sparse/sparse.ply",
+      "media_type": "application/octet-stream",
+      "size_bytes": 402,
+      "sha256": "bf608b844f4ae536407d74dff6c1fdd81702847794fc3fbb9f4e9edc2a1e658f",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/sparse/sparse.ply",
+      "created_at": "2026-08-25T09:24:12.149844+00:00"
+    },
+    {
+      "name": "sparse_local.ply",
+      "relative_path": "sparse/sparse_local.ply",
+      "media_type": "application/octet-stream",
+      "size_bytes": 402,
+      "sha256": "bf608b844f4ae536407d74dff6c1fdd81702847794fc3fbb9f4e9edc2a1e658f",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/sparse/sparse_local.ply",
+      "created_at": "2026-08-25T09:24:12.150551+00:00"
+    },
+    {
+      "name": "sparse_metrics.json",
+      "relative_path": "sparse_metrics.json",
+      "media_type": "application/json",
+      "size_bytes": 250,
+      "sha256": "701eebdf1be803b2fbd9c46076cd9ae90c8f7aa1d23d9b4974654d2aaaf27bf7",
+      "url": "/api/runs/run_75cc8440ab7e/artifacts/sparse_metrics.json",
+      "created_at": "2026-08-25T09:24:12.151233+00:00"
+    }
+  ],
+  "synthetic_fixture": true
+}

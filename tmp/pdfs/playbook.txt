@@ -1,0 +1,4607 @@
+
+
+===== PAGE 1 =====
+
+ PROBLEM STATEMENT 26158
+
+Single-Pass Drone Video to Accurate 3D
+Model Generation
+
+Ultra-Detailed Prototype Build Playbook
+
+
+
+
+
+
+NATIONAL TECHNICAL RESEARCH ORGANISATION (NTRO)
+
+Software | Robotics and Drones | SIH 2026
+
+
+
+
+
+
+ Accurate where observed. Explicit uncertainty where weak. Never present AI-inferred geometry
+ as measured reality.
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026
+
+Build-ready plan - implementation not yet started
+
+===== PAGE 2 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                               NTRO  |  ROBOTICS AND DRONES
+
+
+  Document purpose
+
+         A build-ready, evidence-based plan for a trustworthy single-pass drone-video reconstruction system. The document
+         distinguishes measured geometry from weak, inferred, and unseen regions and treats accuracy reporting as a
+         first-class product capability.
+
+  Contents
+
+
+  Use the clickable PDF outline or this contents list to navigate the playbook. Major sections begin on a new page for presentation and review.
+
+
+
+  0. The brutally honest verdict                                                                                                                                                                               10
+
+      Go / no-go assessment                   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 10
+
+      The project's central differentiator .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 10
+
+
+  1. What the problem is actually asking us to solve                                                                                                                                                           11
+
+      The eight engineering problems inside the statement                                     .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 11
+
+      The hardest physical limitations .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 11
+
+  2. Definition of the SIH prototype we should build                                                                                                                                                           12
+
+      Product statement .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 12
+
+      Primary demo scenario                   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 12
+
+      P0 capabilities - non-negotiable .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 12
+
+      P1 capabilities - finalist-quality target                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 12
+
+      P2 capabilities - only after the core is measured and stable                                     .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 13
+
+      Explicit non-goals for the first prototype .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 13
+
+
+  3. Everything required to build the application                                                                                                                                                              14
+
+      3.1 People and skills                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+
+      What the team must be able to explain to judges .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+
+      3.2 Capture hardware .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+
+      Mandatory capture capabilities                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+
+      Strongly recommended                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+
+      Optional but high value                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+
+      Equipment that can silently hurt the model                            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                      Page 2
+
+===== PAGE 3 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                                NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+       3.3 Compute hardware                        .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+
+       Team-owned compute inventory                                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+
+       Brutally honest capability assessment                                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+
+       Exact machine assignments                             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+
+            H1 - reconstruction node .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+
+            H2 - AI and vision node                   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 17
+
+            H3 - product and QA node                     .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 17
+
+            H4 - service and automation node                         .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 17
+
+       Safe workload profiles for this hardware                                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 18
+
+       Data movement and coordination .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 18
+
+       Optional CUDA worker policy                           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 18
+
+       Storage planning                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 18
+
+       3.4 Software and libraries .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 19
+
+       Core geometry stack - should be used                                   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 19
+
+       AI stack - use as assistance, not as authority .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 19
+
+       AI/research components to avoid in the deployable core .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 20
+
+       Backend stack                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 20
+
+       Frontend stack                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 20
+
+       Developer tools               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 20
+
+       3.5 Data required                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 21
+
+       Minimum project input bundle .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 21
+
+       Required metadata fields                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 21
+
+       Telemetry adapters in priority order .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 21
+
+       Ground truth is mandatory for our evaluation, even if not mandatory for operation                                                                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+
+       3.6 Documentation and evidence required                                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+
+  4. Exact system architecture                                                                                                                                                                                                        23
+
+       Architectural rules .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 23
+
+       Processing profiles                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 23
+
+  5. End-to-end reconstruction pipeline                                                                                                                                                                                               24
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                            Page 3
+
+===== PAGE 4 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                                     NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+       Stage 0 - Project creation and immutable ingest                                           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Inputs        .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Actions           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Required output                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Acceptance criteria                   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Stage 1 - Time synchronization                             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Problem           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Initial method              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Improved method                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+
+       Quality gates               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Stage 2 - Camera calibration and image model                                              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Preferred order                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Calibration capture checklist                          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       IMU/camera calibration                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Rolling shutter .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Stage 3 - Frame extraction and quality scoring                                        .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Why not use every video frame                              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+
+       Per-frame signals                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+
+       Selection policy               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+
+       Important implementation detail .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+
+       Outputs           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+
+       Stage 4 - Dynamic-object and invalid-region masks                                                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+
+       Mask classes                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+
+       Initial approach               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+       Temporal improvement                         .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+       Honest nuance                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+       Evaluation .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+       Stage 5 - Feature extraction and pair selection .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+       Baseline .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                                  Page 4
+
+===== PAGE 5 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                                    NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+       Pair graph           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+
+       Fallback ladder                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+
+       Stage 6 - Visual reconstruction with GPS priors                                          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+
+       Primary reconstruction                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+
+       Coordinate handling .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+
+       Why GPS is a soft prior                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+
+       Outputs           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+
+       Failure signals .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       Stage 7 - Optional IMU/attitude fusion                                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       MVP use              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       Advanced use .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       Stage 8 - Dense geometry                            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       Baseline option A: COLMAP PatchMatch + fusion                                                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       Baseline option B: OpenMVS                             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+
+       Recommended sequence .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Geometry cleanup                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Vegetation handling .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Stage 9 - AI depth prior and weak-region assistance .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Correct use             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Fusion gate             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Never do this               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+
+       Stage 10 - Mesh and texture                            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Mesh choices                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Tradeoff          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Texture workflow                   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Minimum output                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Stage 11 - Georeferencing, scale, and vertical datum                                               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Required transforms                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Alignment methods                     .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                                Page 5
+
+===== PAGE 6 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                                    NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+       Must report separately                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+
+       Stage 12 - Confidence and provenance                                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+
+       Per-point or per-cell features                         .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+
+       Initial confidence engine                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+
+       Later calibration              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+
+       Measurement policy .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+
+       Stage 13 - Standard outputs                            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 33
+
+       Geometry             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 33
+
+       Raster/geospatial                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 33
+
+       Reports           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 33
+
+
+  6. Proposed "Desired Output" table missing from the statement                                                                                                                                                                           34
+
+
+  7. Proposed evaluation criteria and target bands                                                                                                                                                                                        35
+
+       Evaluation methodology                          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 35
+
+             Camera trajectory                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 35
+
+             Point cloud         .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 35
+
+             Geospatial accuracy                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 36
+
+             Measurement validation                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 36
+
+             Runtime          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 36
+
+  8. Dataset plan                                                                                                                                                                                                                         37
+
+       Our controlled dataset matrix                          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 37
+
+       Dataset splits              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 37
+
+  9. Single-pass flight and capture SOP                                                                                                                                                                                                   38
+
+       Scene selection                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 38
+
+       Camera settings .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 38
+
+       Path geometry                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 38
+
+       Metadata             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 38
+
+       Post-flight validation .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 39
+
+  10. Backend product design                                                                                                                                                                                                              40
+
+       Core entities .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 40
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                                Page 6
+
+===== PAGE 7 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                             NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+
+       Job state machine .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 40
+
+       Initial API surface              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 40
+
+       Processing configuration                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 40
+
+       Failure messages must be actionable                                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 41
+
+  11. Frontend/operator experience                                                                                                                                                                                               42
+
+       Screen 1 - New mission/project .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 42
+
+       Screen 2 - Ingest and synchronization                                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 42
+
+       Screen 3 - Frame quality                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 42
+
+       Screen 4 - Processing                      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 42
+
+       Screen 5 - 3D mission viewer .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 42
+
+       Screen 6 - Accuracy and coverage                               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 43
+
+       Screen 7 - Export                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 43
+
+       Visual design principle                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 43
+
+  12. Repository structure                                                                                                                                                                                                       44
+
+       Implementation order                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 44
+
+
+  13. 27-day execution plan to the reported 20 September deadline                                                                                                                                                                45
+
+       Four parallel work lanes .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 45
+
+       Days 1-2 - Hard feasibility gate                        .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 45
+
+       Days 3-5 - Input and repeatable CLI                               .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 46
+
+       Days 6-8 - Sparse geometry and georeferencing .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 46
+
+       Days 9-11 - Local dense result                          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 46
+
+       Days 12-14 - Minimal operator product                                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 47
+
+       Days 15-17 - Trust and AI layer .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 47
+
+       Days 18-20 - Evaluation                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 47
+
+       Days 21-23 - Resilience and finalist polish                                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 47
+
+       Days 24-25 - Pitch and proof                         .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 48
+
+       Days 26-27 - Freeze                     .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 48
+
+       First 48 hours in clock-sized blocks .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 48
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                       Page 7
+
+===== PAGE 8 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                            NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+       What not to parallelize                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 48
+
+  14. First 48-hour technical spike - exact playbook                                                                                                                                                                            49
+
+       Before coding             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 49
+
+       Spike A - baseline through OpenDroneMap                                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 49
+
+       Spike B - custom COLMAP pipeline                                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 49
+
+       Spike C - viewer .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 49
+
+       48-hour deliverable                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 50
+
+       Commit decision                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 50
+
+
+  15. Testing strategy                                                                                                                                                                                                          51
+
+       Unit tests          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 51
+
+       Integration tests             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 51
+
+       End-to-end tests                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 51
+
+       Reconstruction regression suite                            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 51
+
+  16. Security, privacy, and deployment                                                                                                                                                                                         53
+
+       Minimum security controls                        .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 53
+
+       Licence gate              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 53
+
+       Deployment modes                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 54
+
+       Data-classification fields                    .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 54
+
+
+  17. Risk register                                                                                                                                                                                                             55
+
+
+  18. Innovation story for evaluators                                                                                                                                                                                           56
+
+       Strong differentiators                 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 56
+
+       One-line pitch            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 56
+
+       Demonstration sequence                        .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 56
+
+       Questions judges are likely to ask                            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 56
+
+  19. Questions that must be sent to NTRO/SIH mentors                                                                                                                                                                           58
+
+
+  20. What should and should not be purchased                                                                                                                                                                                   59
+
+       Do not buy first              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 59
+
+       Secure first           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 59
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                      Page 8
+
+===== PAGE 9 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                                                                  NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+       Budget tiers            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 59
+
+            Bare-minimum research tier                       .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 59
+
+            Practical SIH tier            .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 59
+
+            Advanced validation tier                  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 59
+
+
+  21. Definition of done                                                                                                                                                                                                               60
+
+       Functional           .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 60
+
+       Accuracy/trust .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 60
+
+       Reliability          .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 60
+
+       Presentation .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 60
+
+
+  22. Immediate information the team must provide before implementation                                                                                                                                                                61
+
+
+  23. Recommended source shortlist                                                                                                                                                                                                     62
+
+       Problem and baseline .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 62
+
+       Geometry             .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 62
+
+       AI assistance              .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 62
+
+       Telemetry/geospatial                     .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 62
+
+       Validation/data                .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 62
+
+
+  Final direction                                                                                                                                                                                                                      63
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                                                                             Page 9
+
+===== PAGE 10 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                   NTRO  |  ROBOTICS AND DRONES
+
+ 0. The brutally honest verdict
+
+
+ This is a high-risk, high-reward SIH problem. A strong, defensible prototype is feasible. A universal system that
+ reconstructs every hidden facade and occluded surface accurately from any arbitrary single straight-line video is not
+ physically possible.
+
+ The winning version should therefore be framed as:
+
+      A trustworthy, georeferenced single-pass reconstruction system that produces metrically useful 3D geometry for
+      directly observed surfaces, uses AI to improve difficult observations, explicitly labels inferred or unseen regions,
+      and attaches an accuracy and confidence report to every output.
+
+
+ Do not frame it as:
+
+      Upload any video and AI magically creates a perfectly complete, survey-grade 3D world.
+
+
+ The second claim is easy for a photogrammetry or robotics evaluator to destroy.
+
+ Go / no-go assessment
+
+   Dimension                                                          Honest assessment
+
+   Prototype feasibility                                              Yes, if the first target is a 30-90 second controlled video and 80-200 selected keyframes
+
+   Strong visual demo                                                 Yes
+
+   Metric measurement on visible surfaces                             Yes, with calibration, parallax, georeferencing, and independent validation
+
+   Survey-grade absolute accuracy using ordinary GPS alone            No
+
+   Complete unseen-surface reconstruction                             No; only labelled inference is possible
+
+   Near-real-time sparse preview                                      Feasible
+
+   Near-real-time final dense mesh from 4K video                      Hardware- and scene-dependent; not the first promise
+
+   Training a foundation model from scratch                           Neither necessary nor realistic for SIH
+
+   Building a differentiated product instead of a wrapper             Feasible, but requires confidence, fusion, validation, and a serious UI
+
+ The project's central differentiator
+
+ Every reconstructed element must have provenance:
+ 1.   Observed - high confidence: supported by several views, healthy triangulation angle, low reprojection error, and
+      consistent depth.
+ 2.   Observed - medium confidence: visible but weakly constrained.
+ 3.   Observed - low confidence: marginal geometry; measurement warning required.
+ 4.   AI-inferred: plausible completion, never treated as measured.
+ 5.   Unseen: no geometry claim.
+
+ Measurements should default to observed geometry only. If a user attempts to measure across inferred or
+ low-confidence geometry, the application must warn them and show the expected uncertainty.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                              Page 10
+
+===== PAGE 11 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                          NTRO  |  ROBOTICS AND DRONES
+
+ 1. What the problem is actually asking us to solve
+
+
+ The input is not just a video. It is a synchronized sensor package:
+  -  1080p or 4K drone video.
+  -  GPS coordinates sampled during the pass.
+  -  Flight metadata.
+  -  Optional IMU, barometric altitude, camera intrinsics, and RTK/PPK corrections.
+
+ The useful output is not just a pretty render. It must support:
+  -  Visualization.
+
+  -  Distance, height, slope, area, and possibly volume measurement.
+  -  Spatial analysis.
+  -  Georeferencing.
+  -  Export into standard 3D and geospatial tools.
+  -  A statement of accuracy, coverage, and uncertainty.
+
+ The eight engineering problems inside the statement
+ 1.  Decode and synchronize video and telemetry.
+ 2.  Select useful frames from a highly redundant video.
+ 3.  Recover camera intrinsics, camera trajectory, and sparse geometry.
+ 4.  Fuse noisy GPS/IMU priors without letting bad telemetry corrupt visual geometry.
+ 5.  Estimate dense depth and create a point cloud or mesh.
+ 6.  Remove or suppress dynamic objects and transient artifacts.
+ 7.  Georeference, scale, orient, validate, and quantify uncertainty.
+ 8.  Deliver the result through a usable, secure, mostly offline application.
+
+ The hardest physical limitations
+  -  A surface that never appears in any frame cannot be measured.
+  -  A nearly straight camera trajectory is geometrically weak for transverse depth and can become degenerate.
+  -  Rooftops and facades compete for camera angle in a single pass.
+
+  -  Ordinary GNSS can be wrong by several metres, especially near buildings and vegetation.
+  -  Monocular reconstruction has an arbitrary scale until a metric prior is introduced.
+  -  Rolling shutter, electronic stabilization, autofocus, or digital zoom can make camera intrinsics vary during the video.
+  -  Video compression destroys fine features and creates block artifacts.
+  -  A visually impressive neural render is not automatically a metrically reliable model.
+
+ The public GPS.gov accuracy guidance notes that ordinary receiver accuracy depends on geometry, blockage,
+ multipath, atmosphere, and hardware; high-end augmented systems are needed for centimetre-level positioning. This is
+ why the application must consume telemetry uncertainty rather than treating every GPS sample as exact truth.
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 11
+
+===== PAGE 12 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                       NTRO  |  ROBOTICS AND DRONES
+
+ 2. Definition of the SIH prototype we should build
+
+ Product statement
+
+ The prototype accepts one drone video plus a telemetry file, generates a georeferenced 3D reconstruction, exposes
+ measurable observed geometry in a browser, highlights weak/inferred/unseen regions, and produces a
+ machine-readable quality report.
+
+ Primary demo scenario
+  - One campus building, courtyard, road segment, or construction scene.
+  - 30-90 seconds of video.
+  - 4K preferred; 1080p supported.
+  - Fixed focal length and stable focus.
+  - One continuous pass with a useful oblique angle.
+  - GPS/SRT/CSV or MAVLink telemetry.
+  - 80-200 retained keyframes after quality filtering.
+  - Several independent surveyed or tape/laser-verified check measurements.
+
+ P0 capabilities - non-negotiable
+  - Upload video and telemetry.
+  - Inspect codec, resolution, duration, frame timestamps, and metadata.
+  - Parse at least CSV and DJI-style SRT; add MAVLink .tlog if available.
+  - Synchronize telemetry to frame timestamps with a visible offset control.
+  - Score blur, exposure, redundancy, and motion.
+
+  - Select keyframes automatically and let the operator review them.
+  - Calibrate or ingest camera intrinsics.
+  - Mask dynamic classes or exclude frames with severe motion.
+  - Run sequential structure-from-motion.
+  - Incorporate GPS position priors with uncertainty.
+  - Generate a sparse point cloud and camera trajectory.
+  - Generate a dense point cloud for observed surfaces.
+  - Georeference into a local metric CRS and retain WGS84 metadata.
+  - Show the model, flight path, source frames, and confidence layer.
+  - Measure distance and height on high-confidence observed geometry.
+
+  - Export PLY/LAZ and a project quality report.
+  - Preserve logs and make every run reproducible from a saved configuration.
+
+ P1 capabilities - finalist-quality target
+  - Textured mesh export as OBJ and/or glTF/GLB.
+
+  - DSM and orthomosaic for predominantly downward-looking scenes.
+  - AI-assisted feature matching fallback in weak texture.
+
+
+
+
+
+Prepared 24 August 2026                                                                                                               Page 12
+
+===== PAGE 13 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                           NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  AI depth prior only where multi-view geometry agrees.
+  -  Temporal segmentation or tracking for dynamic-object masks.
+  -  Compare masked versus unmasked reconstruction.
+  -  Per-point or per-tile confidence visualization.
+  -  Coverage map showing visible, weak, inferred, and unseen regions.
+  -  Independent ground-truth evaluation dashboard.
+  -  Rapid sparse preview while final reconstruction continues.
+  -  3D Tiles output for progressive web streaming.
+
+ P2 capabilities - only after the core is measured and stable
+  -  IMU preintegration or factor-graph fusion.
+  -  Automatic telemetry time-offset estimation.
+  -  Learned dense 3D prior such as a permissively licensed MapAnything checkpoint.
+  -  Optional Gaussian-splat visualization as a presentation layer.
+
+  -  Conservative building/terrain completion with an explicit INFERRED label.
+  -  Multi-worker GPU processing.
+  -  Incremental chunk updates for long video.
+  -  Offline mission package export.
+
+ Explicit non-goals for the first prototype
+  -  No training a giant 3D foundation model from scratch.
+  -  No claim of survey certification.
+  -  No claim that an inferred rear facade is accurate.
+  -  No support for hour-long arbitrary videos in the first release.
+  -  No dependence on an external commercial cloud API.
+  -  No unnecessary drone autonomy; the statement is primarily a reconstruction software task.
+  -  No custom 3D engine before a standards-based viewer works.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 13
+
+===== PAGE 14 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                NTRO  |  ROBOTICS AND DRONES
+
+ 3. Everything required to build the application
+
+ 3.1 People and skills
+
+ A six-person SIH team should divide responsibility like this:
+
+   Role                                        Required ownership                                     Useful background
+
+   1. 3D vision lead                           SfM, matching, bundle adjustment, dense                OpenCV, COLMAP, camera geometry, Python/C++
+                                               reconstruction, failure analysis
+
+   2. Geospatial/sensor-fusion lead            GPS/IMU parsing, synchronization, CRS,                 GIS, robotics, MAVLink, PROJ/GDAL
+                                               scale/alignment, accuracy testing
+
+   3. AI/perception lead                       Dynamic masking, learned features, depth priors,       PyTorch, segmentation, depth, evaluation
+                                               confidence calibration
+
+   4. Backend/platform lead                    Job orchestration, APIs, storage, worker isolation,    FastAPI, PostgreSQL, containers, Linux
+                                               logs
+
+   5. Frontend/3D lead                         Upload flow, viewer, measurements, layers, progress,   React/TypeScript, CesiumJS/Three.js
+                                               report UI
+
+   6. Validation/product/pitch lead            Test scenes, ground truth, metrics, documentation,     Testing, photogrammetry/GIS, presentation
+                                               demo and evaluator story
+
+ One person can cover two adjacent roles, but the following ownership cannot be missing:
+  -  At least one person must understand camera geometry well enough to explain bundle adjustment and scale
+     ambiguity.
+  -  At least one person must own field data and ground truth.
+  -  At least one person must own the browser product and not wait until the last week.
+  -  One faculty or industry mentor with photogrammetry, surveying, GIS, robotics, or UAV experience is strongly
+     recommended.
+
+ What the team must be able to explain to judges
+  -  Why video frames provide multiple views even though there is one flight pass.
+  -  Why geometry needs parallax.
+  -  Why ordinary GPS is a soft prior, not ground truth.
+  -  How camera scale is recovered.
+  -  How dynamic objects are masked.
+  -  How a point becomes high or low confidence.
+  -  Why learned depth is a prior rather than unquestioned truth.
+  -  Which outputs are observed and which are inferred.
+
+  -  How accuracy was measured using held-out checkpoints.
+
+ 3.2 Capture hardware
+
+ Mandatory capture capabilities
+  -  A UAV or access to representative UAV footage.
+  -  A stabilized RGB camera capable of 1080p or 4K.
+  -  Constant focal length during a recording.
+  -  GPS trajectory with timestamps.
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                           Page 14
+
+===== PAGE 15 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                         NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  A way to retrieve flight metadata.
+  -  Sufficient batteries, storage media, and safe field access.
+
+ Strongly recommended
+  -  4K at 25/30 fps.
+  -  Mechanical gimbal stabilization.
+  -  Manual or locked focus after focus is set.
+  -  Locked focal length; no digital zoom.
+  -  Manual exposure or exposure locked per stable illumination segment.
+  -  Fast shutter in daylight to reduce motion blur.
+  -  GNSS quality indicators such as fix type, satellite count, HDOP/VDOP, or reported covariance.
+  -  Known gimbal pitch/yaw, or at least vehicle attitude.
+  -  Camera intrinsic calibration for the chosen resolution and stabilization mode.
+
+ Optional but high value
+  -  RTK/PPK-capable GNSS.
+  -  Base-station corrections.
+  -  Barometric altitude.
+  -  Raw IMU at a useful rate.
+
+  -  Camera-to-IMU/gimbal extrinsics.
+  -  Hardware time synchronization.
+  -  A global-shutter camera.
+  -  A laser distance meter or total station for validation.
+  -  ChArUco or AprilGrid calibration board.
+  -  Durable ground targets used as independent checkpoints.
+
+ Equipment that can silently hurt the model
+  -  Electronic image stabilization that warps/crops every frame.
+  -  Variable zoom.
+  -  Continuous autofocus pumping.
+  -  Aggressive in-camera sharpening and denoising.
+  -  Very low bitrate recording.
+  -  Long exposure with fast flight.
+  -  Unlogged gimbal movement.
+
+  -  GPS with no timestamps or uncertain time base.
+
+ 3.3 Compute hardware
+
+ Team-owned compute inventory
+ The prototype must be designed for the machines the team actually owns, not an imaginary CUDA workstation.
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                 Page 15
+
+===== PAGE 16 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                NTRO  |  ROBOTICS AND DRONES
+
+
+
+
+
+   ID         Available machine                               Fixed primary role                             Do not make it responsible for
+
+   H1         32 GB Intel Core Ultra/Lunar Lake with Arc      Primary photogrammetry, CPU-heavy              Final CUDA-only learned reconstruction
+              GPU                                             reconstruction, ODM/OpenMVS trials, Intel
+                                                              XPU experiments
+
+   H2         Apple M4, 24 GB unified memory, 10-core         AI masks, depth-prior experiments,             Serving the public demo while
+              GPU                                             frame-quality models, secondary geometry       training/inference jobs run
+                                                              tests
+
+   H3         Apple M4, 16 GB unified memory                  Main product-development machine: frontend,    Large dense reconstruction or unrestricted 4K
+                                                              API client, viewer, QA and integration         workloads
+
+   H4         Intel i5, 16 GB RAM                             Lightweight backend, job database, artifact    Dense geometry, large model inference or
+                                                              index, automated tests and demo services       high-resolution meshing
+
+ If H4 has a slow disk or cannot remain powered on, put the demo services on H3 and use H4 only as a test runner. The
+ role matters more than the machine label.
+
+ Brutally honest capability assessment
+  -  The four machines are enough to build a credible, measured prototype.
+  -  They are not equivalent to four CUDA workers. Apple MPS and Intel XPU are different backends, and many research
+     repositories still hard-code CUDA assumptions.
+  -  COLMAP can run sparse feature extraction and matching on CPU. Its official FAQ states that a non-CUDA system
+     can use the full pipeline except COLMAP's own dense reconstruction path, with a significant slowdown; external
+     dense software is therefore required locally. See the COLMAP FAQ.
+  -  PyTorch officially exposes MPS for Apple silicon and XPU for supported Intel GPUs. Every model must still be tested
+     because backend availability does not guarantee that every operator or third-party repository works. See the
+     PyTorch MPS notes and Intel XPU getting-started guide.
+  -  OpenDroneMap is the safest local dense baseline because it can run without a CUDA GPU. Its published guidance
+     estimates about 16 GB for roughly 250 images and 32 GB for roughly 500 images, but those are planning figures,
+     not a promise for 4K video frames. We will use much smaller limits for stability. See the ODM hardware
+     recommendations.
+
+ Exact machine assignments
+
+ H1 - reconstruction node
+ Preferred operating system: Ubuntu 24.04 native. If it must stay on Windows, use WSL2/Docker for the CPU-first
+ pipeline and keep Intel XPU experiments isolated in a separate native or supported Linux Python environment.
+
+ Install:
+  -  FFmpeg and ffprobe.
+  -  OpenCV.
+  -  COLMAP or PyCOLMAP with CPU feature extraction and matching enabled.
+  -  OpenDroneMap and one OpenMVS experiment path.
+  -  GDAL, PROJ, PDAL and Open3D.
+
+  -  Docker only where it reduces installation risk.
+
+ Responsibilities:
+  -  Store the immutable working copy of each raw mission.
+  -  Extract selected frames.
+  -  Run sparse reconstruction.
+  -  Align reconstruction to GPS.
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                           Page 16
+
+===== PAGE 17 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                            NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  Run local dense reconstruction on reduced frame sets.
+  -  Export PLY/LAZ, mesh, GeoTIFF and metrics.
+
+ H2 - AI and vision node
+ Install one native arm64 Python environment with PyTorch MPS support. Keep all model calls behind a device selector
+ that accepts mps, xpu, cuda or cpu.
+
+ Responsibilities:
+  -  Blur, exposure and duplicate-frame scoring.
+  -  People/vehicle/sky masks.
+
+  -  Optional monocular-depth prior generation.
+  -  Learned feature/matcher spike only after the SIFT baseline works.
+  -  Export masks and depth maps as ordinary files so geometry code does not depend on MPS.
+
+ Do not make an MPS-only model a mandatory stage. Every AI enhancement needs a CPU-safe skip path.
+
+ H3 - product and QA node
+ Responsibilities:
+  -  React/Vite operator interface.
+  -  Three.js or Potree point-cloud/mesh viewer.
+  -  Upload, job-progress, accuracy and export screens.
+
+  -  QGIS/CloudCompare visual checks.
+  -  End-to-end test execution on reduced fixtures.
+  -  Final presentation and offline demo playback.
+
+ This machine should remain responsive during demonstrations. Do not schedule background reconstruction on it before
+ a pitch.
+
+ H4 - service and automation node
+ Start with FastAPI, SQLite and a normal artifact directory. Do not introduce Kubernetes, Redis, Postgres/PostGIS and
+ object storage simultaneously.
+
+ Responsibilities:
+
+  -  Project/run API.
+  -  SQLite job and metric database.
+  -  Artifact manifest and checksum index.
+  -  Test runner and nightly regression jobs.
+  -  Lightweight event stream for UI progress.
+
+ After one CLI run is stable, add a small worker process on H1/H2 that polls H4 for capability-tagged jobs. Until then,
+ launch the pipeline manually. A distributed scheduler is not a Day-1 requirement.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                     Page 17
+
+===== PAGE 18 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                              NTRO  |  ROBOTICS AND DRONES
+
+
+ Safe workload profiles for this hardware
+
+   Profile    Selected frames      Maximum frame          Geometry                        Assigned machine          Purpose
+                                   size
+
+   smoke      30-50                1280 px                sparse only                     Any machine               Verify installation and input contract
+
+   preview    60-100               1600 px                sparse cloud and camera path    H1                        Fast operator feedback
+
+   balanced   120-200              1920 px                sparse plus low/medium dense    H1, with H2 masks         Main prototype result
+
+   final-loca 180-250              1920-2560 px           best stable local dense result  H1                        Judging sample after benchmarks
+   l
+
+   final-CU   200-400 after        2560 px or measured    dense plus optional CUDA        Rented/borrowed           Optional finalist-quality rerun
+   DA         profiling            limit                  models                          NVIDIA worker
+
+ These are starting limits. Do not extract a 30 fps video into thousands of frames. A 60-second clip sampled at 2 fps
+ already produces 120 frames. ODM exposes both video-limit and video-resolution, and its current default
+ video limit is 500 frames; our local balanced profile deliberately stays far below that ceiling. See the ODM video-limit
+ documentation and video-resolution documentation.
+
+ Start ODM at max-concurrency=4 on H1 and 2 on 16 GB machines. Increase H1 to 6 only after measuring peak
+ memory. ODM documents an approximate peak of 1 GB per thread at 2-megapixel resolution, but dense stages can
+ create additional pressure. See the ODM max-concurrency documentation.
+
+ Data movement and coordination
+  -  Raw video is copied once to H1 and remains immutable.
+
+  -  H2 receives only selected frames and returns masks/depth maps.
+  -  H3 receives downsampled previews, tiled clouds/meshes and reports, not raw reconstruction scratch.
+  -  H4 stores manifests, logs, metrics and final-artifact locations; it does not need every depth map.
+  -  Use Git only for source, schemas, small fixtures and documentation. Never commit raw videos, model weights or
+     dense clouds.
+  -  Use SHA-256 checksums in each run manifest so results from different machines can be traced to exact inputs.
+  -  Keep one shared external 1-2 TB NVMe drive or equivalent fast storage for mission backups and final artifacts.
+     Reconstruction scratch should stay on the fastest local SSD.
+
+ Optional CUDA worker policy
+ A borrowed or rented NVIDIA worker is an accelerator, not a dependency for the first successful demo. Use it only after
+ the local balanced pipeline produces a valid sparse model, georeferenced output and metric report. Package the job as
+ a container or locked environment, upload selected frames instead of entire raw missions, download all outputs, and
+ delete remote copies when policy requires it.
+
+ Storage planning
+ A single 4K video can be several GB. Extracted PNG frames, undistorted images, depth maps, dense clouds, meshes,
+ texture atlases, logs, and multiple runs can multiply the input size by 10-30×. Plan for:
+  -  raw/ immutable inputs.
+  -  working/ disposable reconstruction scratch.
+
+  -  artifacts/ final outputs.
+  -  benchmarks/ ground truth and metrics.
+  -  cache/ model weights and reusable features.
+
+ Never keep the only copy of a field dataset inside disposable cloud storage.
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                        Page 18
+
+===== PAGE 19 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                       NTRO  |  ROBOTICS AND DRONES
+
+
+ 3.4 Software and libraries
+
+ Core geometry stack - should be used
+
+   Component                  Purpose                                                             Decision
+
+   FFmpeg / ffprobe           Video metadata, timestamps, frame extraction, transcoding           Mandatory
+
+   OpenCV                     Image quality, calibration, undistortion, optical flow, masks       Mandatory
+
+   COLMAP + PyCOLMAP          Features, matching, pose-prior mapping, bundle adjustment,          Primary backbone
+                              sparse and dense reconstruction
+
+   OpenMVS                    Alternative dense fusion, mesh reconstruction, refinement,          Optional comparison; use in a distributed product only after
+                              texturing                                                           AGPL review
+
+   Open3D                     Point-cloud processing, normals, filtering, sampling, QA utilities  Mandatory support library
+
+   PDAL                       Point-cloud transformation, filtering, LAS/LAZ pipelines            Mandatory for serious exports
+
+   PROJ / pyproj              CRS and geodetic transformations                                    Mandatory
+
+   GDAL / Rasterio            GeoTIFF, DSM, orthomosaic and raster geospatial outputs             Required for map outputs
+
+   NumPy / SciPy              Alignment, interpolation, optimization support                      Mandatory
+
+   evo                        APE/RPE trajectory evaluation where ground truth exists             Validation tool
+
+ Current COLMAP supports GPS pose priors through pose_prior_mapper with configurable prior standard
+ deviations. It also supports masks and learned ALIKED extraction in current documentation. See the COLMAP
+ GPS-prior FAQ and COLMAP tutorial.
+
+ OpenMVS can take a calibrated sparse scene and produce a dense cloud, mesh, and texture atlas. See the OpenMVS
+ architecture. Its current repository licence is AGPLv3, so it is a useful prototype/benchmark tool but should not be
+ embedded casually in a closed NTRO product.
+
+ AI stack - use as assistance, not as authority
+
+   Capability                                Initial choice                                              Use
+
+   Dynamic semantic masks                    Torchvision DeepLabV3 or Mask R-CNN                         Mask people, vehicles, and animals in retained
+                                                                                                         keyframes
+
+   Temporal mask propagation                 SAM 2                                                       Stabilize masks across neighbouring video frames
+
+   Learned local matching                    COLMAP ALIKED or hloc with SuperPoint/LightGlue             Fallback when SIFT registration is weak
+
+   Monocular metric depth                    Depth Anything V2 outdoor metric or Metric3D v2             Prior/gap indicator, never sole metric geometry
+
+   Feed-forward multi-view 3D                MapAnything Apache checkpoint                               R&D comparison or weak-region prior after the baseline
+
+   Neural rendering                          gsplat                                                      Optional visual layer after metric geometry exists
+
+ The hloc toolbox supports SuperPoint, LightGlue, LoFTR, and other feature/matcher combinations, while LightGlue
+ adapts computation to match difficulty. Do not add hloc until the COLMAP baseline gives a measurable failure case.
+
+ Depth Anything V2 publishes outdoor metric variants, and Metric3D v2 targets zero-shot metric depth. Their output still
+ needs cross-view and GPS consistency checks for this application.
+
+ SAM 2 is designed for video/image segmentation and uses streaming memory. It is useful for mask propagation, but it
+ needs prompts or a detector/segmenter to identify the relevant dynamic classes.
+
+ MapAnything now provides an Apache-2.0 codebase and a separate Apache-licensed checkpoint. If used, select the
+ permissive checkpoint explicitly and record the exact model hash.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                   Page 19
+
+===== PAGE 20 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                   NTRO  |  ROBOTICS AND DRONES
+
+
+ AI/research components to avoid in the deployable core
+
+   Component                                                          Why not core
+
+   DUSt3R / MASt3R / MASt3R-SLAM                                      Non-commercial/ShareAlike restrictions; MASt3R-SLAM was demonstrated on RTX
+                                                                      4090-class hardware
+
+   Original VGGT checkpoints                                          Licence and acceptable-use restrictions are unsuitable for an NTRO/defence-facing
+                                                                      deliverable; the project notes military exclusions
+
+   VGG-T³                                                             Non-commercial licence and additional inherited restrictions
+
+   Original INRIA 3D Gaussian Splatting implementation                Research-oriented licensing; use Apache-licensed gsplat if a splat is needed
+
+   Any black-box cloud reconstruction API                             Data-sovereignty, repeatability, cost, security, and evaluator-defensibility problems
+
+   Generative image/video models for "creating" hidden facades        They produce plausible appearance, not metric evidence
+
+ Research prototypes can be compared in an isolated branch, but the final architecture must have a licence manifest and
+ a defence-use review.
+
+ Backend stack
+  -  Python 3.11 as the initial compatibility target.
+  -  FastAPI for REST and WebSocket APIs.
+  -  Pydantic for strict manifests and processing configs.
+  -  PostgreSQL + PostGIS for projects, jobs, telemetry indexes, measurements, and spatial metadata.
+  -  Valkey + Celery or Dramatiq for durable jobs; begin with a simple local queue only for the first CLI proof.
+
+  -  Local filesystem for the first build; S3-compatible storage abstraction later.
+  -  Structured JSON logs with a run ID and stage ID.
+  -  Docker/Compose for reproducible services.
+  -  NVIDIA Container Toolkit on the GPU worker.
+
+ Frontend stack
+  -  React + TypeScript.
+  -  Vite.
+  -  CesiumJS for georeferenced 3D Tiles, camera path, map context, and large-scene navigation.
+  -  Three.js only for small custom overlays if Cesium primitives are insufficient.
+  -  A charting library for quality plots and telemetry.
+  -  A virtualized table for frame and checkpoint review.
+  -  WebSocket or server-sent events for job progress.
+  -  Download/export manager with checksums.
+
+ The OGC 3D Tiles standard is designed to stream massive photogrammetry, buildings, and point clouds. Use a
+ standard geospatial format rather than inventing a proprietary viewer payload.
+
+ Developer tools
+  -  Git and GitHub/GitLab.
+  -  Pre-commit.
+
+  -  Ruff and Black for Python.
+  -  mypy or Pyright for typed core modules.
+  -  pytest.
+
+
+
+
+Prepared 24 August 2026                                                                                                                              Page 20
+
+===== PAGE 21 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                           NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  Vitest and Playwright for frontend tests.
+  -  Docker Compose.
+  -  Makefile or task runner with human-readable targets.
+  -  MLflow is optional; a simple run manifest and CSV/JSON metrics are enough initially.
+  -  DVC is optional for public/non-sensitive samples; do not put restricted data in a public remote.
+
+ 3.5 Data required
+ Minimum project input bundle
+
+ project/
+ +-- video/
+ |   +-- pass_001.mp4
+ +-- telemetry/
+ |   +-- pass_001.srt | pass_001.csv | pass_001.tlog
+ +-- camera/
+ |   +-- intrinsics.json            # optional but strongly preferred
+ +-- calibration/
+ |   +-- camera_imu_extrinsics.json # optional
+ +-- ground_truth/
+ |   +-- checkpoints.csv            # not used to solve the model
+ |   +-- reference_cloud.laz        # optional
+ +-- manifest.json
+ Required metadata fields
+  -  Video start time and time base.
+  -  Frame presentation timestamp.
+  -  Latitude and longitude.
+  -  Altitude value and altitude reference.
+  -  GPS fix quality or reported accuracy when available.
+  -  Vehicle yaw/pitch/roll when available.
+  -  Gimbal yaw/pitch/roll when available.
+  -  Ground speed.
+
+  -  Camera make/model.
+  -  Resolution and frame rate.
+  -  Focal length or calibrated intrinsics.
+  -  Distortion coefficients if known.
+  -  Whether electronic stabilization, digital zoom, or cropping was enabled.
+  -  Timezone/UTC interpretation.
+
+ Telemetry adapters in priority order
+ 1.  Generic CSV with a documented column map.
+ 2.  DJI-style SRT accompanying the video.
+ 3.  MAVLink .tlog.
+ 4.  ArduPilot DataFlash .bin.
+ 5.  PX4 ULog.
+ 6.  Custom JSON/CSV schema supplied by NTRO.
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 21
+
+===== PAGE 22 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                         NTRO  |  ROBOTICS AND DRONES
+
+
+
+ ArduPilot documents that telemetry logs are recorded MAVLink messages, and onboard logs can include GPS, IMU,
+ attitude, barometer, and camera information. See ArduPilot telemetry logs, onboard log fields, and the MAVLink
+ common message set.
+
+ Ground truth is mandatory for our evaluation, even if not mandatory for
+ operation
+ Use at least two validation modes:
+  -  Independent checkpoints: surveyed or accurately measured points never passed into reconstruction.
+
+  -  Known dimensions: wall length, roof edge, pole height, lane width, or marker spacing measured by tape/laser.
+
+ If available, add:
+  -  RTK trajectory.
+  -  Total-station points.
+  -  Terrestrial laser scan.
+  -  Existing CAD/BIM.
+  -  Reference LiDAR cloud.
+
+ Do not call checkpoints "GCPs" if they are not used to control the solve. This distinction supports the claim that the
+ operational workflow does not require extensive GCPs while still allowing scientific validation.
+
+ 3.6 Documentation and evidence required
+  -  Problem interpretation and assumptions.
+  -  Architecture diagram.
+  -  Input manifest specification.
+  -  Camera calibration report.
+
+  -  Dataset cards.
+  -  Model cards and licences.
+  -  Experiment/run manifest.
+  -  Accuracy report template.
+  -  Threat model and offline-deployment note.
+  -  API documentation.
+  -  Installation guide.
+  -  Operator guide.
+  -  Demo script.
+  -  Failure-case gallery.
+
+  -  Benchmark comparison against an unmodified baseline.
+  -  Bill of materials and deployment profiles.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                  Page 22
+
+===== PAGE 23 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                  NTRO  |  ROBOTICS AND DRONES
+
+ 4. Exact system architecture
+
+
+
+                             +-----------------------------+
+                             | Browser / Operator Console  |
+                             | upload · progress · 3D · QA |
+                             +--------------+--------------+
+                                            | REST / WebSocket
+                             +--------------▼--------------+
+                             | API + Project/Job Service   |
+                             | manifests · auth · reports  |
+                             +-------+-----------+---------+
+                                     |           |
+                          +----------▼---+   +--▼-------------+
+                          | PostGIS/Jobs |   | Artifact Store |
+                          +--------------+   +--+-------------+
+                                                |
+                                   +------------▼------------+
+                                   | GPU Reconstruction Worker|
+                                   +------------+------------+
+                                                |
+           +------------------------------------+----------------------------------+
+           |                                    |                                  |
+ +---------▼--------+  +------------------------▼-----------------------+  +------▼---------+
+ | Ingest + Sync    |  | Geometry / AI Reconstruction                  |  | Geo + QA        |
+ | ffprobe/telemetry|-> | keyframes -> masks -> SfM -> dense -> mesh/prior |-> | CRS/
+ confidence  |
+ +------------------+  +------------------------------------------------+  +------+---------+
+                                                                                 |
+                                    +--------------------------------------------▼+
+                                    | PLY/LAZ · GLB/OBJ · 3D Tiles · GeoTIFF · QA |
+                                    +---------------------------------------------+
+ Architectural rules
+  -  Every stage reads declared inputs and produces versioned artifacts.
+  -  No stage silently edits raw data.
+  -  The pipeline must resume after a failed stage.
+  -  A run is immutable once marked complete.
+  -  Model/checkpoint hashes and exact parameters are stored.
+
+  -  A result must retain the camera path and source-frame provenance.
+  -  Geometry confidence and inference status must survive export.
+  -  Cloud deployment is optional; local/offline deployment is first-class.
+
+ Processing profiles
+
+   Profile                 Purpose                                                 Typical settings
+
+   preview                 Fast trajectory + sparse cloud                          Downscaled frames, fewer keyframes, sparse only
+
+   balanced                Default demo output                                     2K processing, moderate keyframes, dense cloud, QA
+
+   accurate                Final metric run                                        Larger frames, stricter matching, geometric consistency, texture, full QA
+
+   diagnostic              Reproduce a failure                                     Saves intermediate matches, masks, priors, residual plots
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                             Page 23
+
+===== PAGE 24 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                     NTRO  |  ROBOTICS AND DRONES
+
+ 5. End-to-end reconstruction pipeline
+
+ Stage 0 - Project creation and immutable ingest
+
+ Inputs
+  - Video.
+  - Telemetry.
+  - Optional intrinsics, IMU calibration, RTK/PPK corrections, ground truth.
+
+ Actions
+ 1.  Compute SHA-256 for every uploaded file.
+ 2.  Save original names, byte sizes, MIME types, and timestamps.
+ 3.  Probe the video using ffprobe.
+
+ 4.  Reject unsupported or corrupt inputs early.
+ 5.  Parse the telemetry into a common schema.
+ 6.  Validate coordinate and time ranges.
+ 7.  Create a project manifest and a run ID.
+
+ Required output
+  - ingest_report.json.
+  - Normalized telemetry parquet/CSV.
+  - Video stream metadata.
+  - Warnings such as variable frame rate, missing timestamps, unknown altitude datum, or uncertain stabilization.
+
+ Acceptance criteria
+  - No reconstruction begins when frame timing is unknown or telemetry is structurally invalid.
+  - Every user-visible warning is also machine-readable.
+
+ Stage 1 - Time synchronization
+ Problem
+ The camera clock and flight-controller clock may have an offset, drift, or different epoch. A one-second offset at 8 m/s
+ produces an 8 m camera-prior error.
+
+ Initial method
+ 1.  Convert video frame presentation timestamps into seconds from video start.
+ 2.  Convert telemetry time into seconds from telemetry start.
+ 3.  Support a manual offset in the UI.
+
+ 4.  Interpolate GPS and attitude at selected frame timestamps.
+ 5.  Store the interpolation interval and mark gaps.
+
+ Improved method
+  - Estimate offset by correlating visual motion/rotation with IMU angular velocity.
+
+
+
+
+
+Prepared 24 August 2026                                                                                                             Page 24
+
+===== PAGE 25 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                        NTRO  |  ROBOTICS AND DRONES
+
+
+
+  - Compare visual speed from initial reconstruction with GNSS ground speed.
+  - Optimize time offset as a scalar parameter in a bounded search.
+
+ Quality gates
+  - Maximum allowed telemetry gap.
+  - Maximum interpolation distance.
+  - Monotonic timestamps.
+  - No impossible jumps in GPS/attitude.
+  - Offset uncertainty reported in milliseconds.
+
+ Stage 2 - Camera calibration and image model
+ Preferred order
+ 1.  Use trusted manufacturer/lab intrinsics for the exact recording resolution and mode.
+
+ 2.  Use a team-generated ChArUco/checkerboard calibration.
+ 3.  Use shared-intrinsics self-calibration in COLMAP.
+ 4.  Fall back to a simple radial model with an explicit warning.
+
+ OpenCV recommends multiple views of a calibration target and notes that a roughly printed, unmeasured board can
+ itself introduce error. See the OpenCV calibration tutorial.
+
+ Calibration capture checklist
+  - Same resolution, crop, focus, and stabilization mode as the flight.
+  - At least 15-30 useful board views across the frame.
+  - Varied board orientation and distance.
+  - Board dimensions physically measured.
+  - No motion blur.
+  - RMS and per-view reprojection error retained.
+
+ IMU/camera calibration
+ If a rigid camera-IMU setup and raw IMU are used, Kalibr can estimate spatial and temporal calibration using an
+ AprilGrid. See Kalibr. This is a P2 task unless the team already has synchronized sensor hardware.
+
+ Rolling shutter
+  - Record readout time if available.
+  - Prefer a slower flight and fast shutter.
+  - Do not confuse fast shutter with global shutter; geometric row timing still exists.
+  - Add rolling-shutter compensation only after a controlled experiment proves it is a major error source.
+
+ Stage 3 - Frame extraction and quality scoring
+
+ Why not use every video frame
+ Thirty frames per second creates extreme redundancy, excessive matching cost, and almost-zero baselines between
+ neighbours. Useful keyframes should preserve overlap while gaining enough camera motion for triangulation.
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                 Page 25
+
+===== PAGE 26 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                       NTRO  |  ROBOTICS AND DRONES
+
+
+ Per-frame signals
+  - Timestamp.
+  - Blur score.
+
+  - Saturated/dark pixel fraction.
+  - Entropy or local contrast.
+  - Compression/blockiness indicator.
+  - Optical-flow magnitude.
+  - Motion direction consistency.
+  - GPS displacement since last retained frame.
+  - Attitude change.
+  - Scene-change/appearance difference.
+  - Dynamic-object coverage.
+
+ Selection policy
+ Use an adaptive selector rather than fixed N fps alone:
+ 1.  Start from a maximum candidate rate, such as 5 fps.
+ 2.  Reject severe blur and exposure failures.
+ 3.  Retain a candidate when median optical flow, GPS displacement, or rotation passes a minimum baseline.
+
+ 4.  Reject it if overlap with the previous retained keyframe is too low.
+ 5.  Preserve extra keyframes around turns, occlusions, or sudden appearance change.
+ 6.  Cap long static segments.
+ 7.  Ensure end-of-pass coverage.
+
+ Important implementation detail
+ Blur thresholds must be calibrated per resolution and scene. A universal variance-of-Laplacian threshold is brittle. Begin
+ with distribution-based thresholds, manually review the chosen/rejected frames, and save contact sheets.
+
+ Outputs
+  - Original selected frames.
+  - Matcher-resolution frames.
+  - Thumbnail/contact sheet.
+  - frame_scores.parquet.
+  - keyframes.json.
+
+ Stage 4 - Dynamic-object and invalid-region masks
+ Mask classes
+  - People.
+
+  - Cars, buses, trucks, motorcycles, bicycles.
+  - Animals.
+  - Fast-moving machinery.
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                               Page 26
+
+===== PAGE 27 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                          NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  Drone propellers/body if visible.
+  -  Sky where it creates unstable features.
+  -  Video overlays, timestamps, logos, or telemetry text.
+  -  Severe reflection/glare regions when identified.
+
+ Initial approach
+  -  Run a pretrained semantic/instance segmentation model on retained keyframes.
+  -  Dilate dynamic masks slightly to remove edge contamination.
+  -  Save masks in COLMAP-compatible filenames.
+  -  Mask for feature extraction and dense reconstruction.
+
+ Temporal improvement
+  -  Detect on anchor frames.
+  -  Propagate/refine with SAM 2 or optical flow.
+  -  Use track consistency to distinguish parked/static objects from moving objects.
+
+ Honest nuance
+ A static parked vehicle can be reconstructed as scene geometry; a moving vehicle creates ghosts. The first prototype
+ can mask all vehicles for safety. A later version can classify static versus moving tracks.
+
+ Evaluation
+  -  Mask IoU on a small manually labelled subset.
+  -  Number of dynamic feature tracks removed.
+  -  Ghost-point count/volume before versus after masking.
+  -  Reconstruction completeness loss caused by over-masking.
+
+ Stage 5 - Feature extraction and pair selection
+ Baseline
+  -  COLMAP SIFT or built-in ALIKED.
+  -  Shared camera intrinsics.
+  -  Sequential matcher with temporal neighbours.
+  -  Limited loop/retrieval pairs for revisited views.
+  -  GPS-based candidate pair pruning only when telemetry is trustworthy.
+
+ Pair graph
+ For keyframe i, initially match:
+  -  i ± 1...10 depending on retained spacing.
+  -  Additional frames with spatially nearby GPS positions.
+  -  Additional retrieval matches if the path turns or revisits.
+
+ Avoid exhaustive all-pairs matching for a simple sequence unless the keyframe set is tiny.
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 27
+
+===== PAGE 28 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                         NTRO  |  ROBOTICS AND DRONES
+
+
+ Fallback ladder
+ 1.  SIFT baseline.
+ 2.  ALIKED in current COLMAP.
+
+ 3.  SuperPoint + LightGlue through hloc.
+ 4.  LoFTR for specific texture-poor or repetitive cases.
+
+ Only promote a fallback if it measurably improves registered frames, pose accuracy, or surface completeness without
+ increasing bad matches.
+
+ Stage 6 - Visual reconstruction with GPS priors
+ Primary reconstruction
+ Use COLMAP pose_prior_mapper or PyCOLMAP equivalent:
+  -  Insert each keyframe's position prior.
+
+  -  Convert geodetic coordinates to a stable local metric frame first.
+  -  Set prior covariance from reported GNSS accuracy/HDOP where possible.
+  -  Otherwise use conservative default standard deviations.
+  -  Share/fix intrinsics appropriately.
+  -  Use robust bundle adjustment.
+
+ Coordinate handling
+ 1.  Keep original WGS84 latitude/longitude/height.
+ 2.  Select a local origin near the flight.
+ 3.  Transform to ECEF and then local ENU, or an appropriate UTM/project CRS.
+ 4.  Run numerical geometry close to the origin to avoid precision loss.
+ 5.  Store the complete transform chain.
+
+ PROJ is the standard transformation engine to use for CRS conversions. Never perform metric measurements directly
+ in latitude/longitude degrees.
+
+ Why GPS is a soft prior
+  -  Basic GNSS is noisier than relative visual structure.
+  -  Urban multipath can create biased positions.
+  -  Vertical GNSS is usually worse than horizontal.
+  -  A bad prior can bend a reconstruction if overweighted.
+
+ The solve should compare at least:
+  -  Visual-only SfM followed by robust Sim(3) alignment to GPS.
+  -  Joint mapping with GPS position priors.
+
+ Choose the better method using held-out checkpoints and residuals, not aesthetics.
+
+ Outputs
+  -  Registered cameras.
+  -  Sparse points and tracks.
+  -  Reprojection residuals.
+
+
+
+
+Prepared 24 August 2026                                                                                                                 Page 28
+
+===== PAGE 29 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                       NTRO  |  ROBOTICS AND DRONES
+
+
+
+  - Camera-prior residuals.
+  - Estimated intrinsics.
+  - Local-to-world transform.
+  - Registration failure list.
+
+ Failure signals
+  - Less than 70-80% of eligible keyframes registered.
+  - Large focal-length drift.
+  - Camera trajectory folds or jumps.
+  - GPS residuals show a systematic time offset.
+  - Sparse geometry appears planar when the scene is not.
+  - Track lengths are mostly two views.
+  - Triangulation angles are extremely small.
+
+ Stage 7 - Optional IMU/attitude fusion
+
+ MVP use
+  - Use attitude as a diagnostic and orientation prior.
+  - Use gravity direction to level the model.
+  - Use gimbal pose if camera-to-body transform is known.
+
+ Advanced use
+  - IMU preintegration.
+  - Factor graph with camera poses, velocities, biases, GPS factors, barometer factors, and visual constraints.
+  - Tools to consider: GTSAM or Ceres-based custom optimization.
+
+ Do not implement full VIO solely for buzzwords. It is valuable only if timestamps, IMU calibration, and camera-IMU
+ extrinsics are trustworthy.
+
+ Stage 8 - Dense geometry
+
+ Baseline option A: COLMAP PatchMatch + fusion
+  - Undistort registered images.
+  - Select source views based on overlap.
+  - Estimate depth/normal maps.
+  - Enable geometric consistency in the accurate profile.
+  - Fuse depth maps.
+
+ Baseline option B: OpenMVS
+  - Convert the sparse camera scene.
+  - Densify point cloud.
+  - Reconstruct and refine mesh.
+  - Texture mesh.
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                               Page 29
+
+===== PAGE 30 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                        NTRO  |  ROBOTICS AND DRONES
+
+
+ Recommended sequence
+ 1.  Make COLMAP sparse reliable.
+ 2.  Get one COLMAP dense cloud.
+
+ 3.  Compare OpenMVS for mesh/texturing.
+ 4.  Keep both backends behind one interface only if each has a demonstrated advantage.
+
+ Geometry cleanup
+  - Statistical/radius outlier filtering.
+
+  - Remove points outside the scene/camera envelope.
+  - Crop by operator-defined AOI.
+  - Estimate normals.
+  - Remove isolated components.
+  - Ground/non-ground classification if DSM/DTM is needed.
+  - Preserve raw fused output alongside cleaned output.
+
+ Vegetation handling
+ Vegetation moves and violates a rigid-scene assumption. Do not promise leaf-level accuracy. Represent it as:
+  - A lower-confidence observed surface/occupancy.
+  - Optional semantic class.
+  - A reason for local measurement warnings.
+
+ Stage 9 - AI depth prior and weak-region assistance
+
+ Correct use
+ For a retained frame, compute learned metric/relative depth and align it to reliable multi-view depth using robust
+ scale-and-shift or metric calibration. Use it to:
+  - Flag holes likely caused by weak texture.
+  - Propose depth where multi-view support is marginal.
+  - Improve initialization or regularization.
+  - Estimate a weak-region uncertainty signal.
+
+ Fusion gate
+ A learned depth sample can influence observed geometry only when:
+  - It agrees with reliable multi-view depth in neighbouring pixels/frames.
+  - It is cross-view consistent after reprojection.
+  - It is outside dynamic masks.
+  - Its uncertainty is below a calibrated threshold.
+  - It does not contradict camera/GPS geometry.
+
+ Otherwise it remains a visual prior or becomes AI_INFERRED.
+
+ Never do this
+  - Convert one monocular depth frame into a point cloud and call it accurate.
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                Page 30
+
+===== PAGE 31 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                      NTRO  |  ROBOTICS AND DRONES
+
+
+
+  - Force learned depth into a scene when intrinsics are wrong.
+  - Hide the model source or checkpoint licence.
+  - train on the evaluation scene and present it as generalization.
+
+ Stage 10 - Mesh and texture
+ Mesh choices
+  - Poisson reconstruction for smoother, potentially watertight surfaces.
+  - Delaunay/visibility-aware meshing for preserving observed free space.
+
+  - OpenMVS mesh generation and refinement.
+
+ Tradeoff
+ A watertight mesh can fill holes that were never observed. Filled faces must carry an inferred/unobserved status or be
+ excluded from metric measurement.
+
+ Texture workflow
+  - Use original high-quality frames, not histogram-equalized matcher frames.
+  - Exposure compensation across source views.
+  - Seam optimization.
+
+  - Texture atlas generation.
+  - Remove dynamic sources.
+  - Export material and texture provenance.
+
+ Minimum output
+  - Dense PLY/LAZ is more important than a perfect mesh.
+  - Add GLB/OBJ after measurements on point cloud work.
+
+ Stage 11 - Georeferencing, scale, and vertical datum
+
+ Required transforms
+  - SfM local frame to local ENU/projected CRS.
+  - Projected CRS to WGS84.
+  - Optional ellipsoidal height to orthometric/MSL height when a geoid model is available.
+
+ Alignment methods
+  - Robust 7-DoF similarity transform using camera centres and GPS.
+  - GPS-constrained bundle adjustment.
+  - Optional known scale distance.
+  - Gravity/Manhattan alignment for upright orientation.
+
+ Must report separately
+  - Relative geometric accuracy.
+  - Absolute horizontal geolocation error.
+  - Absolute vertical error.
+
+
+
+
+
+Prepared 24 August 2026                                                                                                             Page 31
+
+===== PAGE 32 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                           NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  Scale error.
+  -  Orientation error.
+
+ One good number cannot summarize all four.
+
+ Stage 12 - Confidence and provenance
+ Per-point or per-cell features
+  -  Number of supporting views.
+  -  Track length.
+
+  -  Triangulation angle.
+  -  Reprojection error.
+  -  Depth photometric score.
+  -  Multi-view geometric consistency.
+  -  Distance to nearest camera path.
+  -  Dynamic-mask proximity.
+  -  Learned-depth disagreement.
+  -  GPS/pose residual in supporting cameras.
+  -  Whether meshing filled a hole.
+
+ Initial confidence engine
+ Use transparent rules and thresholds calibrated on a held-out scene. Do not invent an unexplained "AI confidence of
+ 97%."
+
+ Example status logic:
+
+ if generated_by_completion or unsupported_mesh_fill:
+     status = AI_INFERRED
+ elif views >= 4 and reprojection_error is low and triangulation_angle is healthy
+      and multiview_consistency is high and not near_dynamic_mask:
+     status = OBSERVED_HIGH
+ elif views >= 3 and consistency is acceptable:
+     status = OBSERVED_MEDIUM
+ else:
+     status = OBSERVED_LOW
+ Later calibration
+ Train or calibrate a lightweight confidence model against point-to-reference errors. Inputs are the features above; output
+ is the probability that a point/measurement lies within a declared tolerance. Use reliability diagrams and expected
+ calibration error.
+
+ Measurement policy
+  -  Green: allowed by default.
+  -  Yellow: allowed with warning and uncertainty.
+  -  Red/low: explicit confirmation.
+  -  Inferred: disabled for "verified measurement" mode.
+
+  -  Unseen: no value.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                    Page 32
+
+===== PAGE 33 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                    NTRO  |  ROBOTICS AND DRONES
+
+
+ Stage 13 - Standard outputs
+
+ Geometry
+  - PLY: portable point cloud/debug.
+  - LAS/LAZ or COPC: georeferenced point cloud.
+  - OBJ + textures: broad mesh compatibility.
+  - glTF/GLB: web/native mesh delivery.
+  - OGC 3D Tiles: progressive geospatial web streaming.
+
+ Raster/geospatial
+  - GeoTIFF orthomosaic when scene angle supports it.
+  - DSM GeoTIFF.
+  - Optional DTM GeoTIFF with clear classification caveats.
+
+  - GeoJSON flight path, camera centres, AOI, checkpoints, and measurements.
+
+ Reports
+  - quality_report.json.
+  - quality_report.pdf or HTML later.
+
+  - run_manifest.json.
+  - camera_poses.csv.
+  - coverage.geojson.
+  - measurements.geojson.
+  - licenses.json.
+
+ OpenDroneMap is a useful baseline because its official output set includes georeferenced PLY/LAZ, textured OBJ,
+ orthophoto, DSM, and DTM. See ODM outputs. Our application must differentiate itself through video/telemetry
+ synchronization, confidence/provenance, AI assistance, evaluation, and operator workflow-not by merely reproducing
+ those filenames.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                            Page 33
+
+===== PAGE 34 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                            NTRO  |  ROBOTICS AND DRONES
+
+  6. Proposed "Desired Output" table missing from the
+  statement
+
+
+  The official text contains the placeholder "Add 'Desired Output' and 'Evaluation Criteria' table here." Until NTRO
+  publishes a real table, use the following as our declared engineering contract.
+
+   Desired output                          Minimum prototype                                Strong finalist version                          Format
+
+   Georeferenced sparse                    Camera trajectory and sparse landmarks           Live/progressive preview with residual           COLMAP + PLY +
+   reconstruction                                                                           overlays                                         GeoJSON
+
+   Dense point cloud                       Clean observed-region point cloud                Tiled, semantic/confidence attributes            PLY, LAZ/COPC, 3D Tiles
+
+   Textured 3D mesh                        Optional for first POC                           Observed/inferred face labelling and             OBJ/MTL/JPG, GLB
+                                                                                            texture atlas
+
+   Terrain/surface product                 DSM or local surface where view supports         DSM + orthomosaic + coverage mask                GeoTIFF
+                                           it
+
+   Georeferencing                          Local metric CRS + WGS84 metadata                RTK/PPK support, datum-aware vertical            EPSG/PROJ metadata
+                                                                                            reporting
+
+   Measurements                            Distance and height                              Distance, height, area, slope, volume with       UI + GeoJSON/JSON
+                                                                                            confidence
+
+   Accuracy report                         Reprojection, registration, scale/check          Independent                                      JSON + HTML/PDF
+                                           distances                                        point-cloud/trajectory/checkpoint evaluation
+
+   Confidence/provenance                   High/medium/low/inferred/unseen                  Calibrated per-point/per-tile error              Point attributes + tiles
+                                                                                            probability
+
+   Dynamic-object handling                 Mask people/vehicles                             Temporal tracking and ghost-suppression          PNG masks + QA report
+                                                                                            comparison
+
+   Processing transparency                 Stage status and logs                            Reproducible run manifest with hashes            JSON logs/manifests
+
+   Offline operation                       Local deployment                                 Air-gapped package with RBAC/audit               Containers/install bundle
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                         Page 34
+
+===== PAGE 35 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                         NTRO  |  ROBOTICS AND DRONES
+
+ 7. Proposed evaluation criteria and target bands
+
+
+ These targets are our prototype gates, not official NTRO thresholds. The UI must report actual values, not hide a
+ missed target.
+
+   Category       Metric                                    MVP gate                        Strong target                    Notes
+
+   Input          Successful ingest                         MP4 + CSV/SRT                   MP4/MOV +                        1080p/4K
+                                                                                            CSV/SRT/tlog/ULog
+
+   Frame          Useful keyframe acceptance                Manual review passes            ≥90% accepted by reviewer        Define on labelled sample
+   selection
+
+   SfM            Eligible keyframes registered             ≥80%                            ≥95%                             Exclude intentionally rejected frames
+
+   SfM            Median reprojection error                 ≤1.5 px                         ≤1.0 px                          Also report p95
+
+   Pose           APE/RPE against GT                        Report                          Beat visual-only baseline        Where reference poses exist
+
+   Geo            Horizontal checkpoint RMSE                Report by GNSS tier             Within declared GNSS tier        Never imply RTK accuracy from basic
+                                                                                                                             GNSS
+
+   Geo            Vertical checkpoint RMSE                  Report separately               Within declared altitude tier    State datum
+
+   Scale          Median known-distance error               ≤5%                             ≤3%                              High-confidence observed geometry
+
+   Scale          p95 known-distance error                  ≤10%                            ≤5%                              Multiple dimensions/scales
+
+   Surface        Accuracy                                  Report at 1×/2×/5× GSD          Median ≤3× estimated GSD         Use reference scan/cloud where
+                                                            thresholds                                                       possible
+
+   Surface        Completeness                              ≥70% visible region             ≥85% visible region              Do not count unseen rear surfaces
+
+   Dynamic        Ghost suppression                         Visible reduction               ≥70% reduction on labelled       Compare with unmasked baseline
+                                                                                            cases
+
+   Confidence     High-confidence coverage                  ≥85% inside declared            ≥90%                             Calibration set must be held out
+                  correctness                               tolerance
+
+   Provenanc      Inferred geometry mislabeled              0                               0                                Hard safety rule
+   e              observed
+
+   Speed          Sparse preview                            Report real-time factor         ≤1× video duration on target     Scene-dependent
+                                                                                            GPU
+
+   Speed          Balanced final result                     ≤10× video duration             ≤5×                              State frame count/resolution/hardware
+
+   Reliability    Successful end-to-end runs                8/10                            19/20                            Fixed benchmark suite
+
+   Reproducib     Same config produces comparable           Required                        Automated regression             Store seeds/versions
+   ility          metrics                                                                   thresholds
+
+ Evaluation methodology
+
+ Camera trajectory
+ Use evo_ape for global pose consistency and evo_rpe for local drift where reference trajectories exist. The evo
+ metrics documentation explicitly supports Sim(3) alignment for monocular scale ambiguity.
+
+ Point cloud
+ Report:
+  -  Accuracy: reconstructed points near reference surface.
+  -  Completeness: reference surface covered by reconstruction.
+  -  F-score at declared distance thresholds.
+  -  Chamfer-like distances for debugging, not as the only claim.
+  -  Separate vegetated and rigid regions.
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                      Page 35
+
+===== PAGE 36 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                           NTRO  |  ROBOTICS AND DRONES
+
+
+
+ The ETH3D benchmark uses high-precision laser-scanned ground truth and accuracy/completeness-style evaluation.
+ Use its definitions as a model for our QA.
+
+ Geospatial accuracy
+  -  Use independent checkpoints.
+  -  Report RMSEx, RMSEy, horizontal radial error, RMSEz, and 3D error.
+  -  State CRS and vertical datum.
+  -  State checkpoint count and survey method.
+  -  Follow the reporting spirit of the ASPRS positional accuracy standards.
+
+ Measurement validation
+  -  At least 20 distances across short/medium/long ranges.
+  -  At least 5 height measurements.
+  -  At least 3 areas if the UI exposes area.
+  -  At least 1 volume only if volume is included.
+  -  Report median, mean, RMSE, p95, maximum, and signed bias.
+
+ Runtime
+ For every benchmark, record:
+
+  -  Video length/resolution/codec/bitrate.
+  -  Candidate and retained frame counts.
+  -  Processing resolution.
+  -  CPU, RAM, GPU, VRAM.
+  -  Per-stage wall time.
+  -  Peak memory.
+  -  Artifact sizes.
+
+ "Near-real-time" must always include the hardware and profile used.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 36
+
+===== PAGE 37 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                       NTRO  |  ROBOTICS AND DRONES
+
+ 8. Dataset plan
+
+
+ No single public dataset perfectly matches "4K drone video + GPS + flight metadata + accurate reference 3D for a
+ one-pass urban scene." We therefore need a mixed validation portfolio.
+
+   Dataset/source                          What it tests                                                 What it does not prove
+
+   Team-controlled drone capture           Full product ingest, SRT/CSV, georeferencing,                 Generalization unless several scenes are captured
+                                           measurements
+
+   EuRoC MAV                               Visual-inertial trajectory and calibration                    Outdoor 4K/GPS/urban reconstruction
+
+   UZH-FPV                                 Aggressive motion, blur, camera+IMU state estimation          Survey mapping and standard GNSS georeferencing
+
+   ETH3D                                   Dense MVS accuracy/completeness against laser ground          Drone/GPS workflow
+                                           truth
+
+   UAVid                                   Aerial urban semantic/dynamic masking                         Metric 3D ground truth and GPS
+
+   OpenDroneMap samples                    Photogrammetric baseline and outputs                          Exact single-pass operational conditions
+
+   NTRO live dataset                       Final adaptation/evaluation                                   Available only when supplied
+
+ Primary dataset references:
+
+  -  EuRoC MAV provides synchronized stereo images, IMU, calibration, and accurate motion/structure ground truth.
+  -  UZH-FPV provides challenging drone images, IMU, calibration, and laser-tracker ground truth for aggressive motion.
+  -  ETH3D provides high-resolution multi-view and video benchmarks with laser-scanned geometry.
+  -  UAVid contains 4K oblique urban UAV video sequences and semantic labels including people, moving cars,
+      buildings, roads, and vegetation.
+
+ Our controlled dataset matrix
+ Capture at least these scenes:
+
+   Scene                                                      Purpose                                     Required ground truth
+
+   Building facade + roof edge                                Main SIH demo                               10-15 checkpoint/known dimensions
+
+   Road/courtyard with moving people/vehicles                 Dynamic masking                             Manual masks + known distances
+
+   Vegetated edge                                             Confidence/failure behavior                 Reference photos and selected measurements
+
+   Low-texture wall/roof                                      Learned matching/depth fallback             Known plane and dimensions
+
+   Shadow/illumination transition                             Robust matching                             Same-scene baseline
+
+   Intentionally poor capture                                 Quality rejection                           Expected warnings, not a pretty output
+
+ Dataset splits
+  -  Development: tune thresholds.
+  -  Validation: choose model/profile.
+  -  Final holdout: no tuning; used in pitch metrics.
+
+ Do not report metrics only on the same scene used to tune frame selection and confidence.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                   Page 37
+
+===== PAGE 38 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                            NTRO  |  ROBOTICS AND DRONES
+
+ 9. Single-pass flight and capture SOP
+
+
+ This is for lawful, authorized test capture only. Before flying in India, verify the current airspace zone and applicable
+ permissions under the Ministry of Civil Aviation's Drone Rules and amendments. Do not collect sensitive sites without
+ authorization.
+
+ Scene selection
+  -  Obtain site permission.
+  -  Avoid airports, restricted zones, crowds, and sensitive installations.
+  -  Prefer a rigid, textured structure for the first test.
+  -  Avoid glass-dominant or repetitive facades initially.
+  -  Mark independent checkpoints before flight.
+  -  Record ground-truth measurements and photos.
+
+ Camera settings
+  -  4K/30 fps preferred.
+  -  Fixed focal length.
+  -  Lock focus.
+  -  Disable digital zoom.
+
+  -  Prefer mechanical gimbal over electronic warping.
+  -  Use fast daylight shutter, approximately 1/800-1/1600 s as a starting range, then verify exposure.
+  -  Keep ISO low enough to preserve feature detail.
+  -  Avoid clipped sky and crushed shadows.
+  -  Avoid changing picture profiles mid-flight.
+  -  Record original files without messaging-app recompression.
+
+ Path geometry
+  -  One continuous pass.
+  -  Maintain stable speed.
+  -  Use an oblique angle that sees both facade and roof where the target demands both.
+  -  Avoid a perfectly featureless, purely collinear view if the operational definition allows a slight smooth curve within the
+     single pass.
+  -  Do not orbit the building and call it a single pass unless NTRO explicitly accepts that interpretation.
+  -  Keep adequate stand-off distance and motion parallax.
+
+  -  Do not exceed lawful altitude/airspace limits.
+
+ Metadata
+  -  Start video before the useful pass and stop after it.
+  -  Save SRT/tlog/DataFlash/ULog immediately.
+
+  -  Note camera mode, stabilization, gimbal setting, and approximate time offset.
+  -  Copy files with hashes.
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                     Page 38
+
+===== PAGE 39 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                           NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  Record weather, illumination, and wind.
+
+ Post-flight validation
+  -  Check video integrity before leaving.
+
+  -  Check that telemetry covers the full video.
+  -  Check GPS fix quality.
+  -  Photograph every ground-truth checkpoint.
+  -  Re-measure ambiguous dimensions.
+  -  Keep a field log.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                    Page 39
+
+===== PAGE 40 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                          NTRO  |  ROBOTICS AND DRONES
+
+ 10. Backend product design
+
+ Core entities
+  -  Project - target scene and ownership.
+  -  InputAsset - immutable video/telemetry/calibration/ground truth.
+  -  ProcessingRun - one versioned config and result.
+  -  StageExecution - stage status, logs, timings, resource use.
+  -  Frame - timestamp, pose prior, quality, selected status, mask path.
+  -  Reconstruction - sparse/dense/mesh/tiles artifacts and transforms.
+  -  QualityMetric - name, value, unit, scope, threshold, pass/fail.
+  -  Measurement - endpoints/geometry, value, confidence, provenance.
+  -  Checkpoint - independent validation point/dimension.
+  -  Export - format, checksum, CRS, size, status.
+
+ Job state machine
+
+ CREATED
+   -> VALIDATING
+   -> INGESTED
+   -> SYNCING
+   -> SELECTING_FRAMES
+   -> MASKING
+   -> SPARSE_RECONSTRUCTION
+   -> GEOREFERENCING
+   -> DENSE_RECONSTRUCTION
+   -> MESHING_TEXTURING       (optional)
+   -> QUALITY_ANALYSIS
+   -> TILING_EXPORT
+   -> COMPLETED
+
+ Any stage -> FAILED_RETRYABLE | FAILED_FINAL | CANCELLED
+ Initial API surface
+
+ POST   /v1/projects
+ GET    /v1/projects/{project_id}
+ POST   /v1/projects/{project_id}/assets
+ POST   /v1/projects/{project_id}/runs
+ GET    /v1/runs/{run_id}
+ POST   /v1/runs/{run_id}/cancel
+ POST   /v1/runs/{run_id}/retry
+ GET    /v1/runs/{run_id}/frames
+ PATCH  /v1/runs/{run_id}/frames/{frame_id}
+ GET    /v1/runs/{run_id}/artifacts
+ GET    /v1/runs/{run_id}/quality
+ POST   /v1/runs/{run_id}/measurements
+ GET    /v1/runs/{run_id}/measurements
+ POST   /v1/runs/{run_id}/exports
+ GET    /v1/exports/{export_id}
+ WS     /v1/runs/{run_id}/events
+ Processing configuration
+ Every run should save:
+  -  Profile.
+  -  Frame-selection thresholds.
+  -  Keyframe cap.
+
+  -  Matcher and pair window.
+  -  Camera model/intrinsics mode.
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 40
+
+===== PAGE 41 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                          NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  Pose-prior covariance policy.
+  -  Dense resolution/source count/geometric consistency.
+  -  Mask model and threshold.
+  -  Depth-prior model and fusion policy.
+  -  CRS/local origin.
+  -  Confidence rules/model version.
+  -  Software/container versions.
+  -  Random seeds where relevant.
+
+ Failure messages must be actionable
+ Bad:
+
+      Reconstruction failed.
+
+
+ Good:
+
+      Only 31 of 122 selected keyframes registered. Most failed pairs had fewer than 20 verified matches. Try the
+      low-texture learned matcher, reduce keyframe spacing, verify camera intrinsics, or exclude frames 74-91 with
+      severe blur.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 41
+
+===== PAGE 42 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                    NTRO  |  ROBOTICS AND DRONES
+
+ 11. Frontend/operator experience
+
+ Screen 1 - New mission/project
+  - Project name and description.
+  - Video drop zone.
+  - Telemetry drop zone.
+  - Camera profile selector/upload.
+  - Optional ground-truth upload.
+  - Processing profile.
+  - Data-sensitivity/offline indicator.
+
+ Screen 2 - Ingest and synchronization
+  - Video preview.
+  - Flight path map.
+  - Telemetry graphs.
+  - Frame/GPS cursor linked to playback.
+  - Manual time-offset slider.
+  - Warnings about gaps, altitude datum, variable frame rate, stabilization.
+
+ Screen 3 - Frame quality
+  - Selected/rejected filmstrip.
+  - Blur/exposure/dynamic scores.
+  - Toggle manual inclusion.
+
+  - Map positions of retained keyframes.
+  - Estimated overlap/baseline indicators.
+
+ Screen 4 - Processing
+  - Stage timeline.
+
+  - Per-stage percent and elapsed time.
+  - Registered camera count.
+  - Sparse preview as soon as available.
+  - Resource/queue state.
+  - Cancel/retry controls.
+  - Human-readable diagnostic panel.
+
+ Screen 5 - 3D mission viewer
+  - Point cloud/mesh/DSM/orthomosaic layers.
+  - Flight path and camera frustums.
+  - Source-image inspector: click a point to see supporting frames.
+  - Confidence colors.
+
+
+
+
+
+Prepared 24 August 2026                                                                                                           Page 42
+
+===== PAGE 43 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                        NTRO  |  ROBOTICS AND DRONES
+
+
+
+  - Observed/inferred/unseen toggle.
+  - Distance, height, area, slope, and annotation tools.
+  - Measurement uncertainty and provenance.
+  - Map coordinates/status bar.
+  - Clip/cross-section tool as a stretch feature.
+
+ Screen 6 - Accuracy and coverage
+  - Registered keyframe rate.
+  - Reprojection-error histogram.
+  - GPS residual plot.
+  - Checkpoint residual table/map.
+  - Known-distance error chart.
+  - Surface accuracy/completeness if reference cloud exists.
+  - Runtime breakdown.
+
+  - Hardware/config summary.
+  - Pass/fail against declared target profile.
+
+ Screen 7 - Export
+  - PLY/LAZ/COPC.
+
+  - OBJ/GLB.
+  - 3D Tiles.
+  - GeoTIFF DSM/orthomosaic.
+  - GeoJSON measurements/path/coverage.
+  - Run manifest and QA report.
+  - Checksums and CRS clearly visible.
+
+ Visual design principle
+ The UI should feel operational, not like a gaming demo:
+  - Dark neutral workspace.
+  - High-contrast confidence legend.
+  - Clear timestamps, units, CRS, and warnings.
+  - No meaningless animated "AI" effects.
+  - Performance and uncertainty visible by default.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                Page 43
+
+===== PAGE 44 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                             NTRO  |  ROBOTICS AND DRONES
+
+ 12. Repository structure
+
+
+
+ sih26158/
+ +-- README.md
+ +-- LICENSES.md
+ +-- Makefile
+ +-- compose.yaml
+ +-- .env.example
+ +-- configs/
+ |   +-- preview.yaml
+ |   +-- balanced.yaml
+ |   +-- accurate.yaml
+ |   +-- cameras/
+ +-- apps/
+ |   +-- api/
+ |   +-- worker/
+ |   +-- web/
+ +-- packages/
+ |   +-- schemas/
+ |   +-- telemetry/
+ |   +-- video/
+ |   +-- calibration/
+ |   +-- reconstruction/
+ |   +-- geospatial/
+ |   +-- confidence/
+ |   +-- evaluation/
+ |   +-- exporters/
+ +-- pipelines/
+ |   +-- ingest.py
+ |   +-- select_frames.py
+ |   +-- build_masks.py
+ |   +-- sparse.py
+ |   +-- dense.py
+ |   +-- georeference.py
+ |   +-- quality.py
+ |   +-- export.py
+ +-- scripts/
+ |   +-- doctor.sh
+ |   +-- run_poc.sh
+ |   +-- benchmark.sh
+ +-- tests/
+ |   +-- unit/
+ |   +-- integration/
+ |   +-- fixtures/
+ |   +-- e2e/
+ +-- docs/
+ |   +-- architecture.md
+ |   +-- input-format.md
+ |   +-- capture-sop.md
+ |   +-- evaluation.md
+ |   +-- security.md
+ |   +-- demo-script.md
+ +-- data/
+ |   +-- README.md
+ |   +-- samples/
+ |   +-- .gitignore
+ +-- artifacts/
+     +-- .gitignore
+ Implementation order
+
+ Do not scaffold every empty service on day one. Build in this order:
+ 1.   packages/telemetry and packages/video.
+ 2.   One CLI POC pipeline.
+ 3.   Reconstruction and evaluation interfaces.
+ 4.   Minimal API and worker.
+ 5.   Minimal viewer.
+ 6.   Database/job durability.
+ 7.   AI enhancements.
+ 8.   Product polish.
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                       Page 44
+
+===== PAGE 45 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                        NTRO  |  ROBOTICS AND DRONES
+
+ 13. 27-day execution plan to the reported 20 September
+ deadline
+
+
+ This assumes work starts 24-25 August 2026. Each ticket is intentionally small, has one primary owner/machine and
+ ends in a file, test or measured result. If a ticket cannot be demonstrated, it is not done.
+
+ Four parallel work lanes
+
+   Lane                      Default machine         Owner focus                                              Daily visible output
+
+   R - Reconstruction        H1 Intel 32 GB          frames, SfM, georeferencing, dense geometry,             Run folder plus metrics
+                                                     exports
+
+   V - Vision/AI             H2 M4 24 GB             quality scores, masks, optional depth/features           Versioned masks/model manifest plus A/B metric
+
+   P - Product               H3 M4 16 GB             API client, viewer, UX and integration                   Working screen connected to sample artifacts
+
+   O - Ops/evaluation        H4 i5 16 GB             schemas, service, tests, datasets and evidence           Passing test/report/checklist
+
+ If the team has fewer than four active developers, combine R+V and P+O. Do not make one person own two
+ simultaneous critical-path tickets.
+
+ Days 1-2 - Hard feasibility gate
+
+   Ticket         Machine         Small task                                                         Done when
+
+   F01            O/H4            Record OS, free SSD, CPU cores and exact GPU names for             hardware.json is committed
+                                  all machines
+
+   F02            O/H4            Create one 30-60 second easy bundle and one hard bundle            Both have manifests and checksums
+                                  with video plus telemetry
+
+   F03            R/H1            Install FFmpeg, COLMAP CPU path and viewer tools                   Smoke commands pass
+
+   F04            V/H2            Verify PyTorch mps and run one small inference                     Device report and output image exist
+
+   F05            R/H1            Extract 40 frames at 1280 px                                       Timestamped frame list exists
+
+   F06            R/H1            Run sparse reconstruction on those 40 frames                       PLY and camera path open correctly
+
+   F07            R/H1            Repeat with 80-120 frames at 1600 px                               Registration and runtime are recorded
+
+   F08            R/H1            Align visual trajectory to GPS with a similarity transform         Residual plot and transform JSON exist
+
+   F09            P/H3            Display cloud and flight path in a local viewer                    Screenshot and reproducible launch command exist
+
+   F10            O/H4            Write the feasibility scorecard                                    Go/no-go decision is signed by the team
+
+ Gate: at least 80% of selected frames register on the easy scene, the camera path is plausible, scale is within 10% on
+ one known dimension, and every team member can explain the pipeline. If this fails, fix capture, timestamps, intrinsics
+ and frame selection before building more UI.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                    Page 45
+
+===== PAGE 46 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                               NTRO  |  ROBOTICS AND DRONES
+
+
+  Days 3-5 - Input and repeatable CLI
+
+   Ticket           Machine         Small task                                                            Done when
+
+   I01              O/H4            Freeze manifest.json schema                                           Invalid samples fail with clear errors
+
+   I02              R/H1            Wrap ffprobe metadata extraction                                      JSON output is stable on both samples
+
+   I03              O/H4            Implement generic telemetry CSV reader                                Unit tests cover missing and duplicate timestamps
+
+   I04              O/H4            Implement one real DJI/SRT or flight-log adapter                      It produces the generic schema
+
+   I05              R/H1            Implement timestamp interpolation                                     A frame-to-pose CSV is produced
+
+   I06              V/H2            Compute blur, exposure and duplicate scores                           Scores and thumbnails are exported
+
+   I07              R/H1            Implement adaptive keyframe selection                                 Preview profile stays within 100 frames
+
+   I08              R/H1            Create run_poc CLI with immutable run folders                         Same input/config gives comparable metrics
+
+   I09              O/H4            Add structured logs and stage manifest                                Failed stage and reason are machine-readable
+
+   I10              All             Process both bundles from a clean folder                              Two reproducible run folders exist
+
+  Days 6-8 - Sparse geometry and georeferencing
+
+   Ticket           Machine         Small task                                                            Done when
+
+   G01              R/H1            Add camera profile and fixed/shared intrinsics modes                  Both modes can be selected by config
+
+   G02              R/H1            Add sequential pair generation                                        Pair list matches video order
+
+   G03              R/H1            Export registration, track length and reprojection metrics            sparse_metrics.json exists
+
+   G04              R/H1            Convert WGS84 positions to a local metric CRS                         Round-trip coordinate test passes
+
+   G05              R/H1            Implement robust Sim(3) alignment                                     Outlier GPS points are reported, not hidden
+
+   G06              R/H1            Spike COLMAP pose-prior mapping                                       Result is compared with visual-only plus Sim(3)
+
+   G07              O/H4            Add known-distance and checkpoint input schema                        Bad units/CRS are rejected
+
+   G08              O/H4            Produce the first accuracy report                                     Scale, horizontal and vertical errors are separate
+
+  Gate: select one default sparse/georeferencing method based on registration, reprojection, checkpoint error and
+  runtime. Do not keep both paths in the demo merely because both run.
+
+  Days 9-11 - Local dense result
+
+   Ticket           Machine         Small task                                                            Done when
+
+   D01              R/H1            Run ODM on 60-100 selected 1600 px frames                             Dense cloud is produced or failure is diagnosed
+
+   D02              R/H1            Run one OpenMVS alternative on the same sparse result                 Quality/runtime comparison exists
+
+   D03              V/H2            Produce people, vehicle and sky masks                                 Masks align pixel-for-pixel with frames
+
+   D04              R/H1            Run masked/unmasked A/B reconstruction                                Ghost reduction and geometry loss are measured
+
+   D05              R/H1            Crop AOI and remove obvious isolated components                       Cleanup parameters are saved
+
+   D06              R/H1            Export PLY and LAZ with CRS sidecar                                   Both reopen with correct scale
+
+   D07              R/H1            Attempt mesh plus texture on the best run                             Output or explicit failure report exists
+
+   D08              O/H4            Record time, RAM, frame count and resolution                          Hardware benchmark row is complete
+
+  Gate: the balanced profile must finish locally on H1. CUDA may improve the final output later, but it cannot be the only
+  path that works.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                             Page 46
+
+===== PAGE 47 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                             NTRO  |  ROBOTICS AND DRONES
+
+
+  Days 12-14 - Minimal operator product
+
+   Ticket          Machine         Small task                                                            Done when
+
+   P01             O/H4            Add project, asset and run endpoints                                  API tests pass
+
+   P02             O/H4            Add SQLite job states and stage events                                Restart preserves job history
+
+   P03             P/H3            Build mission creation/upload screen                                  Valid bundle reaches the API
+
+   P04             P/H3            Build synchronization/frame-review screen                             User can reject a frame and rerun
+
+   P05             P/H3            Build processing timeline                                             Current stage and failure reason are visible
+
+   P06             P/H3            Load cloud/mesh and flight path                                       Viewer handles the balanced sample
+
+   P07             P/H3            Add point-to-point distance measurement                               Known dimension reproduces report value
+
+   P08             All             Run upload-to-viewer integration                                      A non-developer completes it unaided
+
+  Days 15-17 - Trust and AI layer
+
+   Ticket          Machine         Small task                                                            Done when
+
+   A01             V/H2            Version the dynamic-mask model and threshold                          Model manifest stores licence and hash
+
+   A02             V/H2            Add temporal mask stabilization                                       Flicker metric improves on one labelled clip
+
+   A03             R/H1            Compute support/view-count and reprojection signals                   Attributes attach to points or tiles
+
+   A04             O/H4            Define high/medium/low confidence rule                                Held-out calibration results are documented
+
+   A05             P/H3            Render confidence and observed/inferred/unseen legend                 User cannot confuse inferred with measured data
+
+   A06             V/H2            Run optional monocular-depth spike                                    Keep only if geometry metric improves
+
+   A07             V/H2            Run optional learned feature/matcher spike                            Keep only if weak-scene registration improves
+
+   A08             O/H4            Create AI ablation table                                              Baseline, mask and optional AI runs are compared
+
+  Days 18-20 - Evaluation
+
+   Ticket          Machine         Small task                                                            Done when
+
+   E01             O/H4            Freeze easy, medium, hard and failure test scenes                     Dataset split is immutable
+
+   E02             O/H4            Import independent checkpoints/known dimensions                       Reference provenance is documented
+
+   E03             R/H1            Run smoke, preview and balanced profiles                              Runtime/quality matrix is complete
+
+   E04             O/H4            Calculate registration, reprojection and scale metrics                Automated report is generated
+
+   E05             O/H4            Calculate checkpoint and surface metrics where possible               Units, CRS and thresholds are explicit
+
+   E06             O/H4            Run failure cases: blur, weak overlap, bad GPS, dynamics              Failures produce actionable warnings
+
+   E07             P/H3            Build accuracy/coverage dashboard                                     Values match exported JSON
+
+   E08             All             Review claims against evidence                                        Unsupported accuracy claims are deleted
+
+  Days 21-23 - Resilience and finalist polish
+  -  Add cancel, retry and resume one feature at a time; test each before the next.
+  -  Add offline packaging and verify it on H3 with networking disabled.
+  -  Add DSM/orthomosaic or textured mesh based on whichever result is actually stronger.
+  -  Add 3D Tiles only if the existing viewer becomes slow.
+  -  Test the Intel XPU and optional CUDA paths without changing the CPU-safe baseline.
+  -  Bundle one small sample project and one precomputed finalist sample.
+  -  Run a clean-machine installation test.
+
+  Exit: a failed optional AI/dense stage does not destroy the sparse result, metrics or previous artifacts.
+
+
+
+
+Prepared 24 August 2026                                                                                                                                          Page 47
+
+===== PAGE 48 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                 NTRO  |  ROBOTICS AND DRONES
+
+
+ Days 24-25 - Pitch and proof
+  -  Freeze a deterministic 2-3 minute demo sequence.
+  -  Record a 90-second backup video from H3.
+
+  -  Show input video, selected frames, camera path, model, measurement, confidence and accuracy report.
+  -  Show one masked/unmasked A/B result.
+  -  Prepare one slide that states the local hardware honestly.
+  -  Prepare one failure case and explain the warning instead of hiding it.
+  -  Rehearse judge questions with measured answers.
+
+ Days 26-27 - Freeze
+  -  No new models, frameworks, databases or deployment architecture.
+  -  Fix only P0/P1 defects.
+  -  Run the entire benchmark matrix once from frozen commits/configs.
+  -  Copy source, models, sample input, outputs and backup video to two offline drives.
+  -  Stop all background workloads on H3 before presentation.
+  -  Rehearse on the exact display, browser and network conditions.
+
+ First 48 hours in clock-sized blocks
+
+   Time                        Action                                                                                                Owner
+
+   Hour 0-2                    Inventory OS, SSD, drivers and free space                                                             O
+
+   Hour 2-5                    Freeze easy/hard sample bundles and known dimension                                                   O + R
+
+   Hour 5-9                    Install and smoke-test H1/H2 tools                                                                    R + V
+
+   Hour 9-13                   Extract 40 frames and produce first sparse cloud                                                      R
+
+   Hour 13-17                  Repeat with 80-120 frames and record metrics                                                          R
+
+   Hour 17-21                  Align camera path to GPS and check scale                                                              R + O
+
+   Hour 21-25                  Run smallest local dense attempt                                                                      R
+
+   Hour 25-30                  Produce frame-quality scores and masks                                                                V
+
+   Hour 30-35                  Display cloud, trajectory and one measurement                                                         P
+
+   Hour 35-40                  Run masked/unmasked or dense alternative                                                              R + V
+
+   Hour 40-44                  Write benchmark and failure scorecard                                                                 O
+
+   Hour 44-48                  Team go/no-go review and lock Days 3-5 tickets                                                        All
+
+ What not to parallelize
+  -  Do not run different photogrammetry stacks on all four machines before one baseline is reproducible.
+  -  Do not build frontend screens against invented outputs; use the exact artifact schema from H1.
+  -  Do not tune AI masks before timestamp synchronization and frame selection work.
+  -  Do not upload raw video repeatedly across machines; move only declared artifacts.
+  -  Do not rent a CUDA worker until local sparse reconstruction, georeferencing and metrics pass.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                           Page 48
+
+===== PAGE 49 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                     NTRO  |  ROBOTICS AND DRONES
+
+ 14. First 48-hour technical spike - exact playbook
+
+ Before coding
+
+ Obtain:
+ 1.  A 30-60 second drone video.
+ 2.  Telemetry for the same recording.
+ 3.  Camera model/resolution/stabilization details.
+ 4.  One or more known scene distances.
+ 5.  A Linux NVIDIA worker.
+
+ Spike A - baseline through OpenDroneMap
+ Purpose: establish what an existing system already achieves.
+  - Extract/geotag frames or use supported video/SRT ingest.
+  - Run a balanced ODM profile.
+  - Save point cloud, mesh, orthophoto/DSM if produced, log, and runtime.
+  - Measure registration and known distances.
+
+ WebODM's current guidance explicitly supports video frame processing, SRT geolocation, sequential matching, and
+ automatic blurry/dark-frame filtering. See the WebODM video option guide. This makes it an excellent baseline-and a
+ warning that our entry needs deeper innovation.
+
+ Spike B - custom COLMAP pipeline
+  - Extract adaptive keyframes.
+  - Attach position priors.
+
+  - Apply a basic invalid/dynamic mask.
+  - Run sequential matching.
+  - Run visual-only mapper and pose-prior mapper.
+  - Compare registration, reprojection, GPS residual, runtime, and known distance.
+  - Run dense reconstruction on the better sparse result.
+
+ Spike C - viewer
+  - Convert/export the chosen cloud.
+  - Display it with flight path.
+  - Click two points and measure distance.
+  - Display a simple confidence color based on view count/reprojection quality.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                             Page 49
+
+===== PAGE 50 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                            NTRO  |  ROBOTICS AND DRONES
+
+
+ 48-hour deliverable
+
+ poc-report/
+ +-- input-summary.md
+ +-- selected-frames.jpg
+ +-- sparse.ply
+ +-- dense.laz
+ +-- camera-path.geojson
+ +-- metrics.json
+ +-- odm-baseline/
+ +-- colmap-visual-only/
+ +-- colmap-pose-prior/
+ +-- screenshots/
+ Commit decision
+
+ Commit to the PS only if:
+  -  We have compute access.
+  -  We have at least one viable dataset.
+  -  We produce stable camera poses.
+  -  We can defend the metric story.
+  -  The team accepts that the confidence/validation layer is core work, not optional polish.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                     Page 50
+
+===== PAGE 51 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                       NTRO  |  ROBOTICS AND DRONES
+
+ 15. Testing strategy
+
+ Unit tests
+  - SRT/CSV/MAVLink timestamp parsing.
+  - Time interpolation.
+  - Coordinate transforms and round trips.
+  - Camera-intrinsics serialization.
+  - Manifest validation.
+  - Similarity alignment using synthetic points.
+  - Measurement math.
+  - Confidence status boundaries.
+  - Export metadata.
+
+ Integration tests
+  - Tiny fixed image set -> expected registered camera count.
+  - Video + telemetry -> deterministic keyframes.
+  - Known synthetic GPS noise -> robust alignment behavior.
+  - Masks correctly consumed by feature extraction.
+
+  - Sparse model -> dense worker artifact.
+  - LAZ/GLB/3D Tiles load back successfully.
+
+ End-to-end tests
+  - Upload sample -> completed result.
+
+  - Cancel and retry.
+  - Worker restart/resume.
+  - Corrupt video.
+  - Missing telemetry.
+  - Telemetry gap.
+  - Wrong time offset.
+  - Wrong camera profile.
+  - Low disk/VRAM failure message.
+  - Browser refresh during run.
+
+ Reconstruction regression suite
+ For each pinned sample, track:
+  - Keyframe count.
+  - Registered count.
+  - Sparse point count.
+
+  - Median/p95 reprojection error.
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                               Page 51
+
+===== PAGE 52 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                             NTRO  |  ROBOTICS AND DRONES
+
+
+
+  -  GPS residual.
+  -  Dense point count.
+  -  Known-distance errors.
+  -  Confidence coverage.
+  -  Runtime.
+  -  Peak memory.
+
+ Do not assert exact point count; use tolerant bounds because parallel numerical pipelines can vary.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                      Page 52
+
+===== PAGE 53 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                           NTRO  |  ROBOTICS AND DRONES
+
+ 16. Security, privacy, and deployment
+
+
+ NTRO and strategic mapping imply that offline operation is a product requirement, not a bonus.
+
+ Minimum security controls
+  -  No automatic upload to third-party AI or mapping services.
+  -  Local model weights.
+  -  Role-based access for projects.
+  -  Audit log for upload, process, view, measure, and export.
+  -  Checksums for inputs and outputs.
+  -  Encryption in transit.
+  -  Encrypted project storage where required.
+  -  Configurable retention and secure deletion policy.
+  -  Redaction of sensitive EXIF/path information in shared demo artifacts.
+
+  -  No public repository containing raw operational data.
+  -  Software bill of materials and licence manifest.
+  -  Container image pinning and vulnerability scanning.
+
+ Licence gate
+
+ This is an engineering checklist, not legal advice. Before the finalist/deployment build, create a dependency and
+ model-weight inventory and have the intended distribution reviewed.
+
+ At minimum, record these facts:
+  -  COLMAP's own library is BSD-licensed, but its official notice warns that separately licensed build dependencies can
+     affect the resulting distribution.
+  -  OpenDroneMap and OpenMVS use AGPLv3; modifying or serving AGPL-covered components can create
+     source-availability obligations.
+  -  CesiumJS is Apache 2.0 and supports offline/local data use.
+  -  FFmpeg's effective licence depends on the codecs and build configuration included.
+  -  AI code and AI checkpoints can have different licences. Record both.
+
+  -  Dataset licences can restrict trained weights even when the training code is permissive.
+  -  "Research use," "non-commercial," and "no military use" are unacceptable ambiguities for an NTRO-facing
+     deployable core.
+
+ Therefore:
+ 1.  Keep ODM as a separate baseline container, not proprietary core logic.
+ 2.  Prefer COLMAP dense/meshing or permissive components for the main distributable path.
+ 3.  Use only the explicitly Apache-licensed MapAnything checkpoint if that experiment is promoted.
+ 4.  Do not use original VGGT, DUSt3R, MASt3R, MASt3R-SLAM, or VGG-T³ weights in the deployable NTRO path
+      without written clearance.
+ 5.  Store exact source revision, package version, checkpoint hash, licence URL, and intended-use decision in
+      licenses.json.
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 53
+
+===== PAGE 54 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                         NTRO  |  ROBOTICS AND DRONES
+
+
+ Deployment modes
+ 1.  Single workstation, fully offline.
+ 2.  LAN web app + one GPU worker.
+
+ 3.  Air-gapped multi-user server.
+ 4.  Cloud development only for non-sensitive/public samples.
+
+ Data-classification fields
+ Each project should include:
+
+  -  Public/demo.
+  -  Internal.
+  -  Sensitive.
+  -  Restricted.
+
+ The application can enforce which processing/storage targets are permitted for each class.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                 Page 54
+
+===== PAGE 55 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                                                       NTRO  |  ROBOTICS AND DRONES
+
+  17. Risk register
+
+
+
+   Risk                                        Probability             Impact       Mitigation                                           Kill signal
+
+   No synchronized drone data                  High                    Critical     Acquire/record sample immediately; build             No matched bundle by Day 2
+                                                                                    adapters
+
+   No NVIDIA worker                            High on current         Critical     Institute/cloud GPU before dense work                Dense stage cannot run
+                                               laptop
+
+   Straight-line degeneracy                    High                    High         Oblique texture, useful baseline, priors,            Folded/planar wrong geometry
+                                                                                    slight lawful curve, confidence
+
+   Ordinary GPS bias                           High                    High         Soft covariance, robust Sim(3),                      Absolute claims exceed evidence
+                                                                                    checkpoints, RTK tier
+
+   Camera intrinsics change                    Medium                  High         Lock focus/zoom/EIS, calibrate exact mode            Focal drift, edge reprojection errors
+
+   Dynamic objects create ghosts               High                    Medium       Masks, temporal consistency, A/B test                Ghost cloud remains
+
+   Low texture/repetition                      High                    High         Learned feature fallback, depth prior, quality       Registration collapse
+                                                                                    warning
+
+   Vegetation/wind                             High                    Medium       Low-confidence semantic region                       False surface claims
+
+   4K compute explosion                        High                    High         Profiles, downscale matcher, cap frames,             OOM or demo exceeds time
+                                                                                    tile
+
+   Thin wrapper perception                     High if ODM is          High         Custom synchronization, priors, confidence,          Demo indistinguishable from WebODM
+                                               core                                 QA, viewer
+
+   AI licence conflict                         Medium                  Critical     Licence gate, model hash, permissive                 Defence use prohibited
+                                                                                    alternatives
+
+   Overclaiming occlusion completion           High                    Critical     Explicit inferred/unseen labels                      Judge exposes hallucination
+
+   UI arrives too late                         Medium                  High         Minimal viewer Days 12-14                            CLI-only by Day 17
+
+   Demo depends on internet                    Medium                  High         Offline bundle and recorded backup                   Venue network failure
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                                                      Page 55
+
+===== PAGE 56 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                       NTRO  |  ROBOTICS AND DRONES
+
+ 18. Innovation story for evaluators
+
+
+ The innovation is not "we used AI to make 3D." Existing photogrammetry already makes 3D.
+
+ Strong differentiators
+ 1.  Single-pass-aware keyframe intelligence - selects frames using parallax, overlap, blur, exposure, telemetry, and
+      dynamic coverage.
+ 2.  Uncertainty-aware sensor fusion - visual geometry plus GPS/IMU priors weighted by quality.
+ 3.  Trustworthy AI assistance - learned masks, matches, and depth priors constrained by multi-view geometry.
+ 4.  Observed-versus-inferred provenance - prevents hallucinated surfaces from becoming "measurements."
+ 5.  Confidence-aware measurement - every measurement carries coverage and uncertainty evidence.
+ 6.  Operational offline product - air-gapped deployment, standard exports, auditability.
+ 7.  Self-evaluation - the output includes a quality report rather than only a model screenshot.
+
+ One-line pitch
+
+      We do not just reconstruct a scene; we tell the operator which parts are truly observed, which measurements are
+      defensible, and where the single-pass data is insufficient.
+
+
+ Demonstration sequence
+ 1.  Upload one video and SRT/telemetry.
+ 2.  Show automatic synchronization and a mapped flight path.
+ 3.  Show blur/redundancy rejection and dynamic masks.
+
+ 4.  Show camera trajectory and sparse cloud within the preview stage.
+ 5.  Reveal the dense georeferenced model.
+ 6.  Toggle confidence and provenance colors.
+ 7.  Measure a known roof/wall/road dimension.
+ 8.  Show error against an independent value.
+ 9.  Click an inferred/weak region and show the warning.
+ 10.   Show masked vs unmasked ghost artifacts.
+ 11.   Export LAZ/GLB/GeoTIFF/report.
+
+ Questions judges are likely to ask
+ How can you reconstruct an unseen facade? We cannot measure it. We either leave it unseen or generate a
+ separately labelled inference that is excluded from verified measurement.
+
+ Why is this better than COLMAP/WebODM? Those are geometry engines/baselines. Our system adds synchronized
+ video/telemetry ingest, adaptive single-pass frame selection, dynamic suppression, uncertainty-aware fusion,
+ provenance, measurement safeguards, self-evaluation, and an operational product workflow.
+
+ Where is AI? In learned feature extraction/matching, temporal dynamic segmentation, constrained depth priors, and
+ eventually calibrated confidence-not in untraceable generative hallucination.
+
+ How do you get metric scale? From GPS/RTK camera positions and optional known scale, solved as a similarity
+ alignment or a GPS-constrained bundle adjustment; we validate scale on independent dimensions.
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                               Page 56
+
+===== PAGE 57 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                               NTRO  |  ROBOTICS AND DRONES
+
+
+
+ How accurate is it? We report separate relative geometry, scale, horizontal, and vertical errors for each dataset and
+ hardware tier. We do not give one unsupported universal number.
+
+ Is it real time? Sparse preview targets near-real-time on the declared GPU. Dense final output is a second stage with
+ an explicitly measured real-time factor and selectable profile.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                         Page 57
+
+===== PAGE 58 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                          NTRO  |  ROBOTICS AND DRONES
+
+ 19. Questions that must be sent to NTRO/SIH mentors
+
+
+ 1.  What exactly counts as a "single pass": straight line, one continuous curved path, or any one non-repeated flight?
+ 2.  Is video recorded by a fixed camera, gimballed camera, or arbitrary platform?
+ 3.  What telemetry formats will the evaluation dataset contain?
+ 4.  Are timestamps hardware-synchronized?
+ 5.  Are camera intrinsics and distortion supplied?
+ 6.  Is gimbal attitude supplied separately from vehicle attitude?
+ 7.  What altitude datum is used?
+
+ 8.  What GPS accuracy/fix metadata is present?
+ 9.  Will RTK/PPK data be present for any test tier?
+ 10.   What scene sizes, flight heights, video durations, and motion speeds are expected?
+ 11.   Are scenes mostly nadir, oblique, or mixed?
+ 12.   Which outputs are mandatory: point cloud, mesh, orthomosaic, DSM, 3D Tiles?
+ 13.   What is the official metric-accuracy threshold?
+ 14.   Is accuracy evaluated only on visible surfaces or on full-scene completeness?
+ 15.   How are occluded/unseen surfaces expected to be scored?
+ 16.   Is inferred geometry allowed if clearly labelled?
+ 17.   What is the target processing hardware?
+
+ 18.   What does "near-real-time" mean numerically?
+ 19.   Must the system operate fully offline/air-gapped?
+ 20.   What licences are acceptable for foundation models?
+ 21.   Will there be restricted or defence-use constraints that prohibit specific model licences?
+ 22.   Will ground-truth point clouds, CAD, GCPs, or checkpoints be provided for evaluation?
+ 23.   Can the system request a small number of independent checkpoints without using them for reconstruction?
+ 24.   Are dynamic objects included in ground truth or excluded?
+ 25.   How will vegetation be evaluated?
+
+ Until these are answered, preserve configurability and do not hard-code an unverified assumption.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                   Page 58
+
+===== PAGE 59 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                       NTRO  |  ROBOTICS AND DRONES
+
+ 20. What should and should not be purchased
+
+ Do not buy first
+  - A new drone solely because it has better marketing claims.
+  - An RTK kit before confirming access through the institute.
+  - A huge workstation before proving the small pipeline.
+  - Paid photogrammetry software as the core solution.
+  - Cloud credits before the data and container are ready.
+
+ Secure first
+ 1.  Authorized access to a suitable drone or dataset.
+ 2.  Authorized test site.
+ 3.  NVIDIA GPU worker.
+ 4.  Storage/backup.
+ 5.  Calibration target.
+ 6.  Ground-truth measurement tools.
+
+ Budget tiers
+
+ Bare-minimum research tier
+  - Existing drone/public datasets.
+  - Current Mac for development.
+  - Borrowed/free NVIDIA compute.
+
+  - Printed/rigid calibration board.
+  - Tape/laser measurements.
+
+ Risk: fragile availability and slow iteration.
+
+ Practical SIH tier
+  - Reliable drone access/rental.
+  - Dedicated 24 GB GPU worker or dependable rental.
+  - 1 TB scratch storage.
+  - Laser distance meter.
+  - Proper calibration target.
+
+  - Backup power/network/storage plan.
+
+ Advanced validation tier
+  - RTK/PPK rig.
+  - Survey-grade checkpoints/total station.
+  - Reference LiDAR/CAD.
+  - Air-gapped GPU server.
+
+ This tier is not necessary to start, but it dramatically strengthens absolute-accuracy claims.
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                               Page 59
+
+===== PAGE 60 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                         NTRO  |  ROBOTICS AND DRONES
+
+ 21. Definition of done
+
+
+ The prototype is SIH-ready only when all of these are true:
+
+ Functional
+  -  One command and the UI both process the canonical sample.
+  -  Video and telemetry are synchronized visibly.
+  -  Keyframes and masks are inspectable.
+  -  Sparse and dense results are produced.
+  -  Model is georeferenced and measured in metres.
+  -  Flight path and source frames are preserved.
+  -  Standard exports load in an independent tool.
+
+ Accuracy/trust
+  -  Independent checkpoint/measurement report exists.
+  -  Relative, horizontal, and vertical errors are separate.
+  -  Confidence layer is visible.
+  -  Inferred surfaces are never labelled observed.
+  -  Weak-region measurements warn the user.
+
+  -  Baseline comparison exists.
+
+ Reliability
+  -  Clean deployment is documented.
+  -  Runs are resumable/retryable.
+
+  -  No internet is required for the demo.
+  -  Failure messages are actionable.
+  -  At least 10 fixed end-to-end test runs have been completed.
+
+ Presentation
+  -  Deterministic live demo under three minutes.
+  -  Backup recording.
+  -  Architecture, novelty, limitations, and metrics are explainable.
+  -  Every technical claim has evidence.
+  -  No fake "100% accuracy" or "perfect occlusion reconstruction" language appears in the deck.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                  Page 60
+
+===== PAGE 61 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                   NTRO  |  ROBOTICS AND DRONES
+
+ 22. Immediate information the team must provide before
+ implementation
+
+
+ 1.  Team member names and skills.
+ 2.  Exact submission/internal-hackathon dates.
+ 3.  Drone access and model/camera details.
+ 4.  A sample video plus matching telemetry.
+ 5.  Available NVIDIA GPU access.
+ 6.  Whether institute cloud use is allowed.
+ 7.  Faculty mentor/domain support.
+
+ 8.  Preferred deployment target: laptop, lab server, or cloud.
+ 9.  Whether the repo will be public or private.
+ 10.   Whether a name/brand for the prototype is already chosen.
+
+ The only true blockers to the first technical spike are a usable input bundle and an NVIDIA worker. Team/branding
+ choices can be filled in later.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                          Page 61
+
+===== PAGE 62 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                          NTRO  |  ROBOTICS AND DRONES
+
+ 23. Recommended source shortlist
+
+ Problem and baseline
+  - SIH26158 mirror with official portal URL
+  - OpenDroneMap documentation
+  - WebODM video processing guidance
+
+ Geometry
+  - COLMAP tutorial
+  - COLMAP GPS priors and dense FAQ
+  - COLMAP installation/GPU guidance
+  - OpenMVS architecture
+
+ AI assistance
+  - hloc
+  - LightGlue paper
+  - Depth Anything V2
+  - Metric3D
+  - SAM 2
+  - MapAnything
+
+ Telemetry/geospatial
+  - MAVLink common messages
+  - ArduPilot telemetry logs
+  - PROJ
+  - OGC 3D Tiles
+
+ Validation/data
+  - ETH3D
+  - EuRoC MAV
+  - UZH-FPV
+  - UAVid
+  - evo trajectory metrics
+
+  - ASPRS positional standards
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                               Page 62
+
+===== PAGE 63 =====
+
+SIH26158  |  PROTOTYPE BUILD PLAYBOOK                                                                             NTRO  |  ROBOTICS AND DRONES
+
+ Final direction
+
+
+ Build the boring, measurable geometry first. Then add AI exactly where the baseline fails. Make uncertainty visible.
+ Validate with independent truth. Package it as an offline operational tool.
+
+ That combination-not a flashy but unverifiable mesh-is the most credible path to an SIH-winning project.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prepared 24 August 2026                                                                                                                      Page 63
