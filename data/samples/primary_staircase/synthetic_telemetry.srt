@@ -1,0 +1,971 @@
+1
+00:00:00,000 --> 00:00:00,100
+<font size="28">SrtCnt : 1, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204024] [longitude: 73.8566792] [rel_alt: 1.771 abs_alt: 561.771] </font>
+
+2
+00:00:00,100 --> 00:00:00,200
+<font size="28">SrtCnt : 2, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204022] [longitude: 73.8566787] [rel_alt: 1.858 abs_alt: 561.858] </font>
+
+3
+00:00:00,200 --> 00:00:00,300
+<font size="28">SrtCnt : 3, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204016] [longitude: 73.8566790] [rel_alt: 1.903 abs_alt: 561.903] </font>
+
+4
+00:00:00,300 --> 00:00:00,400
+<font size="28">SrtCnt : 4, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204023] [longitude: 73.8566793] [rel_alt: 1.931 abs_alt: 561.931] </font>
+
+5
+00:00:00,400 --> 00:00:00,500
+<font size="28">SrtCnt : 5, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204027] [longitude: 73.8566807] [rel_alt: 1.947 abs_alt: 561.947] </font>
+
+6
+00:00:00,500 --> 00:00:00,600
+<font size="28">SrtCnt : 6, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204035] [longitude: 73.8566815] [rel_alt: 2.044 abs_alt: 562.044] </font>
+
+7
+00:00:00,600 --> 00:00:00,700
+<font size="28">SrtCnt : 7, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204033] [longitude: 73.8566818] [rel_alt: 2.131 abs_alt: 562.131] </font>
+
+8
+00:00:00,700 --> 00:00:00,800
+<font size="28">SrtCnt : 8, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204037] [longitude: 73.8566812] [rel_alt: 2.209 abs_alt: 562.209] </font>
+
+9
+00:00:00,800 --> 00:00:00,900
+<font size="28">SrtCnt : 9, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204030] [longitude: 73.8566820] [rel_alt: 2.319 abs_alt: 562.319] </font>
+
+10
+00:00:00,900 --> 00:00:01,000
+<font size="28">SrtCnt : 10, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204029] [longitude: 73.8566826] [rel_alt: 2.337 abs_alt: 562.337] </font>
+
+11
+00:00:01,000 --> 00:00:01,100
+<font size="28">SrtCnt : 11, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204032] [longitude: 73.8566829] [rel_alt: 2.367 abs_alt: 562.367] </font>
+
+12
+00:00:01,100 --> 00:00:01,200
+<font size="28">SrtCnt : 12, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204023] [longitude: 73.8566832] [rel_alt: 2.415 abs_alt: 562.415] </font>
+
+13
+00:00:01,200 --> 00:00:01,300
+<font size="28">SrtCnt : 13, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204022] [longitude: 73.8566840] [rel_alt: 2.485 abs_alt: 562.485] </font>
+
+14
+00:00:01,300 --> 00:00:01,400
+<font size="28">SrtCnt : 14, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204033] [longitude: 73.8566853] [rel_alt: 2.558 abs_alt: 562.558] </font>
+
+15
+00:00:01,400 --> 00:00:01,500
+<font size="28">SrtCnt : 15, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204026] [longitude: 73.8566848] [rel_alt: 2.561 abs_alt: 562.561] </font>
+
+16
+00:00:01,500 --> 00:00:01,600
+<font size="28">SrtCnt : 16, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204032] [longitude: 73.8566848] [rel_alt: 2.582 abs_alt: 562.582] </font>
+
+17
+00:00:01,600 --> 00:00:01,700
+<font size="28">SrtCnt : 17, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204030] [longitude: 73.8566859] [rel_alt: 2.684 abs_alt: 562.684] </font>
+
+18
+00:00:01,700 --> 00:00:01,800
+<font size="28">SrtCnt : 18, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204025] [longitude: 73.8566862] [rel_alt: 2.699 abs_alt: 562.699] </font>
+
+19
+00:00:01,800 --> 00:00:01,900
+<font size="28">SrtCnt : 19, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204027] [longitude: 73.8566868] [rel_alt: 2.748 abs_alt: 562.748] </font>
+
+20
+00:00:01,900 --> 00:00:02,000
+<font size="28">SrtCnt : 20, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204025] [longitude: 73.8566859] [rel_alt: 2.811 abs_alt: 562.811] </font>
+
+21
+00:00:02,000 --> 00:00:02,100
+<font size="28">SrtCnt : 21, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204019] [longitude: 73.8566864] [rel_alt: 2.821 abs_alt: 562.821] </font>
+
+22
+00:00:02,100 --> 00:00:02,200
+<font size="28">SrtCnt : 22, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204032] [longitude: 73.8566866] [rel_alt: 2.881 abs_alt: 562.881] </font>
+
+23
+00:00:02,200 --> 00:00:02,300
+<font size="28">SrtCnt : 23, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204039] [longitude: 73.8566868] [rel_alt: 2.921 abs_alt: 562.921] </font>
+
+24
+00:00:02,300 --> 00:00:02,400
+<font size="28">SrtCnt : 24, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204035] [longitude: 73.8566865] [rel_alt: 2.964 abs_alt: 562.964] </font>
+
+25
+00:00:02,400 --> 00:00:02,500
+<font size="28">SrtCnt : 25, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204029] [longitude: 73.8566857] [rel_alt: 3.028 abs_alt: 563.028] </font>
+
+26
+00:00:02,500 --> 00:00:02,600
+<font size="28">SrtCnt : 26, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204019] [longitude: 73.8566866] [rel_alt: 3.077 abs_alt: 563.077] </font>
+
+27
+00:00:02,600 --> 00:00:02,700
+<font size="28">SrtCnt : 27, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204010] [longitude: 73.8566858] [rel_alt: 3.094 abs_alt: 563.094] </font>
+
+28
+00:00:02,700 --> 00:00:02,800
+<font size="28">SrtCnt : 28, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204007] [longitude: 73.8566846] [rel_alt: 3.162 abs_alt: 563.162] </font>
+
+29
+00:00:02,800 --> 00:00:02,900
+<font size="28">SrtCnt : 29, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204019] [longitude: 73.8566858] [rel_alt: 3.227 abs_alt: 563.227] </font>
+
+30
+00:00:02,900 --> 00:00:03,000
+<font size="28">SrtCnt : 30, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204013] [longitude: 73.8566847] [rel_alt: 3.214 abs_alt: 563.214] </font>
+
+31
+00:00:03,000 --> 00:00:03,100
+<font size="28">SrtCnt : 31, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204009] [longitude: 73.8566846] [rel_alt: 3.196 abs_alt: 563.196] </font>
+
+32
+00:00:03,100 --> 00:00:03,200
+<font size="28">SrtCnt : 32, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204023] [longitude: 73.8566838] [rel_alt: 3.208 abs_alt: 563.208] </font>
+
+33
+00:00:03,200 --> 00:00:03,300
+<font size="28">SrtCnt : 33, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204012] [longitude: 73.8566842] [rel_alt: 3.226 abs_alt: 563.226] </font>
+
+34
+00:00:03,300 --> 00:00:03,400
+<font size="28">SrtCnt : 34, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204017] [longitude: 73.8566836] [rel_alt: 3.291 abs_alt: 563.291] </font>
+
+35
+00:00:03,400 --> 00:00:03,500
+<font size="28">SrtCnt : 35, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204010] [longitude: 73.8566833] [rel_alt: 3.298 abs_alt: 563.298] </font>
+
+36
+00:00:03,500 --> 00:00:03,600
+<font size="28">SrtCnt : 36, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204016] [longitude: 73.8566843] [rel_alt: 3.301 abs_alt: 563.301] </font>
+
+37
+00:00:03,600 --> 00:00:03,700
+<font size="28">SrtCnt : 37, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204015] [longitude: 73.8566853] [rel_alt: 3.331 abs_alt: 563.331] </font>
+
+38
+00:00:03,700 --> 00:00:03,800
+<font size="28">SrtCnt : 38, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204007] [longitude: 73.8566855] [rel_alt: 3.335 abs_alt: 563.335] </font>
+
+39
+00:00:03,800 --> 00:00:03,900
+<font size="28">SrtCnt : 39, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204006] [longitude: 73.8566857] [rel_alt: 3.394 abs_alt: 563.394] </font>
+
+40
+00:00:03,900 --> 00:00:04,000
+<font size="28">SrtCnt : 40, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204006] [longitude: 73.8566869] [rel_alt: 3.371 abs_alt: 563.371] </font>
+
+41
+00:00:04,000 --> 00:00:04,100
+<font size="28">SrtCnt : 41, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204007] [longitude: 73.8566870] [rel_alt: 3.405 abs_alt: 563.405] </font>
+
+42
+00:00:04,100 --> 00:00:04,200
+<font size="28">SrtCnt : 42, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204019] [longitude: 73.8566862] [rel_alt: 3.360 abs_alt: 563.360] </font>
+
+43
+00:00:04,200 --> 00:00:04,300
+<font size="28">SrtCnt : 43, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204020] [longitude: 73.8566881] [rel_alt: 3.383 abs_alt: 563.383] </font>
+
+44
+00:00:04,300 --> 00:00:04,400
+<font size="28">SrtCnt : 44, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204025] [longitude: 73.8566893] [rel_alt: 3.342 abs_alt: 563.342] </font>
+
+45
+00:00:04,400 --> 00:00:04,500
+<font size="28">SrtCnt : 45, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204027] [longitude: 73.8566891] [rel_alt: 3.343 abs_alt: 563.343] </font>
+
+46
+00:00:04,500 --> 00:00:04,600
+<font size="28">SrtCnt : 46, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204039] [longitude: 73.8566890] [rel_alt: 3.347 abs_alt: 563.347] </font>
+
+47
+00:00:04,600 --> 00:00:04,700
+<font size="28">SrtCnt : 47, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204040] [longitude: 73.8566897] [rel_alt: 3.333 abs_alt: 563.333] </font>
+
+48
+00:00:04,700 --> 00:00:04,800
+<font size="28">SrtCnt : 48, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204037] [longitude: 73.8566901] [rel_alt: 3.261 abs_alt: 563.261] </font>
+
+49
+00:00:04,800 --> 00:00:04,900
+<font size="28">SrtCnt : 49, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204035] [longitude: 73.8566900] [rel_alt: 3.256 abs_alt: 563.256] </font>
+
+50
+00:00:04,900 --> 00:00:05,000
+<font size="28">SrtCnt : 50, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204021] [longitude: 73.8566899] [rel_alt: 3.247 abs_alt: 563.247] </font>
+
+51
+00:00:05,000 --> 00:00:05,100
+<font size="28">SrtCnt : 51, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204021] [longitude: 73.8566905] [rel_alt: 3.243 abs_alt: 563.243] </font>
+
+52
+00:00:05,100 --> 00:00:05,200
+<font size="28">SrtCnt : 52, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204013] [longitude: 73.8566904] [rel_alt: 3.198 abs_alt: 563.198] </font>
+
+53
+00:00:05,200 --> 00:00:05,300
+<font size="28">SrtCnt : 53, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204015] [longitude: 73.8566917] [rel_alt: 3.165 abs_alt: 563.165] </font>
+
+54
+00:00:05,300 --> 00:00:05,400
+<font size="28">SrtCnt : 54, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204022] [longitude: 73.8566916] [rel_alt: 3.091 abs_alt: 563.091] </font>
+
+55
+00:00:05,400 --> 00:00:05,500
+<font size="28">SrtCnt : 55, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204020] [longitude: 73.8566908] [rel_alt: 3.059 abs_alt: 563.059] </font>
+
+56
+00:00:05,500 --> 00:00:05,600
+<font size="28">SrtCnt : 56, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204017] [longitude: 73.8566916] [rel_alt: 3.034 abs_alt: 563.034] </font>
+
+57
+00:00:05,600 --> 00:00:05,700
+<font size="28">SrtCnt : 57, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204006] [longitude: 73.8566903] [rel_alt: 2.983 abs_alt: 562.983] </font>
+
+58
+00:00:05,700 --> 00:00:05,800
+<font size="28">SrtCnt : 58, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204008] [longitude: 73.8566911] [rel_alt: 2.933 abs_alt: 562.933] </font>
+
+59
+00:00:05,800 --> 00:00:05,900
+<font size="28">SrtCnt : 59, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204011] [longitude: 73.8566925] [rel_alt: 2.875 abs_alt: 562.875] </font>
+
+60
+00:00:05,900 --> 00:00:06,000
+<font size="28">SrtCnt : 60, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204007] [longitude: 73.8566928] [rel_alt: 2.827 abs_alt: 562.827] </font>
+
+61
+00:00:06,000 --> 00:00:06,100
+<font size="28">SrtCnt : 61, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204004] [longitude: 73.8566922] [rel_alt: 2.810 abs_alt: 562.810] </font>
+
+62
+00:00:06,100 --> 00:00:06,200
+<font size="28">SrtCnt : 62, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203983] [longitude: 73.8566923] [rel_alt: 2.767 abs_alt: 562.767] </font>
+
+63
+00:00:06,200 --> 00:00:06,300
+<font size="28">SrtCnt : 63, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203997] [longitude: 73.8566927] [rel_alt: 2.702 abs_alt: 562.702] </font>
+
+64
+00:00:06,300 --> 00:00:06,400
+<font size="28">SrtCnt : 64, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204002] [longitude: 73.8566938] [rel_alt: 2.680 abs_alt: 562.680] </font>
+
+65
+00:00:06,400 --> 00:00:06,500
+<font size="28">SrtCnt : 65, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204002] [longitude: 73.8566939] [rel_alt: 2.584 abs_alt: 562.584] </font>
+
+66
+00:00:06,500 --> 00:00:06,600
+<font size="28">SrtCnt : 66, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204005] [longitude: 73.8566930] [rel_alt: 2.526 abs_alt: 562.526] </font>
+
+67
+00:00:06,600 --> 00:00:06,700
+<font size="28">SrtCnt : 67, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204004] [longitude: 73.8566921] [rel_alt: 2.433 abs_alt: 562.433] </font>
+
+68
+00:00:06,700 --> 00:00:06,800
+<font size="28">SrtCnt : 68, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204004] [longitude: 73.8566917] [rel_alt: 2.402 abs_alt: 562.402] </font>
+
+69
+00:00:06,800 --> 00:00:06,900
+<font size="28">SrtCnt : 69, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204011] [longitude: 73.8566933] [rel_alt: 2.333 abs_alt: 562.333] </font>
+
+70
+00:00:06,900 --> 00:00:07,000
+<font size="28">SrtCnt : 70, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204023] [longitude: 73.8566939] [rel_alt: 2.279 abs_alt: 562.279] </font>
+
+71
+00:00:07,000 --> 00:00:07,100
+<font size="28">SrtCnt : 71, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204020] [longitude: 73.8566934] [rel_alt: 2.193 abs_alt: 562.193] </font>
+
+72
+00:00:07,100 --> 00:00:07,200
+<font size="28">SrtCnt : 72, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204014] [longitude: 73.8566943] [rel_alt: 2.197 abs_alt: 562.197] </font>
+
+73
+00:00:07,200 --> 00:00:07,300
+<font size="28">SrtCnt : 73, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204012] [longitude: 73.8566946] [rel_alt: 2.089 abs_alt: 562.089] </font>
+
+74
+00:00:07,300 --> 00:00:07,400
+<font size="28">SrtCnt : 74, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204013] [longitude: 73.8566958] [rel_alt: 1.980 abs_alt: 561.980] </font>
+
+75
+00:00:07,400 --> 00:00:07,500
+<font size="28">SrtCnt : 75, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204005] [longitude: 73.8566968] [rel_alt: 1.952 abs_alt: 561.952] </font>
+
+76
+00:00:07,500 --> 00:00:07,600
+<font size="28">SrtCnt : 76, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204010] [longitude: 73.8566967] [rel_alt: 1.861 abs_alt: 561.861] </font>
+
+77
+00:00:07,600 --> 00:00:07,700
+<font size="28">SrtCnt : 77, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204001] [longitude: 73.8566977] [rel_alt: 1.848 abs_alt: 561.848] </font>
+
+78
+00:00:07,700 --> 00:00:07,800
+<font size="28">SrtCnt : 78, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5204002] [longitude: 73.8566983] [rel_alt: 1.770 abs_alt: 561.770] </font>
+
+79
+00:00:07,800 --> 00:00:07,900
+<font size="28">SrtCnt : 79, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203993] [longitude: 73.8566984] [rel_alt: 1.691 abs_alt: 561.691] </font>
+
+80
+00:00:07,900 --> 00:00:08,000
+<font size="28">SrtCnt : 80, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203992] [longitude: 73.8566994] [rel_alt: 1.612 abs_alt: 561.612] </font>
+
+81
+00:00:08,000 --> 00:00:08,100
+<font size="28">SrtCnt : 81, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203969] [longitude: 73.8566991] [rel_alt: 1.579 abs_alt: 561.579] </font>
+
+82
+00:00:08,100 --> 00:00:08,200
+<font size="28">SrtCnt : 82, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203969] [longitude: 73.8566998] [rel_alt: 1.519 abs_alt: 561.519] </font>
+
+83
+00:00:08,200 --> 00:00:08,300
+<font size="28">SrtCnt : 83, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203959] [longitude: 73.8566999] [rel_alt: 1.413 abs_alt: 561.413] </font>
+
+84
+00:00:08,300 --> 00:00:08,400
+<font size="28">SrtCnt : 84, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203955] [longitude: 73.8567012] [rel_alt: 1.380 abs_alt: 561.380] </font>
+
+85
+00:00:08,400 --> 00:00:08,500
+<font size="28">SrtCnt : 85, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203959] [longitude: 73.8567013] [rel_alt: 1.303 abs_alt: 561.303] </font>
+
+86
+00:00:08,500 --> 00:00:08,600
+<font size="28">SrtCnt : 86, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203956] [longitude: 73.8567000] [rel_alt: 1.261 abs_alt: 561.261] </font>
+
+87
+00:00:08,600 --> 00:00:08,700
+<font size="28">SrtCnt : 87, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203971] [longitude: 73.8567001] [rel_alt: 1.238 abs_alt: 561.238] </font>
+
+88
+00:00:08,700 --> 00:00:08,800
+<font size="28">SrtCnt : 88, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203982] [longitude: 73.8567000] [rel_alt: 1.182 abs_alt: 561.182] </font>
+
+89
+00:00:08,800 --> 00:00:08,900
+<font size="28">SrtCnt : 89, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203969] [longitude: 73.8566996] [rel_alt: 1.137 abs_alt: 561.137] </font>
+
+90
+00:00:08,900 --> 00:00:09,000
+<font size="28">SrtCnt : 90, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203970] [longitude: 73.8566993] [rel_alt: 1.105 abs_alt: 561.105] </font>
+
+91
+00:00:09,000 --> 00:00:09,100
+<font size="28">SrtCnt : 91, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203968] [longitude: 73.8566986] [rel_alt: 1.083 abs_alt: 561.083] </font>
+
+92
+00:00:09,100 --> 00:00:09,200
+<font size="28">SrtCnt : 92, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203967] [longitude: 73.8566980] [rel_alt: 0.975 abs_alt: 560.975] </font>
+
+93
+00:00:09,200 --> 00:00:09,300
+<font size="28">SrtCnt : 93, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203975] [longitude: 73.8566981] [rel_alt: 0.943 abs_alt: 560.943] </font>
+
+94
+00:00:09,300 --> 00:00:09,400
+<font size="28">SrtCnt : 94, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203994] [longitude: 73.8566980] [rel_alt: 0.855 abs_alt: 560.855] </font>
+
+95
+00:00:09,400 --> 00:00:09,500
+<font size="28">SrtCnt : 95, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203988] [longitude: 73.8566983] [rel_alt: 0.820 abs_alt: 560.820] </font>
+
+96
+00:00:09,500 --> 00:00:09,600
+<font size="28">SrtCnt : 96, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203981] [longitude: 73.8566988] [rel_alt: 0.768 abs_alt: 560.768] </font>
+
+97
+00:00:09,600 --> 00:00:09,700
+<font size="28">SrtCnt : 97, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203970] [longitude: 73.8566985] [rel_alt: 0.703 abs_alt: 560.703] </font>
+
+98
+00:00:09,700 --> 00:00:09,800
+<font size="28">SrtCnt : 98, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203974] [longitude: 73.8566985] [rel_alt: 0.659 abs_alt: 560.659] </font>
+
+99
+00:00:09,800 --> 00:00:09,900
+<font size="28">SrtCnt : 99, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203984] [longitude: 73.8566992] [rel_alt: 0.612 abs_alt: 560.612] </font>
+
+100
+00:00:09,900 --> 00:00:10,000
+<font size="28">SrtCnt : 100, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203990] [longitude: 73.8567002] [rel_alt: 0.609 abs_alt: 560.609] </font>
+
+101
+00:00:10,000 --> 00:00:10,100
+<font size="28">SrtCnt : 101, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203979] [longitude: 73.8567008] [rel_alt: 0.565 abs_alt: 560.565] </font>
+
+102
+00:00:10,100 --> 00:00:10,200
+<font size="28">SrtCnt : 102, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203976] [longitude: 73.8567005] [rel_alt: 0.520 abs_alt: 560.520] </font>
+
+103
+00:00:10,200 --> 00:00:10,300
+<font size="28">SrtCnt : 103, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203975] [longitude: 73.8567008] [rel_alt: 0.434 abs_alt: 560.434] </font>
+
+104
+00:00:10,300 --> 00:00:10,400
+<font size="28">SrtCnt : 104, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203974] [longitude: 73.8567008] [rel_alt: 0.415 abs_alt: 560.415] </font>
+
+105
+00:00:10,400 --> 00:00:10,500
+<font size="28">SrtCnt : 105, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203967] [longitude: 73.8566999] [rel_alt: 0.345 abs_alt: 560.345] </font>
+
+106
+00:00:10,500 --> 00:00:10,600
+<font size="28">SrtCnt : 106, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203963] [longitude: 73.8567008] [rel_alt: 0.287 abs_alt: 560.287] </font>
+
+107
+00:00:10,600 --> 00:00:10,700
+<font size="28">SrtCnt : 107, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203961] [longitude: 73.8567015] [rel_alt: 0.270 abs_alt: 560.270] </font>
+
+108
+00:00:10,700 --> 00:00:10,800
+<font size="28">SrtCnt : 108, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203950] [longitude: 73.8567021] [rel_alt: 0.243 abs_alt: 560.243] </font>
+
+109
+00:00:10,800 --> 00:00:10,900
+<font size="28">SrtCnt : 109, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203953] [longitude: 73.8567020] [rel_alt: 0.249 abs_alt: 560.249] </font>
+
+110
+00:00:10,900 --> 00:00:11,000
+<font size="28">SrtCnt : 110, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203938] [longitude: 73.8567009] [rel_alt: 0.240 abs_alt: 560.240] </font>
+
+111
+00:00:11,000 --> 00:00:11,100
+<font size="28">SrtCnt : 111, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203939] [longitude: 73.8567011] [rel_alt: 0.257 abs_alt: 560.257] </font>
+
+112
+00:00:11,100 --> 00:00:11,200
+<font size="28">SrtCnt : 112, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203934] [longitude: 73.8567003] [rel_alt: 0.214 abs_alt: 560.214] </font>
+
+113
+00:00:11,200 --> 00:00:11,300
+<font size="28">SrtCnt : 113, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203935] [longitude: 73.8567011] [rel_alt: 0.211 abs_alt: 560.211] </font>
+
+114
+00:00:11,300 --> 00:00:11,400
+<font size="28">SrtCnt : 114, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203946] [longitude: 73.8567013] [rel_alt: 0.167 abs_alt: 560.167] </font>
+
+115
+00:00:11,400 --> 00:00:11,500
+<font size="28">SrtCnt : 115, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203957] [longitude: 73.8567011] [rel_alt: 0.117 abs_alt: 560.117] </font>
+
+116
+00:00:11,500 --> 00:00:11,600
+<font size="28">SrtCnt : 116, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203962] [longitude: 73.8567014] [rel_alt: 0.083 abs_alt: 560.083] </font>
+
+117
+00:00:11,600 --> 00:00:11,700
+<font size="28">SrtCnt : 117, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203955] [longitude: 73.8567024] [rel_alt: 0.087 abs_alt: 560.087] </font>
+
+118
+00:00:11,700 --> 00:00:11,800
+<font size="28">SrtCnt : 118, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203954] [longitude: 73.8567019] [rel_alt: 0.060 abs_alt: 560.060] </font>
+
+119
+00:00:11,800 --> 00:00:11,900
+<font size="28">SrtCnt : 119, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203959] [longitude: 73.8567023] [rel_alt: 0.068 abs_alt: 560.068] </font>
+
+120
+00:00:11,900 --> 00:00:12,000
+<font size="28">SrtCnt : 120, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203965] [longitude: 73.8567031] [rel_alt: 0.097 abs_alt: 560.097] </font>
+
+121
+00:00:12,000 --> 00:00:12,100
+<font size="28">SrtCnt : 121, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203977] [longitude: 73.8567042] [rel_alt: 0.085 abs_alt: 560.085] </font>
+
+122
+00:00:12,100 --> 00:00:12,200
+<font size="28">SrtCnt : 122, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203984] [longitude: 73.8567034] [rel_alt: 0.114 abs_alt: 560.114] </font>
+
+123
+00:00:12,200 --> 00:00:12,300
+<font size="28">SrtCnt : 123, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203981] [longitude: 73.8567033] [rel_alt: 0.102 abs_alt: 560.102] </font>
+
+124
+00:00:12,300 --> 00:00:12,400
+<font size="28">SrtCnt : 124, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203981] [longitude: 73.8567029] [rel_alt: 0.067 abs_alt: 560.067] </font>
+
+125
+00:00:12,400 --> 00:00:12,500
+<font size="28">SrtCnt : 125, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203969] [longitude: 73.8567036] [rel_alt: 0.110 abs_alt: 560.110] </font>
+
+126
+00:00:12,500 --> 00:00:12,600
+<font size="28">SrtCnt : 126, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203970] [longitude: 73.8567053] [rel_alt: 0.068 abs_alt: 560.068] </font>
+
+127
+00:00:12,600 --> 00:00:12,700
+<font size="28">SrtCnt : 127, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203956] [longitude: 73.8567061] [rel_alt: 0.012 abs_alt: 560.012] </font>
+
+128
+00:00:12,700 --> 00:00:12,800
+<font size="28">SrtCnt : 128, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203945] [longitude: 73.8567055] [rel_alt: 0.001 abs_alt: 560.001] </font>
+
+129
+00:00:12,800 --> 00:00:12,900
+<font size="28">SrtCnt : 129, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203935] [longitude: 73.8567054] [rel_alt: 0.030 abs_alt: 560.030] </font>
+
+130
+00:00:12,900 --> 00:00:13,000
+<font size="28">SrtCnt : 130, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203937] [longitude: 73.8567063] [rel_alt: 0.040 abs_alt: 560.040] </font>
+
+131
+00:00:13,000 --> 00:00:13,100
+<font size="28">SrtCnt : 131, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203943] [longitude: 73.8567071] [rel_alt: 0.004 abs_alt: 560.004] </font>
+
+132
+00:00:13,100 --> 00:00:13,200
+<font size="28">SrtCnt : 132, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203946] [longitude: 73.8567071] [rel_alt: 0.022 abs_alt: 560.022] </font>
+
+133
+00:00:13,200 --> 00:00:13,300
+<font size="28">SrtCnt : 133, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203941] [longitude: 73.8567059] [rel_alt: 0.098 abs_alt: 560.098] </font>
+
+134
+00:00:13,300 --> 00:00:13,400
+<font size="28">SrtCnt : 134, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203926] [longitude: 73.8567058] [rel_alt: 0.141 abs_alt: 560.141] </font>
+
+135
+00:00:13,400 --> 00:00:13,500
+<font size="28">SrtCnt : 135, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203930] [longitude: 73.8567068] [rel_alt: 0.213 abs_alt: 560.213] </font>
+
+136
+00:00:13,500 --> 00:00:13,600
+<font size="28">SrtCnt : 136, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203935] [longitude: 73.8567072] [rel_alt: 0.227 abs_alt: 560.227] </font>
+
+137
+00:00:13,600 --> 00:00:13,700
+<font size="28">SrtCnt : 137, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203936] [longitude: 73.8567070] [rel_alt: 0.278 abs_alt: 560.278] </font>
+
+138
+00:00:13,700 --> 00:00:13,800
+<font size="28">SrtCnt : 138, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203942] [longitude: 73.8567068] [rel_alt: 0.335 abs_alt: 560.335] </font>
+
+139
+00:00:13,800 --> 00:00:13,900
+<font size="28">SrtCnt : 139, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203958] [longitude: 73.8567072] [rel_alt: 0.413 abs_alt: 560.413] </font>
+
+140
+00:00:13,900 --> 00:00:14,000
+<font size="28">SrtCnt : 140, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203946] [longitude: 73.8567070] [rel_alt: 0.419 abs_alt: 560.419] </font>
+
+141
+00:00:14,000 --> 00:00:14,100
+<font size="28">SrtCnt : 141, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203943] [longitude: 73.8567059] [rel_alt: 0.458 abs_alt: 560.458] </font>
+
+142
+00:00:14,100 --> 00:00:14,200
+<font size="28">SrtCnt : 142, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203938] [longitude: 73.8567068] [rel_alt: 0.482 abs_alt: 560.482] </font>
+
+143
+00:00:14,200 --> 00:00:14,300
+<font size="28">SrtCnt : 143, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203929] [longitude: 73.8567077] [rel_alt: 0.538 abs_alt: 560.538] </font>
+
+144
+00:00:14,300 --> 00:00:14,400
+<font size="28">SrtCnt : 144, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203920] [longitude: 73.8567087] [rel_alt: 0.540 abs_alt: 560.540] </font>
+
+145
+00:00:14,400 --> 00:00:14,500
+<font size="28">SrtCnt : 145, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203927] [longitude: 73.8567083] [rel_alt: 0.553 abs_alt: 560.553] </font>
+
+146
+00:00:14,500 --> 00:00:14,600
+<font size="28">SrtCnt : 146, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203930] [longitude: 73.8567088] [rel_alt: 0.576 abs_alt: 560.576] </font>
+
+147
+00:00:14,600 --> 00:00:14,700
+<font size="28">SrtCnt : 147, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203933] [longitude: 73.8567089] [rel_alt: 0.645 abs_alt: 560.645] </font>
+
+148
+00:00:14,700 --> 00:00:14,800
+<font size="28">SrtCnt : 148, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203931] [longitude: 73.8567103] [rel_alt: 0.744 abs_alt: 560.744] </font>
+
+149
+00:00:14,800 --> 00:00:14,900
+<font size="28">SrtCnt : 149, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203926] [longitude: 73.8567100] [rel_alt: 0.759 abs_alt: 560.759] </font>
+
+150
+00:00:14,900 --> 00:00:15,000
+<font size="28">SrtCnt : 150, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203923] [longitude: 73.8567103] [rel_alt: 0.782 abs_alt: 560.782] </font>
+
+151
+00:00:15,000 --> 00:00:15,100
+<font size="28">SrtCnt : 151, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203929] [longitude: 73.8567110] [rel_alt: 0.829 abs_alt: 560.829] </font>
+
+152
+00:00:15,100 --> 00:00:15,200
+<font size="28">SrtCnt : 152, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203940] [longitude: 73.8567115] [rel_alt: 0.945 abs_alt: 560.945] </font>
+
+153
+00:00:15,200 --> 00:00:15,300
+<font size="28">SrtCnt : 153, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203926] [longitude: 73.8567109] [rel_alt: 1.013 abs_alt: 561.013] </font>
+
+154
+00:00:15,300 --> 00:00:15,400
+<font size="28">SrtCnt : 154, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203923] [longitude: 73.8567112] [rel_alt: 1.057 abs_alt: 561.057] </font>
+
+155
+00:00:15,400 --> 00:00:15,500
+<font size="28">SrtCnt : 155, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203928] [longitude: 73.8567108] [rel_alt: 1.113 abs_alt: 561.113] </font>
+
+156
+00:00:15,500 --> 00:00:15,600
+<font size="28">SrtCnt : 156, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203926] [longitude: 73.8567109] [rel_alt: 1.181 abs_alt: 561.181] </font>
+
+157
+00:00:15,600 --> 00:00:15,700
+<font size="28">SrtCnt : 157, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203922] [longitude: 73.8567114] [rel_alt: 1.271 abs_alt: 561.271] </font>
+
+158
+00:00:15,700 --> 00:00:15,800
+<font size="28">SrtCnt : 158, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203913] [longitude: 73.8567118] [rel_alt: 1.314 abs_alt: 561.314] </font>
+
+159
+00:00:15,800 --> 00:00:15,900
+<font size="28">SrtCnt : 159, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203913] [longitude: 73.8567120] [rel_alt: 1.357 abs_alt: 561.357] </font>
+
+160
+00:00:15,900 --> 00:00:16,000
+<font size="28">SrtCnt : 160, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203915] [longitude: 73.8567132] [rel_alt: 1.389 abs_alt: 561.389] </font>
+
+161
+00:00:16,000 --> 00:00:16,100
+<font size="28">SrtCnt : 161, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203918] [longitude: 73.8567121] [rel_alt: 1.479 abs_alt: 561.479] </font>
+
+162
+00:00:16,100 --> 00:00:16,200
+<font size="28">SrtCnt : 162, DiffTime : 100ms
+SYNTHETIC_TELEMETRY : generated, not recorded
+[iso : 100] [shutter : 1/1000.0] [fnum : 280] [ev : 0] [focal_len : 240] [latitude: 18.5203916] [longitude: 73.8567120] [rel_alt: 1.531 abs_alt: 561.531] </font>

@@ -1,0 +1,17 @@
+1
+00:00:00,000 --> 00:00:01,000
+<font size="36">FrameCnt : 1, DiffTime : 1000ms
+2026-08-20 09:20:00,000,000
+[iso : 100] [shutter : 1/500] [fnum : 280] [ev : 0] [latitude : 18.5204100] [longtitude : 73.8567400] [altitude: 25.6] </font>
+
+2
+00:00:01,000 --> 00:00:02,000
+<font size="36">FrameCnt : 2, DiffTime : 1000ms
+2026-08-20 09:20:01,000,000
+[iso : 100] [shutter : 1/500] [fnum : 280] [ev : 0] [latitude : 18.5204500] [longtitude : 73.8567900] [altitude: 25.9] </font>
+
+3
+00:00:02,000 --> 00:00:03,000
+<font size="36">FrameCnt : 3, DiffTime : 1000ms
+2026-08-20 09:20:02,000,000
+[iso : 100] [shutter : 1/500] [fnum : 280] [ev : 0] [latitude : 18.5204900] [longtitude : 73.8568400] [altitude: 26.1] </font>

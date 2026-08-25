@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "warning": "Generated telemetry. Not a recorded flight. Must be labelled SYNTHETIC_TELEMETRY in any UI and must not back a verified measurement claim.",
+  "generator_version": "0.1.0",
+  "parameters": {
+    "pattern": "line",
+    "center_lat": 18.5204,
+    "center_lon": 73.8567,
+    "radius_m": 1.5,
+    "alt_m": 1.6,
+    "duration_s": 16.2,
+    "rate_hz": 10.0,
+    "arc_degrees": 140.0,
+    "jitter_m": 0.4,
+    "alt_jitter_m": 0.15,
+    "seed": 26158,
+    "out_dir": "data/samples/primary_staircase/",
+    "basename": "synthetic_telemetry"
+  },
+  "true_geometry": {
+    "center_lat": 18.5204,
+    "center_lon": 73.8567,
+    "radius_m": 1.5,
+    "north_span_m": 1.413,
+    "east_span_m": 3.647,
+    "note": "spans include jitter; nominal diameter is 2*radius_m"
+  },
+  "sample_count": 162
+}
