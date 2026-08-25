@@ -1,0 +1,109 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import App from "./App";
+
+vi.mock("./components/PointCloudViewer", () => ({
+  PointCloudViewer: () => <div data-testid="point-cloud-viewer">WebGL viewer</div>,
+}));
+
+const manifest = {
+  schema_version: "1.0",
+  project_id: "prj_fixture",
+  run_id: "run_fixture",
+  synthetic_fixture: true,
+  cloud: { url: "/demo/cloud.ply", format: "PLY", coordinate_frame: "LOCAL_ENU_METRES" },
+  camera_path: { url: "/demo/camera.csv", coordinate_frame: "LOCAL_ENU_METRES" },
+  selected_frames: { url: "/demo/keyframes.json" },
+  confidence_legend: [
+    { label: "OBSERVED_HIGH", color: "#20bf6b", measurement: "ALLOWED" },
+    { label: "AI_ASSISTED_NOT_MEASURABLE", color: "#a855f7", measurement: "DISABLED" },
+  ],
+  measurement_reference: {
+    label: "Independent known distance",
+    reference_m: 10,
+    measured_m: 10.6,
+    percent_error: 6,
+    passes_10_percent_gate: true,
+    synthetic_fixture: true,
+  },
+  quality_report_url: "/demo/quality.json",
+  ai_overlay: {
+    available: false,
+    label: "AI_ASSISTED_NOT_MEASURABLE",
+    measurement: "DISABLED",
+    reason: "No overlay declared.",
+  },
+};
+
+const quality = {
+  schema_version: "1.0",
+  project_id: "prj_fixture",
+  run_id: "run_fixture",
+  synthetic_fixture: true,
+  metrics: {
+    eligible_frames: 10,
+    registered_frames: 9,
+    registered_frame_rate: 0.9,
+    median_reprojection_error_px: 0.9,
+    reprojection_gate_1_5_px: true,
+    runtime_s: 0.1,
+  },
+  warnings: [{ code: "SYNTHETIC_FIXTURE", message: "Not reconstruction proof." }],
+  limitations: ["Unseen surfaces are not reconstructed."],
+  confidence_contract: ["OBSERVED_HIGH", "AI_ASSISTED_NOT_MEASURABLE"],
+};
+
+function response(body: unknown, contentType = "application/json"): Response {
+  return new Response(typeof body === "string" ? body : JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": contentType },
+  });
+}
+
+describe("operator application", () => {
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("viewer-manifest.json")) return Promise.resolve(response(manifest));
+        if (url.endsWith("camera.csv")) {
+          return Promise.resolve(
+            response("frame_index,timestamp_s,x_m,y_m,z_m\n0,0,0,0,2\n", "text/csv"),
+          );
+        }
+        if (url.endsWith("keyframes.json")) {
+          return Promise.resolve(
+            response({ frames: [{ frame_index: 0, timestamp_s: 0, selected: true }] }),
+          );
+        }
+        if (url.endsWith("quality.json")) return Promise.resolve(response(quality));
+        return Promise.reject(new Error(`Unexpected request: ${url}`));
+      }),
+    );
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("starts on the honest upload and demo choice", () => {
+    render(<App />);
+    expect(screen.getByRole("heading", { name: /see what the camera proved/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /run api smoke fixture/i })).toBeEnabled();
+    expect(screen.getByPlaceholderText(/yosha-handoff/i)).toBeInTheDocument();
+  });
+
+  it("loads the offline manifest through the complete operator workspace", async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /open offline ui fixture/i }));
+
+    await waitFor(() => expect(screen.getByTestId("point-cloud-viewer")).toBeVisible());
+    expect(screen.getByText(/ui \/ orchestration fixture/i)).toBeVisible();
+    expect(screen.getByText("90%")).toBeVisible();
+    expect(screen.getByText("SYNTHETIC")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ai depth/i })).toBeDisabled();
+    expect(screen.getByText(/measurement: disabled/i)).toBeVisible();
+  });
+});

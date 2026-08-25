@@ -17,3 +17,11 @@ data/samples/*/
 !tests/fixtures/*.srt
 data/projects/
 .env
+
+# Arnav frontend build/test outputs
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+.venv-depth/
+evidence/arnav/depth-anything/*.png

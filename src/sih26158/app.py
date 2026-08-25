@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from .models import ProjectManifest, RunConfig, RunRecord
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
+from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
 
 
 def create_app(data_root: str | Path | None = None) -> FastAPI:
@@ -73,6 +74,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return store.get_run(run_id)
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(status_code=404, detail="Run not found") from exc
+
+    @app.get("/api/runs/{run_id}/viewer-manifest")
+    def get_viewer_manifest(run_id: str) -> dict[str, object]:
+        try:
+            record = store.get_run(run_id)
+            return build_viewer_manifest(
+                record,
+                store.run_dir(record.project_id, record.run_id),
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Run not found") from exc
+        except ViewerManifestUnavailable as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/api/runs/{run_id}/artifacts/{artifact_path:path}")
     def get_artifact(run_id: str, artifact_path: str) -> FileResponse:

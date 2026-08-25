@@ -1,0 +1,72 @@
+import time
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from sih26158.app import create_app
+from sih26158.models import RunConfig
+
+
+def _create_project(client: TestClient) -> str:
+    response = client.post(
+        "/api/projects",
+        data={"name": "viewer fixture"},
+        files={
+            "video": ("fixture.mp4", b"not-real-video", "video/mp4"),
+            "telemetry": (
+                "fixture.csv",
+                b"timestamp_s,lat,lon,alt_m\n0,1,2,3\n",
+                "text/csv",
+            ),
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["project_id"]
+
+
+def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> None:
+    app = create_app(tmp_path / "projects")
+    with TestClient(app) as client:
+        project_id = _create_project(client)
+        response = client.post(
+            f"/api/projects/{project_id}/runs",
+            json={
+                "execution_mode": "SYNTHETIC_DEMO",
+                "profile": "smoke",
+                "known_distance_m": 10,
+                "measured_distance_m": 10.6,
+            },
+        )
+        run_id = response.json()["run_id"]
+        for _ in range(100):
+            state = client.get(f"/api/runs/{run_id}").json()
+            if state["status"] in {"COMPLETED", "FAILED"}:
+                break
+            time.sleep(0.01)
+
+        response = client.get(f"/api/runs/{run_id}/viewer-manifest")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["schema_version"] == "1.0"
+        assert payload["synthetic_fixture"] is True
+        assert payload["cloud"]["url"].endswith("/sparse/sparse_local.ply")
+        assert payload["ingest_report_url"].endswith("/ingest_report.json")
+        assert abs(payload["measurement_reference"]["percent_error"] - 6) < 1e-9
+        assert payload["ai_overlay"]["measurement"] == "DISABLED"
+        assert {item["label"] for item in payload["confidence_legend"]} == {
+            "OBSERVED_HIGH",
+            "OBSERVED_MEDIUM",
+            "OBSERVED_LOW",
+            "AI_ASSISTED_NOT_MEASURABLE",
+            "UNSEEN",
+        }
+
+
+def test_viewer_manifest_is_not_fabricated_for_queued_run(tmp_path: Path) -> None:
+    app = create_app(tmp_path / "projects")
+    with TestClient(app) as client:
+        project_id = _create_project(client)
+        record = app.state.store.create_run(project_id, RunConfig())
+        response = client.get(f"/api/runs/{record.run_id}/viewer-manifest")
+        assert response.status_code == 409
+        assert "missing declared artifacts" in response.json()["detail"]

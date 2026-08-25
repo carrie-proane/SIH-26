@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "status": "BLOCKED_NO_SELECTED_FRAME_INPUTS",
+  "owner": "Arnav",
+  "model": {
+    "name": "Depth Anything V2 Small",
+    "model_id": "depth-anything/Depth-Anything-V2-Small-hf",
+    "revision": "32d03942121d29edb49de4e2cc15831558af3f36",
+    "license": "Apache-2.0"
+  },
+  "label": "AI_ASSISTED_NOT_MEASURABLE",
+  "measurement_allowed": false,
+  "input_count": 0,
+  "reason": "No real selected-frame images from Yosha's preprocessing handoff are available in the repository.",
+  "next_action": "Run scripts/depth_anything_overlay.py on 3-6 retained primary-scene frames when the handoff is available."
+}

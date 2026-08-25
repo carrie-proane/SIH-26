@@ -37,6 +37,17 @@ Poll `GET /api/runs/RUN_ID`. The response contains `stage`, `status`, `progress`
 Use `GET /api/runs/RUN_ID/artifact-index`, then fetch only a returned URL. The API does not expose
 directory listing and will not guess a filesystem path.
 
+## Open the operator viewer
+
+After the run declares a cloud, camera poses, selected frames and quality report:
+
+```bash
+curl http://127.0.0.1:8000/api/runs/RUN_ID/viewer-manifest
+```
+
+This is Arnav's stable frontend payload. Incomplete runs return HTTP 409 with the exact missing
+artifact classes. The renderer uses declared artifact URLs only and never fabricates success data.
+
 ## Preprocessing handoff contract
 
 The configured directory must contain:

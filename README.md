@@ -58,6 +58,23 @@ never substitute synthetic geometry when a dependency or input is missing.
 - `docs/matcher-benchmark.md` - SIFT/SuperPoint+LightGlue promotion rule.
 - `examples/viewer-manifest.json` - exact frontend payload sample for Arnav.
 
+## Arnav operator frontend
+
+The React/TypeScript/Three.js workspace lives in `frontend/`. It provides upload/demo selection,
+exact pipeline progress, PLY + flight-path viewing, source-frame inspection, confidence filters,
+confidence-aware measurement and the quality/limitations report.
+
+```bash
+make ui-install
+make ui
+```
+
+For deterministic browser QA without the API, open `http://127.0.0.1:5173/?fixture=1`. It is
+prominently labelled as a synthetic UI fixture and does not count as reconstruction evidence.
+
+Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evidence.md` and
+`docs/arnav-integration-review.md`.
+
 ## Honest limitations
 
 - Only directly observed multi-view geometry is measurable.

@@ -1,0 +1,15 @@
+{
+  "synthetic_fixture": true,
+  "frames": [
+    { "frame_index": 0, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 0.0, "blur_score": 0.82, "exposure_score": 0.91, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 1, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 0.5, "blur_score": 0.84, "exposure_score": 0.89, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 2, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 1.0, "blur_score": 0.79, "exposure_score": 0.92, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 3, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 1.5, "blur_score": 0.85, "exposure_score": 0.90, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 4, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 2.0, "blur_score": 0.81, "exposure_score": 0.88, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 5, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 2.5, "blur_score": 0.80, "exposure_score": 0.87, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 6, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 3.0, "blur_score": 0.78, "exposure_score": 0.86, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 7, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 3.5, "blur_score": 0.77, "exposure_score": 0.85, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 8, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 4.0, "blur_score": 0.76, "exposure_score": 0.84, "dynamic_mask_fraction": 0.0 },
+    { "frame_index": 9, "selected": true, "source": "SYNTHETIC_DEMO", "timestamp_s": 4.5, "blur_score": 0.75, "exposure_score": 0.82, "dynamic_mask_fraction": 0.0 }
+  ]
+}
