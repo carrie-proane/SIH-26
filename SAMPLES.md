@@ -138,11 +138,16 @@ When a bundle is captured, add a section here:
 - **Notes:** <anything odd — people walking through, lighting change mid-flight>
 ```
 
-## Where bundles live
-
-**Decision needed** (blocking — see Day-1 report). Options:
-
-1. Shared Drive/Dropbox folder, linked here. Simplest, works today.
-2. Git LFS, if compressed bundles stay under ~50 MB each.
-
-Whichever is chosen, `sha256` of every file goes in this registry so Day 7's checksum verification has something to verify against.
+   ## Where bundles live
+   
+   **Decided (Day 1): shared Drive/Dropbox folder.** Not Git LFS.
+   
+   Raw video, photo sets and telemetry live in the shared folder. This registry
+   records the link plus a `sha256` for every file, so Day 7's checksum
+   verification has something to verify against and so we can prove the
+   submitted artifacts came from the bundle we say they did.
+   
+   Committed to git: only `normalized_telemetry.csv`, its `.meta.json` sidecar,
+   `*.truth.json`, and small test fixtures.
+   
+   **Folder link:** https://drive.google.com/file/d/1u7pOu6Nr4s8f71mPSHGE61yvJe4VRhNO/view?usp=sharing
