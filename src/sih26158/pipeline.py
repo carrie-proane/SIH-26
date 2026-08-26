@@ -9,6 +9,11 @@ from pathlib import Path
 
 import numpy as np
 
+from telemetry.csv_parser import parse_csv
+from telemetry.models import sha256_file as telemetry_sha256_file
+from telemetry.models import write_csv as write_telemetry_csv
+from telemetry.srt_parser import parse_srt
+
 from .colmap import ColmapRunner, ExternalToolError, ReconstructionResult, write_matcher_benchmark
 from .confidence import validate_point_confidence_for_ply
 from .geo import geodetic_to_enu, transform_ply
@@ -196,35 +201,129 @@ class PipelineRunner:
                 },
             )
             return [keyframes_path, scores_path, telemetry_path, telemetry_meta_path]
-        if not record.config.preprocessing_run:
-            raise PipelineError(
-                "No preprocessing_run was supplied. Complete frame extraction/selection first and "
-                "pass the path containing keyframes.json, frame_scores.csv, and frames/."
+        handoff_problem: str | None = None
+        if record.config.preprocessing_run:
+            source = Path(record.config.preprocessing_run).resolve()
+            required = [
+                source / "keyframes.json",
+                source / "frame_scores.csv",
+                source / "normalized_telemetry.csv",
+                source / "normalized_telemetry.meta.json",
+                source / "frames",
+            ]
+            missing = [path.name for path in required if not path.exists()]
+            if not missing:
+                shutil.copyfile(required[0], run_dir / "keyframes.json")
+                shutil.copyfile(required[1], run_dir / "frame_scores.csv")
+                shutil.copyfile(required[2], run_dir / "normalized_telemetry.csv")
+                shutil.copyfile(required[3], run_dir / "normalized_telemetry.meta.json")
+                for image in required[4].iterdir():
+                    if image.is_file() and image.suffix.lower() in {".jpg", ".jpeg", ".png"}:
+                        shutil.copyfile(image, run_dir / "frames" / image.name)
+                return [
+                    run_dir / "keyframes.json",
+                    run_dir / "frame_scores.csv",
+                    run_dir / "normalized_telemetry.csv",
+                    run_dir / "normalized_telemetry.meta.json",
+                ]
+            handoff_problem = (
+                f"Configured handoff {source} was incomplete; missing: {', '.join(missing)}. "
+                "Generated a dataset-specific handoff from this run's immutable inputs instead."
             )
-        source = Path(record.config.preprocessing_run).resolve()
-        required = [
-            source / "keyframes.json",
-            source / "frame_scores.csv",
-            source / "normalized_telemetry.csv",
-            source / "normalized_telemetry.meta.json",
-            source / "frames",
+        return self._preprocess_uploaded_inputs(record, handoff_problem)
+
+    def _preprocess_uploaded_inputs(
+        self, record: RunRecord, handoff_problem: str | None = None
+    ) -> list[Path]:
+        """Create a conservative per-run handoff directly from the uploaded pair."""
+        run_dir = self.store.run_dir(record.project_id, record.run_id)
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise PipelineError(
+                "No valid preprocessing handoff was supplied and ffmpeg is unavailable. "
+                "Install FFmpeg or provide a complete dataset-specific handoff."
+            )
+        video = _asset_path(self.store, record, "video")
+        telemetry = _asset_path(self.store, record, "telemetry")
+        frames_dir = run_dir / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        extraction = subprocess.run(
+            [
+                ffmpeg,
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-vf",
+                "fps=2,scale=1600:-2:force_original_aspect_ratio=decrease",
+                "-q:v",
+                "2",
+                "-start_number",
+                "1",
+                str(frames_dir / "frame_%04d.jpg"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if extraction.returncode:
+            raise PipelineError(
+                "Automatic frame extraction failed for the uploaded video: "
+                + (extraction.stderr.strip() or f"ffmpeg exit code {extraction.returncode}")
+            )
+        images = sorted(frames_dir.glob("frame_*.jpg"))
+        if len(images) < 3:
+            raise PipelineError(
+                "Automatic preprocessing extracted fewer than three frames; provide a longer "
+                "video or a complete dataset-specific preprocessing handoff."
+            )
+
+        keyframes = [
+            {
+                "frame_index": index,
+                "image_name": image.name,
+                "timestamp_s": round(index / 2.0, 3),
+                "selected": True,
+                "source": "AUTO_UNIFORM_2_HZ_FROM_UPLOADED_VIDEO",
+            }
+            for index, image in enumerate(images)
         ]
-        missing = [path.name for path in required if not path.exists()]
-        if missing:
-            raise PipelineError(f"Preprocessing handoff is incomplete; missing: {', '.join(missing)}")
-        shutil.copyfile(required[0], run_dir / "keyframes.json")
-        shutil.copyfile(required[1], run_dir / "frame_scores.csv")
-        shutil.copyfile(required[2], run_dir / "normalized_telemetry.csv")
-        shutil.copyfile(required[3], run_dir / "normalized_telemetry.meta.json")
-        for image in required[4].iterdir():
-            if image.is_file() and image.suffix.lower() in {".jpg", ".jpeg", ".png"}:
-                shutil.copyfile(image, run_dir / "frames" / image.name)
-        return [
-            run_dir / "keyframes.json",
-            run_dir / "frame_scores.csv",
-            run_dir / "normalized_telemetry.csv",
-            run_dir / "normalized_telemetry.meta.json",
-        ]
+        keyframes_path = run_dir / "keyframes.json"
+        atomic_json(
+            keyframes_path,
+            {
+                "schema_version": "1.0",
+                "selection_method": "UNIFORM_2_HZ",
+                "frames": keyframes,
+            },
+        )
+        scores_path = run_dir / "frame_scores.csv"
+        with scores_path.open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(
+                ["frame_index", "timestamp_s", "blur_score", "exposure_score", "selected"]
+            )
+            for item in keyframes:
+                writer.writerow([item["frame_index"], item["timestamp_s"], "", "", True])
+
+        suffix = telemetry.suffix.lower()
+        parsed = parse_srt(telemetry) if suffix == ".srt" else parse_csv(telemetry)
+        usable = [record for record in parsed.records if record.has_fix and record.alt_m is not None]
+        if len(usable) < 3:
+            raise PipelineError(
+                "Uploaded telemetry could not produce at least three usable latitude, longitude, "
+                f"and altitude samples ({parsed.warnings.summary()})."
+            )
+        if handoff_problem:
+            parsed.warnings.add("HANDOFF_FALLBACK", handoff_problem)
+        telemetry_path = run_dir / "normalized_telemetry.csv"
+        write_telemetry_csv(parsed.records, telemetry_path)
+        telemetry_meta_path = run_dir / "normalized_telemetry.meta.json"
+        metadata = parsed.meta(telemetry_sha256_file(telemetry))
+        metadata["preprocessing_source"] = "AUTO_FROM_IMMUTABLE_RUN_INPUTS"
+        metadata["frame_selection_method"] = "UNIFORM_2_HZ"
+        atomic_json(telemetry_meta_path, metadata)
+        return [keyframes_path, scores_path, telemetry_path, telemetry_meta_path]
 
     def _merge_telemetry_metadata(
         self, record: RunRecord, warnings: list[dict[str, str]]

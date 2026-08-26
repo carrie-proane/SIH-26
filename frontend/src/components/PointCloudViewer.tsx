@@ -4,7 +4,11 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 
 import { resolveAssetUrl } from "../api";
-import { pointSizeForRadius, robustSceneBounds } from "../viewerBounds";
+import {
+  cameraDistanceForSphere,
+  pointSizeForRadius,
+  robustSceneBounds,
+} from "../viewerBounds";
 import type {
   CameraPose,
   ConfidenceLabel,
@@ -87,6 +91,7 @@ export function PointCloudViewer({
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 5000);
     camera.position.set(7, 6, 8);
+    let fittedSphere: THREE.Sphere | null = null;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -130,12 +135,30 @@ export function PointCloudViewer({
       scene.add(pathMarkers);
     }
 
+    const fitCamera = (useDefaultDirection = false) => {
+      if (!fittedSphere) return;
+      const radius = Math.max(fittedSphere.radius, 1);
+      const direction = useDefaultDirection
+        ? new THREE.Vector3(0.9, 0.65, 1).normalize()
+        : camera.position.clone().sub(controls.target).normalize();
+      const distance = cameraDistanceForSphere(radius, camera.fov, camera.aspect);
+      controls.target.copy(fittedSphere.center);
+      camera.position.copy(fittedSphere.center).add(direction.multiplyScalar(distance));
+      camera.near = Math.max(radius / 1000, 0.01);
+      camera.far = Math.max(radius * 50, 500);
+      controls.minDistance = Math.max(radius / 100, 0.05);
+      controls.maxDistance = Math.max(radius * 20, 500);
+      camera.updateProjectionMatrix();
+      controls.update();
+    };
+
     const resize = () => {
       const width = Math.max(host.clientWidth, 1);
       const height = Math.max(host.clientHeight, 1);
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      fitCamera();
     };
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
@@ -319,7 +342,6 @@ export function PointCloudViewer({
         if (!bounds.isEmpty()) {
           const center = bounds.getCenter(new THREE.Vector3());
           const radius = Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius, 1);
-          const distance = radius * 2.8;
           const renderedPointSize = pointSizeForRadius(radius);
           for (const points of pointObjectsRef.current) {
             if (points.material instanceof THREE.PointsMaterial) {
@@ -327,16 +349,8 @@ export function PointCloudViewer({
               points.material.needsUpdate = true;
             }
           }
-          controls.target.copy(center);
-          camera.position.copy(center).add(
-            new THREE.Vector3(0.9, 0.65, 1).normalize().multiplyScalar(distance),
-          );
-          camera.near = Math.max(radius / 1000, 0.01);
-          camera.far = Math.max(radius * 50, 500);
-          controls.minDistance = Math.max(radius / 100, 0.05);
-          controls.maxDistance = Math.max(radius * 20, 500);
-          camera.updateProjectionMatrix();
-          controls.update();
+          fittedSphere = new THREE.Sphere(center, radius);
+          fitCamera(true);
         }
         geometry.dispose();
         setLoadState("READY");

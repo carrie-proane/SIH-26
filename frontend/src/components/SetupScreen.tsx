@@ -48,12 +48,6 @@ export function SetupScreen({
       setLocalError("Choose both the video and its matching telemetry file.");
       return;
     }
-    if (!preprocessingRun.trim()) {
-      setLocalError(
-        "Jay's real COLMAP run currently requires Yosha's preprocessing handoff path.",
-      );
-      return;
-    }
     setLocalError("");
     onUpload({
       name,
@@ -141,11 +135,11 @@ export function SetupScreen({
           </div>
 
           <label className="field">
-            <span>Preprocessing handoff path <small>required by current backend</small></span>
+            <span>Preprocessing handoff path <small>optional advanced input</small></span>
             <input
               value={preprocessingRun}
               onChange={(event) => setPreprocessingRun(event.target.value)}
-              placeholder="/absolute/path/to/yosha-handoff"
+              placeholder="Leave blank to preprocess this upload automatically"
             />
           </label>
           <div className="compact-fields">

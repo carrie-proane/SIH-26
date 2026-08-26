@@ -2,7 +2,11 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import viewerSource from "./components/PointCloudViewer.tsx?raw";
-import { pointSizeForRadius, robustSceneBounds } from "./viewerBounds";
+import {
+  cameraDistanceForSphere,
+  pointSizeForRadius,
+  robustSceneBounds,
+} from "./viewerBounds";
 
 describe("robust point-cloud framing", () => {
   it("does not let sparse reconstruction outliers hide the observed cloud", () => {
@@ -28,5 +32,11 @@ describe("robust point-cloud framing", () => {
 
   it("does not hide metric evidence behind a fixed-distance fog effect", () => {
     expect(viewerSource).not.toContain("FogExp2");
+  });
+
+  it("fits against the narrower field of view after responsive resizing", () => {
+    const landscape = cameraDistanceForSphere(100, 45, 16 / 9);
+    const portrait = cameraDistanceForSphere(100, 45, 9 / 16);
+    expect(portrait).toBeGreaterThan(landscape);
   });
 });

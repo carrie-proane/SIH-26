@@ -39,3 +39,14 @@ export function robustSceneBounds(
 export function pointSizeForRadius(radius: number): number {
   return Math.max(0.13, Math.min(radius * 0.008, 2.5));
 }
+
+export function cameraDistanceForSphere(
+  radius: number,
+  verticalFovDegrees: number,
+  aspect: number,
+): number {
+  const verticalFov = THREE.MathUtils.degToRad(verticalFovDegrees);
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(aspect, 0.01));
+  const limitingFov = Math.min(verticalFov, horizontalFov);
+  return (Math.max(radius, 1) / Math.sin(limitingFov / 2)) * 1.08;
+}

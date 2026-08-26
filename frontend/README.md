@@ -29,9 +29,8 @@ npm run test:e2e
 
 The end-to-end test uses the locally installed Google Chrome channel and does not require the API.
 
-## Live input dependency
+## Live preprocessing
 
-A real run currently needs the absolute path to Yosha's preprocessing handoff on the same machine as
-the backend. It must contain selected frames, `keyframes.json`, `frame_scores.csv`, normalized
-telemetry and its metadata sidecar. The UI exposes this requirement instead of starting a run that is
-guaranteed to fail.
+When the handoff field is blank, the backend creates a dataset-specific preview handoff from the
+uploaded video and matching SRT/CSV: uniform 2 Hz frames plus normalized telemetry. An external
+handoff can still be supplied for reviewed frame scoring, masks, or a custom selection policy.

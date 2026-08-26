@@ -343,7 +343,7 @@ button:focus-visible, input:focus-visible {
   grid-template-columns: 242px minmax(420px, 1fr) 326px;
   overflow: hidden;
 }
-.workspace-rail, .inspector { min-width: 0; background: rgba(8, 20, 18, .95); }
+.workspace-rail, .inspector { min-width: 0; min-height: 0; background: rgba(8, 20, 18, .95); }
 .workspace-rail { display: flex; flex-direction: column; border-right: 1px solid var(--line); }
 .run-identity { padding: 20px 17px 17px; border-bottom: 1px solid var(--line); }
 .run-identity h2 { margin: 7px 0 5px; color: var(--text); font-size: 15px; font-weight: 520; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -373,7 +373,7 @@ button:focus-visible, input:focus-visible {
 .rail-footer strong { color: #8ba19a; font: 8px ui-monospace,monospace; }
 .rail-footer button { margin-top: 9px; padding: 0; border: 0; background: none; color: #7aa397; font-size: 9px; text-align: left; cursor: pointer; }
 
-.viewport-section { min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; background: #07100f; }
+.viewport-section { min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; background: #07100f; }
 .truth-banner { min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 7px 16px; border-bottom: 1px solid rgba(252,221,120,.15); color: #b99e50; background: rgba(252,221,120,.055); font-size: 8px; }
 .truth-banner strong { color: var(--amber); text-transform: uppercase; letter-spacing: .08em; }
 .viewport-toolbar { height: 47px; padding: 0 11px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: #091512; }

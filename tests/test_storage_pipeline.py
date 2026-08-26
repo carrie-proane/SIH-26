@@ -2,9 +2,11 @@ import csv
 import json
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import sih26158.pipeline as pipeline_module
 from sih26158.models import ProvenanceOrigin, RunConfig, RunStatus
 from sih26158.pipeline import PipelineRunner
 from sih26158.storage import ProjectStore, sha256_file
@@ -47,6 +49,59 @@ def test_project_inputs_are_hashed_and_immutable(tmp_path: Path) -> None:
     assert project.immutable is True
     assert project.source_provenance == ProvenanceOrigin.SYNTHETIC
     assert {asset.origin for asset in project.assets} == {ProvenanceOrigin.SYNTHETIC}
+
+
+def test_missing_handoff_is_generated_from_matching_uploaded_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    video = tmp_path / "new-flight.mp4"
+    telemetry = tmp_path / "new-flight.csv"
+    video.write_bytes(b"video fixture")
+    telemetry.write_text(
+        "timestamp_s,lat,lon,alt_m\n"
+        "0,18.5,73.8,10\n"
+        "1,18.50001,73.80001,10.1\n"
+        "2,18.50002,73.80002,10.2\n"
+        "3,18.50003,73.80003,10.3\n",
+        encoding="utf-8",
+    )
+    project = store.create_project(
+        name="new upload",
+        description="",
+        video_name=video.name,
+        video=video,
+        telemetry_name=telemetry.name,
+        telemetry=telemetry,
+    )
+    record = store.create_run(
+        project.project_id,
+        RunConfig(preprocessing_run=str(tmp_path / "deleted-old-handoff")),
+    )
+
+    monkeypatch.setattr(pipeline_module.shutil, "which", lambda tool: f"/usr/bin/{tool}")
+
+    def fake_ffmpeg(command, **_kwargs):
+        output = Path(command[-1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        for index in range(1, 5):
+            (output.parent / f"frame_{index:04d}.jpg").write_bytes(b"jpg")
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(pipeline_module.subprocess, "run", fake_ffmpeg)
+    artifacts = PipelineRunner(store)._preprocess_contract(record)
+    run_dir = store.run_dir(project.project_id, record.run_id)
+
+    assert len(list((run_dir / "frames").glob("*.jpg"))) == 4
+    assert {path.name for path in artifacts} == {
+        "keyframes.json",
+        "frame_scores.csv",
+        "normalized_telemetry.csv",
+        "normalized_telemetry.meta.json",
+    }
+    metadata = json.loads((run_dir / "normalized_telemetry.meta.json").read_text())
+    assert metadata["preprocessing_source"] == "AUTO_FROM_IMMUTABLE_RUN_INPUTS"
+    assert any(item["code"] == "HANDOFF_FALLBACK" for item in metadata["warnings"])
 
 
 def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_path: Path) -> None:
@@ -212,7 +267,9 @@ def test_artifact_serving_rejects_undeclared_and_traversal(tmp_path: Path) -> No
         store.resolve_declared_artifact(result.run_id, "../manifest.json")
 
 
-def test_real_run_retains_ingest_artifact_when_preprocessing_is_missing(tmp_path: Path, monkeypatch) -> None:
+def test_real_run_retains_ingest_artifact_when_automatic_preprocessing_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
     store = ProjectStore(tmp_path / "projects")
     project = make_project(store, tmp_path)
     record = store.create_run(project.project_id, RunConfig())
@@ -225,5 +282,7 @@ def test_real_run_retains_ingest_artifact_when_preprocessing_is_missing(tmp_path
     monkeypatch.setattr("sih26158.pipeline.subprocess.run", lambda *args, **kwargs: Completed())
     result = PipelineRunner(store).run(record.run_id)
     assert result.status == RunStatus.FAILED
-    assert "preprocessing_run" in (result.failure_reason or "")
+    assert "Automatic preprocessing extracted fewer than three frames" in (
+        result.failure_reason or ""
+    )
     assert "ingest_report.json" in {item.relative_path for item in result.artifacts}

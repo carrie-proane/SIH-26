@@ -82,8 +82,8 @@ export default function App() {
         profile: "preview",
         matcher: "SIFT",
         use_gpu: input.useGpu,
-        preprocessing_run: input.preprocessingRun,
       };
+      if (input.preprocessingRun) config.preprocessing_run = input.preprocessingRun;
       if (input.knownDistanceM) config.known_distance_m = input.knownDistanceM;
       const createdRun = await startRun(createdProject.project_id, config);
       await watchRun(createdRun);
