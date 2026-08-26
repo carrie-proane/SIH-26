@@ -22,7 +22,12 @@ const IDLE_MEASUREMENT: MeasurementResult = {
   distanceM: null,
   labels: [],
   status: "IDLE",
-  message: "Enable measure, then select two observed points in the cloud.",
+  message: "Enable measure, then select two visible points in the cloud.",
+};
+
+const UNVERIFIED_VISUAL_ESTIMATE: MeasurementResult = {
+  ...IDLE_MEASUREMENT,
+  message: "Visual estimate - verification confidence unavailable",
 };
 
 function displayPercent(value: number | undefined): string {
@@ -90,15 +95,21 @@ function SourcePreview({
 }
 
 export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
-  const { manifest, cameraPoses, keyframes, quality } = bundle;
+  const { manifest, cameraPoses, keyframes, quality, pointConfidence } = bundle;
+  const confidenceAvailable = manifest.confidence.available && pointConfidence !== null;
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(
     keyframes[0]?.frame_index ?? null,
   );
   const [visibleLabels, setVisibleLabels] = useState<Set<ConfidenceLabel>>(
-    () => new Set(manifest.confidence_legend.map((item) => item.label)),
+    () =>
+      new Set(
+        confidenceAvailable ? manifest.confidence_legend.map((item) => item.label) : [],
+      ),
   );
   const [measurementEnabled, setMeasurementEnabled] = useState(false);
-  const [measurement, setMeasurement] = useState<MeasurementResult>(IDLE_MEASUREMENT);
+  const [measurement, setMeasurement] = useState<MeasurementResult>(
+    confidenceAvailable ? IDLE_MEASUREMENT : UNVERIFIED_VISUAL_ESTIMATE,
+  );
   const [measurementResetKey, setMeasurementResetKey] = useState(0);
   const [showDepth, setShowDepth] = useState(false);
   const [showMask, setShowMask] = useState(false);
@@ -119,12 +130,13 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
   };
 
   const resetMeasurement = () => {
-    setMeasurement(IDLE_MEASUREMENT);
+    setMeasurement(confidenceAvailable ? IDLE_MEASUREMENT : UNVERIFIED_VISUAL_ESTIMATE);
     setMeasurementResetKey((value) => value + 1);
   };
 
   const measurementReference = manifest.measurement_reference;
-  const synthetic = manifest.synthetic_fixture || quality.synthetic_fixture;
+  const provenance = manifest.source_provenance ?? quality.source_provenance ?? "UNKNOWN";
+  const synthetic = provenance === "SYNTHETIC";
   const inputAssets = project?.assets ?? bundle.ingest?.input_assets ?? [];
   const liveReferenceError =
     measurement.distanceM !== null && measurementReference.reference_m
@@ -142,7 +154,9 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
           <code>{manifest.run_id}</code>
           <div className="identity-badges">
             <span className="status-badge status-badge--ready"><i /> COMPLETED</span>
-            {synthetic && <span className="status-badge status-badge--synthetic">SYNTHETIC</span>}
+            <span className={`status-badge status-badge--${provenance.toLowerCase()}`}>
+              PROVENANCE: {provenance}
+            </span>
           </div>
         </div>
 
@@ -190,7 +204,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
         )}
         <div className="viewport-toolbar">
           <div className="toolbar-cluster">
-            <button type="button" className="tool-button is-active">● Cloud</button>
+            <button type="button" className="tool-button is-active">● Photographic RGB</button>
             <button type="button" className="tool-button is-active">⌁ Flight path</button>
             <button
               type="button"
@@ -236,6 +250,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
         <PointCloudViewer
           manifest={manifest}
           cameraPoses={cameraPoses}
+          pointConfidence={pointConfidence}
           visibleLabels={visibleLabels}
           measurementEnabled={measurementEnabled}
           measurementResetKey={measurementResetKey}
@@ -305,7 +320,9 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             <section className="inspector-section trust-summary">
               <div className="section-title-row">
                 <span>Run health</span>
-                <b className={synthetic ? "is-caution" : "is-good"}>{synthetic ? "FIXTURE" : "OBSERVED"}</b>
+                <b className={provenance === "REAL" ? "is-good" : "is-caution"}>
+                  {provenance === "REAL" ? "REAL INPUT" : provenance}
+                </b>
               </div>
               <div className="metric-grid">
                 <div>
@@ -346,7 +363,9 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
                   <div key={`${asset.role}-${asset.sha256}`}>
                     <span>{asset.role}</span>
                     <strong>{asset.original_name}</strong>
-                    <small>{displayBytes(asset.size_bytes)} · SHA {asset.sha256.slice(0, 12)}…</small>
+                    <small>
+                      {displayBytes(asset.size_bytes)} · {asset.origin ?? "UNKNOWN"} · SHA {asset.sha256.slice(0, 12)}…
+                    </small>
                   </div>
                 ))}
                 {!inputAssets.length && <p>No immutable input assets were included in this fixture.</p>}
@@ -362,14 +381,18 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             <section className="inspector-section">
               <div className="section-title-row">
                 <span>Confidence layers</span>
-                <b>{visibleLabels.size}/{manifest.confidence_legend.length}</b>
+                <b>{confidenceAvailable ? `${visibleLabels.size}/${manifest.confidence_legend.length}` : "OFF"}</b>
               </div>
+              {!confidenceAvailable && (
+                <p className="metric-disclaimer">Confidence unavailable for this run</p>
+              )}
               <div className="legend-list">
                 {manifest.confidence_legend.map((item) => (
                   <label key={item.label}>
                     <input
                       type="checkbox"
                       checked={visibleLabels.has(item.label)}
+                      disabled={!confidenceAvailable}
                       onChange={() => toggleLabel(item.label)}
                     />
                     <i style={{ background: item.color }} />

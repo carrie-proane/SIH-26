@@ -17,6 +17,10 @@ data/samples/*/
 !tests/fixtures/*.srt
 data/projects/
 .env
+.DS_Store
+
+# Local reconstruction runs, extracted frames, COLMAP databases, and diagnostics
+tmp/
 
 # Arnav frontend build/test outputs
 frontend/node_modules/

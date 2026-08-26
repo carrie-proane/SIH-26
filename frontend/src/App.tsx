@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   createSyntheticDemo,
+  getProject,
+  getRun,
   getViewerManifest,
   loadOfflineFixture,
   loadViewerBundle,
@@ -27,6 +29,7 @@ export default function App() {
 
   const reset = () => {
     pollControllerRef.current?.abort();
+    window.history.replaceState(null, "", window.location.pathname);
     setScreen("SETUP");
     setProject(null);
     setRun(null);
@@ -40,6 +43,7 @@ export default function App() {
     const controller = new AbortController();
     pollControllerRef.current = controller;
     setRun(initial);
+    window.history.replaceState(null, "", `?run=${encodeURIComponent(initial.run_id)}`);
     setScreen("PROCESSING");
     const completed = await pollRun(initial.run_id, setRun, controller.signal);
     if (completed.status === "FAILED") return;
@@ -48,6 +52,23 @@ export default function App() {
     setRun(completed);
     setBundle(loaded);
     setScreen("WORKSPACE");
+  };
+
+  const openExistingRun = async (runId: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const existingRun = await getRun(runId);
+      const existingProject = await getProject(existingRun.project_id);
+      setProject(existingProject);
+      await watchRun(existingRun);
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setError(cause instanceof Error ? cause.message : "The saved run could not be opened.");
+      setScreen("SETUP");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleUpload = async (input: UploadInput) => {
@@ -110,8 +131,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("fixture") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fixture") === "1") {
       void handleOfflineFixture();
+    } else if (params.get("run")) {
+      void openExistingRun(params.get("run")!);
     }
     return () => pollControllerRef.current?.abort();
     // This is intentionally a one-time deep-link check.

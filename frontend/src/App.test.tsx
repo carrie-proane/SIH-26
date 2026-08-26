@@ -13,13 +13,48 @@ const manifest = {
   project_id: "prj_fixture",
   run_id: "run_fixture",
   synthetic_fixture: true,
-  cloud: { url: "/demo/cloud.ply", format: "PLY", coordinate_frame: "LOCAL_ENU_METRES" },
+  source_provenance: "SYNTHETIC",
+  video_origin: "SYNTHETIC",
+  telemetry_origin: "SYNTHETIC",
+  genuine_real_evidence: false,
+  cloud: {
+    url: "/demo/cloud.ply",
+    format: "PLY",
+    coordinate_frame: "LOCAL_ENU_METRES",
+    color_mode: "PHOTOGRAPHIC_RGB",
+    color_mode_label: "Photographic RGB",
+  },
   camera_path: { url: "/demo/camera.csv", coordinate_frame: "LOCAL_ENU_METRES" },
   selected_frames: { url: "/demo/keyframes.json" },
   confidence_legend: [
     { label: "OBSERVED_HIGH", color: "#20bf6b", measurement: "ALLOWED" },
     { label: "AI_ASSISTED_NOT_MEASURABLE", color: "#a855f7", measurement: "DISABLED" },
   ],
+  confidence: {
+    available: false,
+    reason: "Confidence unavailable for this run",
+    contract: {
+      schema_version: "1.0",
+      supported_artifact: "point_confidence.json",
+      point_order: "PLY_VERTEX_ORDER",
+      required_fields: [
+        "point_id",
+        "supporting_views",
+        "track_length",
+        "reprojection_error",
+        "triangulation_angle",
+        "confidence_class",
+      ],
+      valid_classes: [
+        "OBSERVED_HIGH",
+        "OBSERVED_MEDIUM",
+        "OBSERVED_LOW",
+        "AI_ASSISTED_NOT_MEASURABLE",
+        "UNSEEN",
+      ],
+      rgb_derivation_prohibited: true,
+    },
+  },
   measurement_reference: {
     label: "Independent known distance",
     reference_m: 10,
@@ -42,6 +77,10 @@ const quality = {
   project_id: "prj_fixture",
   run_id: "run_fixture",
   synthetic_fixture: true,
+  source_provenance: "SYNTHETIC",
+  video_origin: "SYNTHETIC",
+  telemetry_origin: "SYNTHETIC",
+  genuine_real_evidence: false,
   metrics: {
     eligible_frames: 10,
     registered_frames: 9,
@@ -49,10 +88,16 @@ const quality = {
     median_reprojection_error_px: 0.9,
     reprojection_gate_1_5_px: true,
     runtime_s: 0.1,
+    telemetry_sync: {},
   },
   warnings: [{ code: "SYNTHETIC_FIXTURE", message: "Not reconstruction proof." }],
   limitations: ["Unseen surfaces are not reconstructed."],
-  confidence_contract: ["OBSERVED_HIGH", "AI_ASSISTED_NOT_MEASURABLE"],
+  confidence_artifact: {
+    available: false,
+    measurement_confidence_available: false,
+    reason: "Confidence unavailable for this run",
+    contract: { rgb_derivation_prohibited: true },
+  },
 };
 
 function response(body: unknown, contentType = "application/json"): Response {
@@ -102,7 +147,9 @@ describe("operator application", () => {
     await waitFor(() => expect(screen.getByTestId("point-cloud-viewer")).toBeVisible());
     expect(screen.getByText(/ui \/ orchestration fixture/i)).toBeVisible();
     expect(screen.getByText("90%")).toBeVisible();
-    expect(screen.getByText("SYNTHETIC")).toBeInTheDocument();
+    expect(screen.getByText(/provenance: synthetic/i)).toBeInTheDocument();
+    expect(screen.getByText(/confidence unavailable for this run/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: /photographic rgb/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /ai depth/i })).toBeDisabled();
     expect(screen.getByText(/measurement: disabled/i)).toBeVisible();
   });

@@ -4,6 +4,7 @@ import csv
 import json
 import re
 import shutil
+import struct
 import subprocess
 import time
 from dataclasses import dataclass
@@ -23,6 +24,22 @@ class ReconstructionResult:
     metrics: MatcherMetrics
     artifacts: list[Path]
     commands: list[list[str]]
+
+
+@dataclass(frozen=True)
+class SparseModelCandidate:
+    path: Path
+    registered_images: int
+    median_reprojection_error_px: float | None
+    p95_reprojection_error_px: float | None
+
+    def sort_key(self) -> tuple[int, float, str]:
+        error = (
+            self.median_reprojection_error_px
+            if self.median_reprojection_error_px is not None
+            else float("inf")
+        )
+        return (-self.registered_images, error, str(self.path))
 
 
 def choose_matcher(
@@ -91,7 +108,7 @@ class ColmapRunner:
                 config.camera_model,
                 "--ImageReader.single_camera",
                 "1",
-                "--SiftExtraction.use_gpu",
+                "--FeatureExtraction.use_gpu",
                 gpu,
             ],
             [
@@ -101,7 +118,7 @@ class ColmapRunner:
                 str(database),
                 "--SequentialMatching.overlap",
                 str(config.sequential_overlap),
-                "--SiftMatching.use_gpu",
+                "--FeatureMatching.use_gpu",
                 gpu,
             ],
             [
@@ -132,6 +149,103 @@ class ColmapRunner:
                 "verify overlap, intrinsics, blur, and selected-frame spacing."
             )
 
+    @staticmethod
+    def _read_registered_image_count(images_bin: Path) -> int:
+        try:
+            with images_bin.open("rb") as stream:
+                raw = stream.read(8)
+        except OSError as exc:
+            raise ExternalToolError(f"Unable to inspect COLMAP model: {images_bin}") from exc
+        if len(raw) != 8:
+            raise ExternalToolError(f"Malformed COLMAP images.bin: {images_bin}")
+        return int(struct.unpack("<Q", raw)[0])
+
+    @staticmethod
+    def _read_point_errors(points_bin: Path) -> list[float]:
+        if not points_bin.is_file():
+            return []
+        errors: list[float] = []
+        try:
+            with points_bin.open("rb") as stream:
+                count_raw = stream.read(8)
+                if len(count_raw) != 8:
+                    raise ExternalToolError(f"Malformed COLMAP points3D.bin: {points_bin}")
+                point_count = struct.unpack("<Q", count_raw)[0]
+                record_size = struct.calcsize("<QdddBBBd")
+                for _ in range(point_count):
+                    record = stream.read(record_size)
+                    if len(record) != record_size:
+                        raise ExternalToolError(f"Malformed COLMAP points3D.bin: {points_bin}")
+                    error = float(struct.unpack("<QdddBBBd", record)[-1])
+                    errors.append(error)
+                    track_length_raw = stream.read(8)
+                    if len(track_length_raw) != 8:
+                        raise ExternalToolError(f"Malformed COLMAP points3D.bin: {points_bin}")
+                    track_length = struct.unpack("<Q", track_length_raw)[0]
+                    stream.seek(int(track_length) * 8, 1)
+        except OSError as exc:
+            raise ExternalToolError(f"Unable to inspect COLMAP model: {points_bin}") from exc
+        return errors
+
+    @classmethod
+    def inspect_sparse_models(cls, model_root: Path) -> list[SparseModelCandidate]:
+        candidates: list[SparseModelCandidate] = []
+        for images_bin in sorted(model_root.glob("*/images.bin")):
+            model_dir = images_bin.parent
+            errors = cls._read_point_errors(model_dir / "points3D.bin")
+            candidates.append(
+                SparseModelCandidate(
+                    path=model_dir,
+                    registered_images=cls._read_registered_image_count(images_bin),
+                    median_reprojection_error_px=(
+                        float(np.median(errors)) if errors else None
+                    ),
+                    p95_reprojection_error_px=(
+                        float(np.percentile(errors, 95)) if errors else None
+                    ),
+                )
+            )
+        return candidates
+
+    @classmethod
+    def select_best_model(
+        cls, model_root: Path, report_path: Path | None = None
+    ) -> SparseModelCandidate:
+        candidates = cls.inspect_sparse_models(model_root)
+        if not candidates:
+            raise ExternalToolError(
+                "COLMAP completed without a sparse model. Check colmap.log for verified-match and "
+                "camera-model diagnostics."
+            )
+        selected = min(candidates, key=SparseModelCandidate.sort_key)
+        if report_path is not None:
+            report = {
+                "schema_version": "1.0",
+                "selection_order": [
+                    "highest registered_images",
+                    "lowest median_reprojection_error_px",
+                    "lexical path",
+                ],
+                "candidates": [
+                    {
+                        "path": str(candidate.path.relative_to(model_root)),
+                        "registered_images": candidate.registered_images,
+                        "median_reprojection_error_px": candidate.median_reprojection_error_px,
+                        "p95_reprojection_error_px": candidate.p95_reprojection_error_px,
+                    }
+                    for candidate in sorted(candidates, key=lambda item: str(item.path))
+                ],
+                "selected_model": str(selected.path.relative_to(model_root)),
+                "rationale": (
+                    f"Selected {selected.path.relative_to(model_root)} with "
+                    f"{selected.registered_images} registered images. Candidates are ranked by "
+                    "registered-image count descending, median reprojection error ascending, then "
+                    "lexical path."
+                ),
+            }
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        return selected
+
     def run(self, frames: Path, run_dir: Path, config: RunConfig) -> ReconstructionResult:
         self.doctor()
         images = [p for p in frames.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
@@ -145,13 +259,9 @@ class ColmapRunner:
         started = time.monotonic()
         for command in commands:
             self._execute(command, log)
-        models = sorted((run_dir / "sparse" / "model").glob("*/images.bin"))
-        if not models:
-            raise ExternalToolError(
-                "COLMAP completed without a sparse model. Check colmap.log for verified-match and "
-                "camera-model diagnostics."
-            )
-        model_dir = models[0].parent
+        selection_path = run_dir / "sparse" / "model_selection.json"
+        selected = self.select_best_model(run_dir / "sparse" / "model", selection_path)
+        model_dir = selected.path
         ply = run_dir / "sparse" / "sparse.ply"
         self._execute(
             [self.binary, "model_converter", "--input_path", str(model_dir), "--output_path", str(ply), "--output_type", "PLY"],
@@ -184,19 +294,31 @@ class ColmapRunner:
             analysis.stdout + analysis.stderr, encoding="utf-8"
         )
         values = {k.lower().replace(" ", "_"): v for k, v in re.findall(r"^([^:]+):\s*(.+)$", analysis.stdout, re.MULTILINE)}
-        registered = int(values.get("registered_images", values.get("images", len(images))))
-        mean_error = float(str(values.get("mean_reprojection_error", "0")).split()[0])
+        registered = selected.registered_images
+        analyzer_error = float(str(values.get("mean_reprojection_error", "0")).split()[0])
+        median_error = selected.median_reprojection_error_px
+        p95_error = selected.p95_reprojection_error_px
         metrics = MatcherMetrics(
             matcher=config.matcher,
             eligible_frames=len(images),
             registered_frames=registered,
-            median_reprojection_error_px=max(0.0, mean_error),
-            p95_reprojection_error_px=max(0.0, mean_error),
+            median_reprojection_error_px=max(
+                0.0, analyzer_error if median_error is None else median_error
+            ),
+            p95_reprojection_error_px=max(
+                0.0, analyzer_error if p95_error is None else p95_error
+            ),
             runtime_s=time.monotonic() - started,
         )
         return ReconstructionResult(
             metrics,
-            [ply, poses, log, run_dir / "sparse" / "model_analysis.txt"],
+            [
+                ply,
+                poses,
+                log,
+                run_dir / "sparse" / "model_analysis.txt",
+                selection_path,
+            ],
             commands,
         )
 

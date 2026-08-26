@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .models import RunRecord
+from .confidence import confidence_contract, validate_point_confidence_for_ply
+from .models import ProvenanceOrigin, RunRecord
 
 CONFIDENCE_LEGEND = [
     {"label": "OBSERVED_HIGH", "color": "#20bf6b", "measurement": "ALLOWED"},
@@ -70,6 +71,20 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
     coordinate_frame = (
         "LOCAL_ENU_METRES" if cloud_path == "sparse/sparse_local.ply" else "COLMAP_SFM"
     )
+    confidence_path = (
+        "point_confidence.json" if "point_confidence.json" in artifacts else None
+    )
+    confidence_reason = "Confidence unavailable for this run"
+    confidence_available = False
+    if confidence_path is not None:
+        try:
+            validate_point_confidence_for_ply(
+                run_dir / confidence_path, run_dir / cloud_path
+            )
+            confidence_available = True
+            confidence_reason = "Explicit point-confidence artifact validated."
+        except ValueError as exc:
+            confidence_reason = str(exc)
     measurement_reference = {
         "label": "Independent known distance",
         "status": known_distance.get("status", "NOT_MEASURED"),
@@ -77,7 +92,7 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "measured_m": known_distance.get("measured_m"),
         "percent_error": known_distance.get("percent_error"),
         "passes_10_percent_gate": known_distance.get("passes_10_percent_gate"),
-        "synthetic_fixture": record.synthetic_fixture,
+            "synthetic_fixture": record.synthetic_fixture,
     }
 
     return {
@@ -87,10 +102,16 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "stage": record.stage,
         "status": record.status,
         "synthetic_fixture": record.synthetic_fixture,
+        "source_provenance": record.source_provenance,
+        "video_origin": record.video_origin,
+        "telemetry_origin": record.telemetry_origin,
+        "genuine_real_evidence": record.source_provenance == ProvenanceOrigin.REAL,
         "cloud": {
             "url": artifacts[cloud_path].url,
             "format": "PLY",
             "coordinate_frame": coordinate_frame,
+            "color_mode": "PHOTOGRAPHIC_RGB",
+            "color_mode_label": "Photographic RGB",
         },
         "camera_path": {
             "url": artifacts["camera_poses.csv"].url,
@@ -98,6 +119,13 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         },
         "selected_frames": {"url": artifacts["keyframes.json"].url},
         "confidence_legend": CONFIDENCE_LEGEND,
+        "confidence": {
+            "available": confidence_available,
+            "url": artifacts[confidence_path].url if confidence_available else None,
+            "format": "POINT_CONFIDENCE_JSON" if confidence_available else None,
+            "reason": confidence_reason,
+            "contract": confidence_contract(),
+        },
         "measurement_reference": measurement_reference,
         "quality_report_url": artifacts["quality_report.json"].url,
         "ingest_report_url": (

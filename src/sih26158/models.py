@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def utc_now() -> str:
@@ -29,17 +29,34 @@ class ConfidenceLabel(StrEnum):
     UNSEEN = "UNSEEN"
 
 
+class ProvenanceOrigin(StrEnum):
+    REAL = "REAL"
+    SYNTHETIC = "SYNTHETIC"
+    DERIVED = "DERIVED"
+    UNKNOWN = "UNKNOWN"
+
+
+class OffsetSource(StrEnum):
+    AUTOMATIC = "automatic"
+    MANUAL = "manual"
+    CALIBRATED = "calibrated"
+    NOT_APPLICABLE = "not_applicable"
+
+
 class InputAsset(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     role: Literal["video", "telemetry", "config", "intrinsics", "ground_truth"]
     original_name: str
     relative_path: str
     size_bytes: int = Field(ge=0)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     media_type: str | None = None
+    origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
 
 
 class ProjectManifest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     project_id: str
     name: str
@@ -52,6 +69,9 @@ class ProjectManifest(BaseModel):
     immutable: bool = True
     assets: list[InputAsset]
     warnings: list[dict[str, str]] = Field(default_factory=list)
+    source_provenance: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
+    video_origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
+    telemetry_origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
 
 
 class RunConfig(BaseModel):
@@ -68,6 +88,8 @@ class RunConfig(BaseModel):
     measured_distance_m: float | None = Field(default=None, gt=0)
     local_origin: tuple[float, float, float] | None = None
     preprocessing_run: str | None = None
+    telemetry_offset_s: float | None = Field(default=None, ge=-5.0, le=5.0)
+    telemetry_offset_source: Literal["manual", "calibrated"] | None = None
 
     @field_validator("measured_distance_m")
     @classmethod
@@ -75,6 +97,14 @@ class RunConfig(BaseModel):
         if value is not None and info.data.get("known_distance_m") is None:
             raise ValueError("known_distance_m is required when measured_distance_m is provided")
         return value
+
+    @model_validator(mode="after")
+    def validate_manual_offset_source(self) -> RunConfig:
+        if self.telemetry_offset_source is not None and self.telemetry_offset_s is None:
+            raise ValueError("telemetry_offset_s is required when telemetry_offset_source is set")
+        if self.telemetry_offset_s is not None and self.telemetry_offset_source is None:
+            self.telemetry_offset_source = "manual"
+        return self
 
 
 class ArtifactEntry(BaseModel):
@@ -112,6 +142,41 @@ class RunRecord(BaseModel):
     events: list[StageEvent] = Field(default_factory=list)
     artifacts: list[ArtifactEntry] = Field(default_factory=list)
     synthetic_fixture: bool = False
+    source_provenance: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
+    video_origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
+    telemetry_origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
+    telemetry_offset_s: float = 0.0
+    offset_source: OffsetSource = OffsetSource.NOT_APPLICABLE
+    rmse_before_m: float | None = Field(default=None, ge=0)
+    rmse_after_m: float | None = Field(default=None, ge=0)
+
+
+class PointConfidenceRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    point_id: int = Field(ge=0)
+    supporting_views: int = Field(ge=0)
+    track_length: int = Field(ge=0)
+    reprojection_error: float = Field(ge=0)
+    triangulation_angle: float = Field(ge=0, le=180)
+    confidence_class: ConfidenceLabel
+
+
+class PointConfidenceArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    point_order: Literal["PLY_VERTEX_ORDER"] = "PLY_VERTEX_ORDER"
+    points: list[PointConfidenceRecord]
+
+    @model_validator(mode="after")
+    def require_contiguous_vertex_ids(self) -> PointConfidenceArtifact:
+        point_ids = [point.point_id for point in self.points]
+        if sorted(point_ids) != list(range(len(point_ids))):
+            raise ValueError(
+                "point_id values must be unique and contiguous PLY vertex indices starting at zero"
+            )
+        return self
 
 
 class MatcherMetrics(BaseModel):

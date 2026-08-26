@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .models import ProjectManifest, RunConfig, RunRecord
+from .models import ProjectManifest, ProvenanceOrigin, RunConfig, RunRecord
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
@@ -38,6 +38,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         name: Annotated[str, Form()],
         description: Annotated[str, Form()] = "",
         data_classification: Annotated[str, Form()] = "PUBLIC_DEMO",
+        video_origin: Annotated[ProvenanceOrigin, Form()] = ProvenanceOrigin.UNKNOWN,
+        telemetry_origin: Annotated[ProvenanceOrigin, Form()] = ProvenanceOrigin.UNKNOWN,
     ) -> ProjectManifest:
         try:
             return store.create_project(
@@ -48,6 +50,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 telemetry_name=telemetry.filename or "telemetry.csv",
                 telemetry=telemetry.file,
                 data_classification=data_classification,
+                video_origin=video_origin,
+                telemetry_origin=telemetry_origin,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

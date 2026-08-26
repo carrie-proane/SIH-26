@@ -16,9 +16,31 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import BinaryIO
 
-from .models import ArtifactEntry, InputAsset, ProjectManifest, RunConfig, RunRecord, utc_now
+from .models import (
+    ArtifactEntry,
+    InputAsset,
+    ProjectManifest,
+    ProvenanceOrigin,
+    RunConfig,
+    RunRecord,
+    utc_now,
+)
 
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
+
+
+def combine_provenance(
+    video_origin: ProvenanceOrigin, telemetry_origin: ProvenanceOrigin
+) -> ProvenanceOrigin:
+    """Return the most conservative immutable evidence classification."""
+    origins = {video_origin, telemetry_origin}
+    if ProvenanceOrigin.SYNTHETIC in origins:
+        return ProvenanceOrigin.SYNTHETIC
+    if ProvenanceOrigin.UNKNOWN in origins:
+        return ProvenanceOrigin.UNKNOWN
+    if ProvenanceOrigin.DERIVED in origins:
+        return ProvenanceOrigin.DERIVED
+    return ProvenanceOrigin.REAL
 
 
 def sha256_file(path: Path) -> str:
@@ -94,6 +116,7 @@ class ProjectStore:
         filename: str,
         source: Path | BinaryIO,
         media_type: str | None = None,
+        origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN,
     ) -> InputAsset:
         safe_name = Path(filename).name
         if not safe_name or safe_name in {".", ".."}:
@@ -111,6 +134,7 @@ class ProjectStore:
             size_bytes=target.stat().st_size,
             sha256=sha256_file(target),
             media_type=media_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream",
+            origin=origin,
         )
 
     def create_project(
@@ -123,7 +147,12 @@ class ProjectStore:
         telemetry_name: str,
         telemetry: Path | BinaryIO,
         data_classification: str = "PUBLIC_DEMO",
+        video_origin: ProvenanceOrigin | str = ProvenanceOrigin.UNKNOWN,
+        telemetry_origin: ProvenanceOrigin | str = ProvenanceOrigin.UNKNOWN,
     ) -> ProjectManifest:
+        video_origin = ProvenanceOrigin(video_origin)
+        telemetry_origin = ProvenanceOrigin(telemetry_origin)
+        source_provenance = combine_provenance(video_origin, telemetry_origin)
         project_id = self.new_id("prj")
         project_dir = self.project_dir(project_id)
         input_dir = project_dir / "input"
@@ -131,8 +160,16 @@ class ProjectStore:
             input_dir.mkdir(parents=True, exist_ok=False)
             try:
                 assets = [
-                    self._copy_asset(input_dir, "video", video_name, video),
-                    self._copy_asset(input_dir, "telemetry", telemetry_name, telemetry),
+                    self._copy_asset(
+                        input_dir, "video", video_name, video, origin=video_origin
+                    ),
+                    self._copy_asset(
+                        input_dir,
+                        "telemetry",
+                        telemetry_name,
+                        telemetry,
+                        origin=telemetry_origin,
+                    ),
                 ]
                 manifest = ProjectManifest(
                     project_id=project_id,
@@ -140,6 +177,9 @@ class ProjectStore:
                     description=description,
                     data_classification=data_classification,  # type: ignore[arg-type]
                     assets=assets,
+                    source_provenance=source_provenance,
+                    video_origin=video_origin,
+                    telemetry_origin=telemetry_origin,
                 )
                 atomic_json(project_dir / "manifest.json", manifest.model_dump(mode="json"))
                 return manifest
@@ -154,7 +194,7 @@ class ProjectStore:
         return ProjectManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
     def create_run(self, project_id: str, config: RunConfig) -> RunRecord:
-        self.get_project(project_id)
+        project = self.get_project(project_id)
         run_id = self.new_id("run")
         directory = self.run_dir(project_id, run_id)
         directory.mkdir(parents=True, exist_ok=False)
@@ -166,7 +206,10 @@ class ProjectStore:
             config_version=config.config_version,
             config=config,
             environment=runtime_environment(),
-            synthetic_fixture=config.execution_mode == "SYNTHETIC_DEMO",
+            synthetic_fixture=project.source_provenance == ProvenanceOrigin.SYNTHETIC,
+            source_provenance=project.source_provenance,
+            video_origin=project.video_origin,
+            telemetry_origin=project.telemetry_origin,
         )
         self.save_run(record)
         return record

@@ -5,12 +5,17 @@ from fastapi.testclient import TestClient
 
 from sih26158.app import create_app
 from sih26158.models import RunConfig
+from sih26158.storage import atomic_json
 
 
 def _create_project(client: TestClient) -> str:
     response = client.post(
         "/api/projects",
-        data={"name": "viewer fixture"},
+        data={
+            "name": "viewer fixture",
+            "video_origin": "SYNTHETIC",
+            "telemetry_origin": "SYNTHETIC",
+        },
         files={
             "video": ("fixture.mp4", b"not-real-video", "video/mp4"),
             "telemetry": (
@@ -49,10 +54,14 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
         payload = response.json()
         assert payload["schema_version"] == "1.0"
         assert payload["synthetic_fixture"] is True
+        assert payload["source_provenance"] == "SYNTHETIC"
         assert payload["cloud"]["url"].endswith("/sparse/sparse_local.ply")
         assert payload["ingest_report_url"].endswith("/ingest_report.json")
         assert abs(payload["measurement_reference"]["percent_error"] - 6) < 1e-9
         assert payload["ai_overlay"]["measurement"] == "DISABLED"
+        assert payload["cloud"]["color_mode_label"] == "Photographic RGB"
+        assert payload["confidence"]["available"] is False
+        assert payload["confidence"]["reason"] == "Confidence unavailable for this run"
         assert {item["label"] for item in payload["confidence_legend"]} == {
             "OBSERVED_HIGH",
             "OBSERVED_MEDIUM",
@@ -60,6 +69,31 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
             "AI_ASSISTED_NOT_MEASURABLE",
             "UNSEEN",
         }
+
+        record = app.state.store.get_run(run_id)
+        confidence_path = app.state.store.run_dir(project_id, run_id) / "point_confidence.json"
+        atomic_json(
+            confidence_path,
+            {
+                "schema_version": "1.0",
+                "point_order": "PLY_VERTEX_ORDER",
+                "points": [
+                    {
+                        "point_id": index,
+                        "supporting_views": 3,
+                        "track_length": 3,
+                        "reprojection_error": 0.5,
+                        "triangulation_angle": 8.0,
+                        "confidence_class": "OBSERVED_MEDIUM",
+                    }
+                    for index in range(10)
+                ],
+            },
+        )
+        app.state.store.register_artifacts(record, [confidence_path])
+        with_confidence = client.get(f"/api/runs/{run_id}/viewer-manifest").json()
+        assert with_confidence["confidence"]["available"] is True
+        assert with_confidence["confidence"]["url"].endswith("/point_confidence.json")
 
 
 def test_viewer_manifest_is_not_fabricated_for_queued_run(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from .colmap import write_matcher_benchmark
-from .models import MatcherMetrics, RunConfig
+from .models import MatcherMetrics, ProvenanceOrigin, RunConfig
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
 
@@ -32,6 +32,8 @@ def _demo(args: argparse.Namespace) -> int:
             video=video,
             telemetry_name=telemetry.name,
             telemetry=telemetry,
+            video_origin=ProvenanceOrigin.SYNTHETIC,
+            telemetry_origin=ProvenanceOrigin.SYNTHETIC,
         )
         record = store.create_run(
             project.project_id,
@@ -56,6 +58,8 @@ def _run(args: argparse.Namespace) -> int:
         video=Path(args.video),
         telemetry_name=Path(args.telemetry).name,
         telemetry=Path(args.telemetry),
+        video_origin=args.video_origin,
+        telemetry_origin=args.telemetry_origin,
     )
     config = RunConfig(
         execution_mode="COLMAP",
@@ -63,6 +67,8 @@ def _run(args: argparse.Namespace) -> int:
         preprocessing_run=args.preprocessing_run,
         known_distance_m=args.known_distance,
         measured_distance_m=args.measured_distance,
+        telemetry_offset_s=args.telemetry_offset,
+        telemetry_offset_source=args.telemetry_offset_source,
     )
     record = store.create_run(project.project_id, config)
     result = PipelineRunner(store).run(record.run_id)
@@ -104,6 +110,14 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--profile", choices=["smoke", "preview", "balanced", "accurate", "diagnostic"], default="preview")
     run.add_argument("--known-distance", type=float)
     run.add_argument("--measured-distance", type=float)
+    run.add_argument(
+        "--video-origin", choices=[item.value for item in ProvenanceOrigin], default="UNKNOWN"
+    )
+    run.add_argument(
+        "--telemetry-origin", choices=[item.value for item in ProvenanceOrigin], default="UNKNOWN"
+    )
+    run.add_argument("--telemetry-offset", type=float)
+    run.add_argument("--telemetry-offset-source", choices=["manual", "calibrated"])
     run.set_defaults(func=_run)
     benchmark = sub.add_parser("benchmark-matchers")
     benchmark.add_argument("--sift", required=True)
@@ -122,4 +136,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

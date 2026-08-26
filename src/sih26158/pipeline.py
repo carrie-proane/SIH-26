@@ -10,14 +10,27 @@ from pathlib import Path
 import numpy as np
 
 from .colmap import ColmapRunner, ExternalToolError, ReconstructionResult, write_matcher_benchmark
-from .geo import geodetic_to_enu, robust_similarity, transform_ply
-from .models import MatcherMetrics, RunRecord, RunStatus, StageEvent
+from .confidence import validate_point_confidence_for_ply
+from .geo import geodetic_to_enu, transform_ply
+from .models import (
+    MatcherMetrics,
+    OffsetSource,
+    ProvenanceOrigin,
+    RunRecord,
+    RunStatus,
+    StageEvent,
+)
 from .report import build_quality_report, write_quality_report
 from .storage import ProjectStore, atomic_json
+from .sync import calibrate_telemetry_offset
 
 
 class PipelineError(RuntimeError):
     pass
+
+
+def _is_synthetic_demo(record: RunRecord) -> bool:
+    return record.config.execution_mode == "SYNTHETIC_DEMO"
 
 
 def _asset_path(store: ProjectStore, record: RunRecord, role: str) -> Path:
@@ -68,7 +81,7 @@ class PipelineRunner:
         project = self.store.get_project(record.project_id)
         warnings: list[dict[str, str]] = []
         ffprobe = shutil.which("ffprobe")
-        if record.synthetic_fixture:
+        if _is_synthetic_demo(record):
             probe = {
                 "format": {"filename": video.name, "format_name": "synthetic_fixture"},
                 "streams": [],
@@ -106,6 +119,10 @@ class PipelineRunner:
             "config_version": record.config_version,
             "video_probe": probe,
             "input_assets": [asset.model_dump(mode="json") for asset in project.assets],
+            "source_provenance": record.source_provenance,
+            "video_origin": record.video_origin,
+            "telemetry_origin": record.telemetry_origin,
+            "genuine_real_evidence": record.source_provenance == ProvenanceOrigin.REAL,
             "warnings": warnings,
         }
         path = self.store.run_dir(record.project_id, record.run_id) / "ingest_report.json"
@@ -114,7 +131,7 @@ class PipelineRunner:
 
     def _preprocess_contract(self, record: RunRecord) -> list[Path]:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
-        if record.synthetic_fixture:
+        if _is_synthetic_demo(record):
             keyframes = [
                 {"frame_index": i, "timestamp_s": i * 0.5, "selected": True, "source": "SYNTHETIC_DEMO"}
                 for i in range(10)
@@ -232,17 +249,38 @@ class PipelineRunner:
                     "message": str(warning.get("detail", warning.get("code", "Telemetry warning"))),
                 }
             )
+            if str(warning.get("code")) == "SYNTHETIC_TELEMETRY":
+                record.telemetry_origin = ProvenanceOrigin.SYNTHETIC
+                record.source_provenance = ProvenanceOrigin.SYNTHETIC
+                record.synthetic_fixture = True
+                self.store.save_run(record)
         ingest_path = run_dir / "ingest_report.json"
         ingest = json.loads(ingest_path.read_text(encoding="utf-8"))
         ingest["telemetry_normalization"] = metadata
         ingest["warnings"] = warnings
+        ingest["source_provenance"] = record.source_provenance
+        ingest["video_origin"] = record.video_origin
+        ingest["telemetry_origin"] = record.telemetry_origin
+        ingest["genuine_real_evidence"] = record.source_provenance == ProvenanceOrigin.REAL
         atomic_json(ingest_path, ingest)
         return ingest_path
 
     def _align_to_local_metric(self, record: RunRecord) -> list[Path]:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
-        if record.synthetic_fixture:
+        if _is_synthetic_demo(record):
             transform_path = run_dir / "local_transform.json"
+            sync_path = run_dir / "sync_report.json"
+            sync_report = {
+                "schema_version": "1.0",
+                "telemetry_offset_s": 0.0,
+                "offset_source": OffsetSource.NOT_APPLICABLE,
+                "rmse_before_m": 0.0,
+                "rmse_after_m": 0.0,
+                "matched_camera_count": 10,
+                "inlier_count": 10,
+                "synthetic_fixture": True,
+            }
+            atomic_json(sync_path, sync_report)
             atomic_json(
                 transform_path,
                 {
@@ -253,11 +291,20 @@ class PipelineRunner:
                     "translation_m": [0.0, 0.0, 0.0],
                     "inlier_count": 10,
                     "residuals_m": [0.0] * 10,
+                    "telemetry_offset_s": 0.0,
+                    "offset_source": OffsetSource.NOT_APPLICABLE,
+                    "rmse_before_m": 0.0,
+                    "rmse_after_m": 0.0,
                 },
             )
+            record.telemetry_offset_s = 0.0
+            record.offset_source = OffsetSource.NOT_APPLICABLE
+            record.rmse_before_m = 0.0
+            record.rmse_after_m = 0.0
+            self.store.save_run(record)
             local_ply = run_dir / "sparse" / "sparse_local.ply"
             shutil.copyfile(run_dir / "sparse" / "sparse.ply", local_ply)
-            return [transform_path, local_ply]
+            return [transform_path, sync_path, local_ply]
 
         keyframe_payload = json.loads((run_dir / "keyframes.json").read_text(encoding="utf-8"))
         keyframes = (
@@ -330,38 +377,50 @@ class PipelineRunner:
         with pose_path.open(newline="", encoding="utf-8") as stream:
             pose_rows = list(csv.DictReader(stream))
         sfm_points: list[list[float]] = []
-        metric_points: list[np.ndarray] = []
-        matched_rows: list[dict[str, str]] = []
+        frame_times: list[float] = []
+        eligible_rows: list[dict[str, str]] = []
         for row in pose_rows:
             timestamp = timestamps.get(Path(row["image_name"]).name)
-            if timestamp is None or timestamp < times[0] or timestamp > times[-1]:
+            if timestamp is None:
                 continue
-            right = int(np.searchsorted(times, timestamp, side="right"))
-            if right == 0:
-                position = enu[0]
-            elif right == len(times):
-                position = enu[-1]
-            else:
-                left = right - 1
-                weight = (timestamp - times[left]) / (times[right] - times[left])
-                position = enu[left] * (1 - weight) + enu[right] * weight
             sfm_points.append([float(row["sfm_x"]), float(row["sfm_y"]), float(row["sfm_z"])])
-            metric_points.append(position)
-            matched_rows.append(row | {"timestamp_s": str(timestamp)})
+            frame_times.append(timestamp)
+            eligible_rows.append(row | {"timestamp_s": str(timestamp)})
         if len(sfm_points) < 3:
             raise PipelineError(
                 "Fewer than three registered cameras could be joined to telemetry timestamps; "
                 "verify keyframe filenames and synchronization."
             )
-        transform = robust_similarity(np.array(sfm_points), np.array(metric_points))
-        aligned = transform.apply(np.array(sfm_points))
+        calibration = calibrate_telemetry_offset(
+            np.array(sfm_points),
+            np.array(frame_times),
+            times,
+            enu,
+            manual_offset_s=record.config.telemetry_offset_s,
+            manual_source=record.config.telemetry_offset_source,
+        )
+        selected = calibration.selected
+        transform = selected.transform
+        selected_sfm = np.array(sfm_points)[selected.matched_indices]
+        aligned = transform.apply(selected_sfm)
+        matched_rows = [eligible_rows[index] for index in selected.matched_indices]
         with pose_path.open("w", newline="", encoding="utf-8") as stream:
-            fields = list(matched_rows[0]) + ["x_m", "y_m", "z_m", "alignment_residual_m", "alignment_inlier"]
+            fields = list(matched_rows[0]) + [
+                "telemetry_timestamp_s",
+                "x_m",
+                "y_m",
+                "z_m",
+                "alignment_residual_m",
+                "alignment_inlier",
+            ]
             writer = csv.DictWriter(stream, fieldnames=fields)
             writer.writeheader()
             for index, row in enumerate(matched_rows):
                 row.update(
                     {
+                        "telemetry_timestamp_s": (
+                            float(row["timestamp_s"]) + selected.offset_s
+                        ),
                         "x_m": aligned[index, 0],
                         "y_m": aligned[index, 1],
                         "z_m": aligned[index, 2],
@@ -371,6 +430,9 @@ class PipelineRunner:
                 )
                 writer.writerow(row)
         transform_path = run_dir / "local_transform.json"
+        sync_path = run_dir / "sync_report.json"
+        sync_report = calibration.as_report()
+        atomic_json(sync_path, sync_report)
         atomic_json(
             transform_path,
             transform.as_dict()
@@ -382,15 +444,24 @@ class PipelineRunner:
                     for index, keep in enumerate(transform.inliers)
                     if not keep
                 ],
+                "telemetry_offset_s": selected.offset_s,
+                "offset_source": calibration.source,
+                "rmse_before_m": calibration.before.rmse_m,
+                "rmse_after_m": selected.rmse_m,
             },
         )
+        record.telemetry_offset_s = selected.offset_s
+        record.offset_source = calibration.source
+        record.rmse_before_m = calibration.before.rmse_m
+        record.rmse_after_m = selected.rmse_m
+        self.store.save_run(record)
         local_ply = run_dir / "sparse" / "sparse_local.ply"
         transform_ply(run_dir / "sparse" / "sparse.ply", local_ply, transform)
-        return [pose_path, transform_path, local_ply]
+        return [pose_path, transform_path, sync_path, local_ply]
 
     def _reconstruct(self, record: RunRecord) -> ReconstructionResult:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
-        if record.synthetic_fixture:
+        if _is_synthetic_demo(record):
             ply = run_dir / "sparse" / "sparse.ply"
             _synthetic_ply(ply)
             poses = run_dir / "camera_poses.csv"
@@ -444,12 +515,30 @@ class PipelineRunner:
                     / "local_transform.json"
                 ).read_text(encoding="utf-8")
             )
+            confidence_available = False
+            if any(
+                artifact.relative_path == "point_confidence.json"
+                for artifact in record.artifacts
+            ):
+                try:
+                    validate_point_confidence_for_ply(
+                        self.store.run_dir(record.project_id, record.run_id)
+                        / "point_confidence.json",
+                        self.store.run_dir(record.project_id, record.run_id)
+                        / "sparse"
+                        / "sparse_local.ply",
+                    )
+                    confidence_available = True
+                except ValueError as exc:
+                    warnings.append(
+                        {"code": "INVALID_CONFIDENCE_ARTIFACT", "message": str(exc)}
+                    )
             report = build_quality_report(
                 record,
                 result.metrics,
                 warnings,
-                synthetic=record.synthetic_fixture,
                 alignment=alignment_report,
+                confidence_available=confidence_available,
             )
             write_quality_report(quality_path, report)
             self.store.register_artifacts(record, [quality_path])

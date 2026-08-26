@@ -14,6 +14,8 @@ export type ConfidenceLabel =
   | "AI_ASSISTED_NOT_MEASURABLE"
   | "UNSEEN";
 
+export type ProvenanceOrigin = "REAL" | "SYNTHETIC" | "DERIVED" | "UNKNOWN";
+
 export interface InputAsset {
   role: string;
   original_name: string;
@@ -21,6 +23,7 @@ export interface InputAsset {
   size_bytes: number;
   sha256: string;
   media_type?: string | null;
+  origin?: ProvenanceOrigin;
 }
 
 export interface ProjectManifest {
@@ -32,6 +35,9 @@ export interface ProjectManifest {
   immutable: boolean;
   assets: InputAsset[];
   warnings: Array<{ code?: string; message?: string }>;
+  source_provenance: ProvenanceOrigin;
+  video_origin: ProvenanceOrigin;
+  telemetry_origin: ProvenanceOrigin;
 }
 
 export interface ArtifactEntry {
@@ -67,6 +73,13 @@ export interface RunRecord {
   events: StageEvent[];
   artifacts: ArtifactEntry[];
   synthetic_fixture: boolean;
+  source_provenance: ProvenanceOrigin;
+  video_origin: ProvenanceOrigin;
+  telemetry_origin: ProvenanceOrigin;
+  telemetry_offset_s: number;
+  offset_source: "automatic" | "manual" | "calibrated" | "not_applicable";
+  rmse_before_m: number | null;
+  rmse_after_m: number | null;
 }
 
 export interface ConfidenceLegendItem {
@@ -82,10 +95,16 @@ export interface ViewerManifest {
   stage?: RunStatus;
   status?: RunStatus;
   synthetic_fixture: boolean;
+  source_provenance: ProvenanceOrigin;
+  video_origin: ProvenanceOrigin;
+  telemetry_origin: ProvenanceOrigin;
+  genuine_real_evidence: boolean;
   cloud: {
     url: string;
     format: "PLY";
     coordinate_frame: string;
+    color_mode: "PHOTOGRAPHIC_RGB";
+    color_mode_label: "Photographic RGB";
   };
   camera_path: {
     url: string;
@@ -93,6 +112,20 @@ export interface ViewerManifest {
   };
   selected_frames: { url: string };
   confidence_legend: ConfidenceLegendItem[];
+  confidence: {
+    available: boolean;
+    url?: string | null;
+    format?: "POINT_CONFIDENCE_JSON" | null;
+    reason: string;
+    contract: {
+      schema_version: string;
+      supported_artifact: string;
+      point_order: "PLY_VERTEX_ORDER";
+      required_fields: string[];
+      valid_classes: ConfidenceLabel[];
+      rgb_derivation_prohibited: true;
+    };
+  };
   measurement_reference: {
     label: string;
     status?: string;
@@ -146,6 +179,10 @@ export interface QualityReport {
   project_id: string;
   run_id: string;
   synthetic_fixture: boolean;
+  source_provenance: ProvenanceOrigin;
+  video_origin: ProvenanceOrigin;
+  telemetry_origin: ProvenanceOrigin;
+  genuine_real_evidence: boolean;
   metrics: {
     eligible_frames?: number;
     registered_frames?: number;
@@ -156,12 +193,33 @@ export interface QualityReport {
     reprojection_gate_1_5_px?: boolean;
     runtime_s?: number;
     metric_alignment?: Record<string, unknown>;
+    telemetry_sync?: Record<string, unknown>;
     known_distance?: Record<string, unknown>;
     coverage?: Record<string, unknown>;
   };
   warnings: Array<{ code: string; message: string }>;
   limitations: string[];
-  confidence_contract: ConfidenceLabel[];
+  confidence_artifact: {
+    available: boolean;
+    measurement_confidence_available: boolean;
+    reason: string | null;
+    contract: Record<string, unknown>;
+  };
+}
+
+export interface PointConfidenceRecord {
+  point_id: number;
+  supporting_views: number;
+  track_length: number;
+  reprojection_error: number;
+  triangulation_angle: number;
+  confidence_class: ConfidenceLabel;
+}
+
+export interface PointConfidenceArtifact {
+  schema_version: "1.0";
+  point_order: "PLY_VERTEX_ORDER";
+  points: PointConfidenceRecord[];
 }
 
 export interface ViewerBundle {
@@ -170,6 +228,7 @@ export interface ViewerBundle {
   keyframes: Keyframe[];
   quality: QualityReport;
   ingest: IngestReport | null;
+  pointConfidence: PointConfidenceArtifact | null;
 }
 
 export interface IngestReport {
@@ -183,6 +242,10 @@ export interface IngestReport {
   };
   warnings?: Array<{ code: string; message: string }>;
   telemetry_normalization?: Record<string, unknown>;
+  source_provenance?: ProvenanceOrigin;
+  video_origin?: ProvenanceOrigin;
+  telemetry_origin?: ProvenanceOrigin;
+  genuine_real_evidence?: boolean;
 }
 
 export interface MeasurementResult {

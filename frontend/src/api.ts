@@ -1,8 +1,10 @@
 import { parseCsv } from "./csv";
+import { parsePointConfidence } from "./confidence";
 import type {
   CameraPose,
   Keyframe,
   ProjectManifest,
+  ProvenanceOrigin,
   QualityReport,
   RunRecord,
   ViewerBundle,
@@ -45,6 +47,8 @@ export async function uploadProject(input: {
   description: string;
   video: File;
   telemetry: File;
+  videoOrigin?: ProvenanceOrigin;
+  telemetryOrigin?: ProvenanceOrigin;
 }): Promise<ProjectManifest> {
   const body = new FormData();
   body.set("name", input.name);
@@ -52,7 +56,13 @@ export async function uploadProject(input: {
   body.set("data_classification", "PUBLIC_DEMO");
   body.set("video", input.video);
   body.set("telemetry", input.telemetry);
+  body.set("video_origin", input.videoOrigin ?? "UNKNOWN");
+  body.set("telemetry_origin", input.telemetryOrigin ?? "UNKNOWN");
   return request<ProjectManifest>("/api/projects", { method: "POST", body });
+}
+
+export function getProject(projectId: string): Promise<ProjectManifest> {
+  return request<ProjectManifest>(`/api/projects/${projectId}`);
 }
 
 export async function startRun(
@@ -95,12 +105,15 @@ function numberFrom(row: Record<string, string>, names: string[], fallback = 0):
 }
 
 export async function loadViewerBundle(manifest: ViewerManifest): Promise<ViewerBundle> {
-  const [cameraResponse, keyframeResponse, qualityResponse, ingestResponse] = await Promise.all([
+  const [cameraResponse, keyframeResponse, qualityResponse, ingestResponse, confidenceResponse] = await Promise.all([
     fetch(resolveAssetUrl(manifest.camera_path.url)),
     fetch(resolveAssetUrl(manifest.selected_frames.url)),
     fetch(resolveAssetUrl(manifest.quality_report_url)),
     manifest.ingest_report_url
       ? fetch(resolveAssetUrl(manifest.ingest_report_url))
+      : Promise.resolve(null),
+    manifest.confidence.available && manifest.confidence.url
+      ? fetch(resolveAssetUrl(manifest.confidence.url))
       : Promise.resolve(null),
   ]);
   for (const response of [cameraResponse, keyframeResponse, qualityResponse, ingestResponse]) {
@@ -124,7 +137,11 @@ export async function loadViewerBundle(manifest: ViewerManifest): Promise<Viewer
     : (keyframePayload.frames ?? []);
   const quality = (await qualityResponse.json()) as QualityReport;
   const ingest = ingestResponse ? await ingestResponse.json() : null;
-  return { manifest, cameraPoses, keyframes, quality, ingest };
+  const pointConfidence =
+    confidenceResponse?.ok
+      ? parsePointConfidence(await confidenceResponse.json())
+      : null;
+  return { manifest, cameraPoses, keyframes, quality, ingest, pointConfidence };
 }
 
 export async function loadOfflineFixture(): Promise<ViewerBundle> {
@@ -146,6 +163,8 @@ export async function createSyntheticDemo(): Promise<{ project: ProjectManifest;
     description: "UI/API fixture only; never reconstruction evidence.",
     video,
     telemetry,
+    videoOrigin: "SYNTHETIC",
+    telemetryOrigin: "SYNTHETIC",
   });
   const run = await startRun(project.project_id, {
     execution_mode: "SYNTHETIC_DEMO",

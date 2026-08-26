@@ -7,6 +7,10 @@
   "created_at": "2026-08-25T09:24:12.151945+00:00",
   "config_version": "1.0",
   "synthetic_fixture": true,
+  "source_provenance": "SYNTHETIC",
+  "video_origin": "SYNTHETIC",
+  "telemetry_origin": "SYNTHETIC",
+  "genuine_real_evidence": false,
   "metrics": {
     "eligible_frames": 10,
     "registered_frames": 9,
@@ -17,6 +21,7 @@
     "reprojection_gate_1_5_px": true,
     "runtime_s": 0.01,
     "metric_alignment": { "scale": 1.0, "camera_pairs": 10 },
+    "telemetry_sync": { "telemetry_offset_s": 0.0, "offset_source": "not_applicable", "rmse_before_m": 0.0, "rmse_after_m": 0.0 },
     "known_distance": {
       "status": "MEASURED",
       "reference_m": 10.0,
@@ -26,21 +31,22 @@
     },
     "coverage": { "status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied." }
   },
-  "confidence_contract": [
-    "OBSERVED_HIGH",
-    "OBSERVED_MEDIUM",
-    "OBSERVED_LOW",
-    "AI_ASSISTED_NOT_MEASURABLE",
-    "UNSEEN"
-  ],
+  "confidence_artifact": {
+    "available": false,
+    "measurement_confidence_available": false,
+    "reason": "Confidence unavailable for this run",
+    "contract": { "rgb_derivation_prohibited": true }
+  },
   "warnings": [
     { "code": "SYNTHETIC_FIXTURE", "message": "Offline fixture is for deterministic UI verification only." },
     { "code": "SOURCE_IMAGES_UNAVAILABLE", "message": "No real selected-frame images are declared in this fixture." }
+    ,{ "code": "CONFIDENCE_UNAVAILABLE", "message": "No explicit point-confidence artifact is declared." }
   ],
   "limitations": [
     "Geometry is defensible only where observed by multiple source frames.",
     "Ordinary GNSS is a soft alignment prior and is not survey-grade ground truth.",
-    "AI-assisted geometry is excluded from verified measurement.",
+    "AI-assisted geometry is excluded from measurement evidence.",
+    "Confidence-qualified measurement is unavailable without a valid explicit confidence artifact.",
     "Unseen surfaces are not reconstructed or claimed as measured."
   ]
 }

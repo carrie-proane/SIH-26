@@ -4,16 +4,19 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 
 import { resolveAssetUrl } from "../api";
+import { pointSizeForRadius, robustSceneBounds } from "../viewerBounds";
 import type {
   CameraPose,
   ConfidenceLabel,
   MeasurementResult,
+  PointConfidenceArtifact,
   ViewerManifest,
 } from "../types";
 
 interface PointCloudViewerProps {
   manifest: ViewerManifest;
   cameraPoses: CameraPose[];
+  pointConfidence: PointConfidenceArtifact | null;
   visibleLabels: Set<ConfidenceLabel>;
   measurementEnabled: boolean;
   measurementResetKey: number;
@@ -23,7 +26,7 @@ interface PointCloudViewerProps {
 
 interface PickedPoint {
   position: THREE.Vector3;
-  label: ConfidenceLabel;
+  label?: ConfidenceLabel;
 }
 
 const DISABLED_LABELS = new Set<ConfidenceLabel>([
@@ -33,31 +36,6 @@ const DISABLED_LABELS = new Set<ConfidenceLabel>([
 
 function scenePosition(x: number, y: number, z: number): THREE.Vector3 {
   return new THREE.Vector3(x, z, -y);
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const value = Number.parseInt(hex.replace("#", ""), 16);
-  return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
-}
-
-function nearestConfidence(
-  red: number,
-  green: number,
-  blue: number,
-  manifest: ViewerManifest,
-): ConfidenceLabel {
-  let nearest = manifest.confidence_legend[0]?.label ?? "OBSERVED_MEDIUM";
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const item of manifest.confidence_legend) {
-    const [targetRed, targetGreen, targetBlue] = hexToRgb(item.color);
-    const distance =
-      (red - targetRed) ** 2 + (green - targetGreen) ** 2 + (blue - targetBlue) ** 2;
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearest = item.label;
-    }
-  }
-  return nearest;
 }
 
 function makeMarker(position: THREE.Vector3, color: string, radius = 0.075): THREE.Mesh {
@@ -73,6 +51,7 @@ function makeMarker(position: THREE.Vector3, color: string, radius = 0.075): THR
 export function PointCloudViewer({
   manifest,
   cameraPoses,
+  pointConfidence,
   visibleLabels,
   measurementEnabled,
   measurementResetKey,
@@ -81,6 +60,8 @@ export function PointCloudViewer({
 }: PointCloudViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const labelObjectsRef = useRef<Map<ConfidenceLabel, THREE.Points>>(new Map());
+  const pointObjectsRef = useRef<THREE.Points[]>([]);
+  const confidenceReadyRef = useRef(false);
   const measurementGroupRef = useRef<THREE.Group | null>(null);
   const cameraMarkerGroupRef = useRef<THREE.Group | null>(null);
   const selectedCameraMarkerRef = useRef<THREE.Mesh | null>(null);
@@ -103,7 +84,6 @@ export function PointCloudViewer({
     let animationFrame = 0;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#07100f");
-    scene.fog = new THREE.FogExp2("#07100f", 0.035);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 5000);
     camera.position.set(7, 6, 8);
@@ -176,16 +156,18 @@ export function PointCloudViewer({
       pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
       pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
-      const objects = [...labelObjectsRef.current.values()].filter((item) => item.visible);
+      const objects = pointObjectsRef.current.filter((item) => item.visible);
       const intersection = raycaster.intersectObjects(objects, false)[0];
       if (!intersection?.point) return;
-      const label = intersection.object.userData.confidence as ConfidenceLabel;
-      if (DISABLED_LABELS.has(label)) {
+      const label = confidenceReadyRef.current
+        ? (intersection.object.userData.confidence as ConfidenceLabel)
+        : undefined;
+      if (label && DISABLED_LABELS.has(label)) {
         onMeasurementChangeRef.current({
           distanceM: null,
-          labels: [label],
+          labels: label ? [label] : [],
           status: "BLOCKED",
-          message: `${label} geometry is not eligible for verified measurement.`,
+          message: `${label} geometry is not eligible for confidence-qualified measurement.`,
         });
         return;
       }
@@ -198,9 +180,11 @@ export function PointCloudViewer({
       if (pickedPointsRef.current.length === 1) {
         onMeasurementChangeRef.current({
           distanceM: null,
-          labels: [label],
+          labels: label ? [label] : [],
           status: "SELECTING",
-          message: "First observed point selected. Choose a second point.",
+          message: confidenceReadyRef.current
+            ? "First confidence-qualified point selected. Choose a second point."
+            : "Visual estimate - verification confidence unavailable. Choose a second point.",
         });
         return;
       }
@@ -212,7 +196,18 @@ export function PointCloudViewer({
         new THREE.LineBasicMaterial({ color: "#f8fff9" }),
       );
       measurementGroup.add(line);
-      const labels = [first.label, second.label];
+      const labels = [first.label, second.label].filter(
+        (value): value is ConfidenceLabel => value !== undefined,
+      );
+      if (!confidenceReadyRef.current) {
+        onMeasurementChangeRef.current({
+          distanceM: distance,
+          labels: [],
+          status: "CAUTION",
+          message: "Visual estimate - verification confidence unavailable",
+        });
+        return;
+      }
       const status = labels.includes("OBSERVED_LOW")
         ? "CONFIRM"
         : labels.includes("OBSERVED_MEDIUM")
@@ -224,7 +219,7 @@ export function PointCloudViewer({
         status,
         message:
           status === "ALLOWED"
-            ? "Both points are supported by high-confidence observed geometry."
+            ? "Both points have explicit high-confidence observed support."
             : status === "CONFIRM"
               ? "Low-confidence geometry requires explicit operator confirmation."
               : "Measurement includes medium-confidence geometry; use with caution.",
@@ -242,52 +237,104 @@ export function PointCloudViewer({
         }
         const position = geometry.getAttribute("position");
         const color = geometry.getAttribute("color");
-        const grouped = new Map<ConfidenceLabel, number[]>();
-        for (const item of manifest.confidence_legend) grouped.set(item.label, []);
-        for (let index = 0; index < position.count; index += 1) {
-          const label = color
-            ? nearestConfidence(color.getX(index), color.getY(index), color.getZ(index), manifest)
-            : "OBSERVED_MEDIUM";
-          grouped.get(label)?.push(
-            position.getX(index),
-            position.getZ(index),
-            -position.getY(index),
-          );
-        }
-
         const pointGroup = new THREE.Group();
-        pointGroup.name = "confidence-point-cloud";
-        for (const item of manifest.confidence_legend) {
-          const values = grouped.get(item.label) ?? [];
-          if (!values.length) continue;
-          const labelGeometry = new THREE.BufferGeometry();
-          labelGeometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
+        const explicitConfidence =
+          pointConfidence !== null && pointConfidence.points.length === position.count;
+        confidenceReadyRef.current = explicitConfidence;
+        if (explicitConfidence) {
+          pointGroup.name = "explicit-confidence-point-cloud";
+          const grouped = new Map<ConfidenceLabel, number[]>();
+          for (const item of manifest.confidence_legend) grouped.set(item.label, []);
+          for (const point of pointConfidence.points) {
+            grouped.get(point.confidence_class)?.push(
+              position.getX(point.point_id),
+              position.getZ(point.point_id),
+              -position.getY(point.point_id),
+            );
+          }
+          for (const item of manifest.confidence_legend) {
+            const values = grouped.get(item.label) ?? [];
+            if (!values.length) continue;
+            const labelGeometry = new THREE.BufferGeometry();
+            labelGeometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
+            const points = new THREE.Points(
+              labelGeometry,
+              new THREE.PointsMaterial({
+                color: item.color,
+                size: 0.13,
+                sizeAttenuation: true,
+                transparent: true,
+                opacity: 0.95,
+              }),
+            );
+            points.userData.confidence = item.label;
+            points.visible = visibleLabelsRef.current.has(item.label);
+            labelObjectsRef.current.set(item.label, points);
+            pointObjectsRef.current.push(points);
+            pointGroup.add(points);
+          }
+        } else {
+          pointGroup.name = "photographic-rgb-point-cloud";
+          const photographicGeometry = new THREE.BufferGeometry();
+          const positions: number[] = [];
+          const colors: number[] = [];
+          for (let index = 0; index < position.count; index += 1) {
+            positions.push(
+              position.getX(index),
+              position.getZ(index),
+              -position.getY(index),
+            );
+            if (color) colors.push(color.getX(index), color.getY(index), color.getZ(index));
+          }
+          photographicGeometry.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(positions, 3),
+          );
+          if (color) {
+            photographicGeometry.setAttribute(
+              "color",
+              new THREE.Float32BufferAttribute(colors, 3),
+            );
+          }
           const points = new THREE.Points(
-            labelGeometry,
+            photographicGeometry,
             new THREE.PointsMaterial({
-              color: item.color,
+              color: color ? "#ffffff" : "#b8c6c2",
+              vertexColors: Boolean(color),
               size: 0.13,
               sizeAttenuation: true,
               transparent: true,
               opacity: 0.95,
             }),
           );
-          points.userData.confidence = item.label;
-          points.visible = visibleLabelsRef.current.has(item.label);
-          labelObjectsRef.current.set(item.label, points);
+          pointObjectsRef.current.push(points);
           pointGroup.add(points);
         }
         scene.add(pointGroup);
 
-        const bounds = new THREE.Box3().setFromObject(pointGroup);
+        // Sparse COLMAP clouds can contain a handful of kilometre-scale outliers.
+        // Use robust bounds only for the initial camera; retain every point in the scene.
+        const bounds = robustSceneBounds(position);
         for (const point of cameraPathPoints) bounds.expandByPoint(point);
         if (!bounds.isEmpty()) {
           const center = bounds.getCenter(new THREE.Vector3());
-          const size = Math.max(bounds.getSize(new THREE.Vector3()).length(), 1);
+          const radius = Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius, 1);
+          const distance = radius * 2.8;
+          const renderedPointSize = pointSizeForRadius(radius);
+          for (const points of pointObjectsRef.current) {
+            if (points.material instanceof THREE.PointsMaterial) {
+              points.material.size = renderedPointSize;
+              points.material.needsUpdate = true;
+            }
+          }
           controls.target.copy(center);
-          camera.position.copy(center).add(new THREE.Vector3(size * 0.9, size * 0.65, size));
-          camera.near = Math.max(size / 1000, 0.01);
-          camera.far = size * 100;
+          camera.position.copy(center).add(
+            new THREE.Vector3(0.9, 0.65, 1).normalize().multiplyScalar(distance),
+          );
+          camera.near = Math.max(radius / 1000, 0.01);
+          camera.far = Math.max(radius * 50, 500);
+          controls.minDistance = Math.max(radius / 100, 0.05);
+          controls.maxDistance = Math.max(radius * 20, 500);
           camera.updateProjectionMatrix();
           controls.update();
         }
@@ -325,11 +372,13 @@ export function PointCloudViewer({
       renderer.dispose();
       renderer.domElement.remove();
       labelObjectsRef.current.clear();
+      pointObjectsRef.current = [];
+      confidenceReadyRef.current = false;
       measurementGroupRef.current = null;
       cameraMarkerGroupRef.current = null;
       selectedCameraMarkerRef.current = null;
     };
-  }, [cameraPoses, manifest]);
+  }, [cameraPoses, manifest, pointConfidence]);
 
   useEffect(() => {
     for (const [label, object] of labelObjectsRef.current) {
@@ -367,7 +416,7 @@ export function PointCloudViewer({
         <span className="live-dot" />
         <span>{manifest.cloud.coordinate_frame.replaceAll("_", " ")}</span>
         <span className="viewport-divider" />
-        <span>PLY · sparse evidence</span>
+        <span>PLY · sparse evidence · {manifest.cloud.color_mode_label}</span>
       </div>
       <div className="axis-readout" aria-hidden="true">
         <span className="axis axis--x">E</span>
@@ -375,7 +424,11 @@ export function PointCloudViewer({
         <span className="axis axis--z">N</span>
       </div>
       <div className="viewport-hint">
-        {measurementEnabled ? "Select two observed points" : "Drag to orbit · Scroll to zoom"}
+        {measurementEnabled
+          ? pointConfidence
+            ? "Select two confidence-qualified points"
+            : "Select two visible points"
+          : "Drag to orbit · Scroll to zoom"}
       </div>
       {loadState === "LOADING" && <div className="viewer-state">Loading declared point cloud…</div>}
       {loadState === "ERROR" && (

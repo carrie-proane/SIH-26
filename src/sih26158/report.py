@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .models import ConfidenceLabel, MatcherMetrics, RunRecord, utc_now
+from .confidence import confidence_contract
+from .models import MatcherMetrics, ProvenanceOrigin, RunRecord, utc_now
 
 
 def known_distance_metrics(reference_m: float | None, measured_m: float | None) -> dict[str, Any]:
@@ -35,8 +36,8 @@ def build_quality_report(
     metrics: MatcherMetrics,
     warnings: list[dict[str, str]],
     *,
-    synthetic: bool,
     alignment: dict[str, Any] | None = None,
+    confidence_available: bool = False,
 ) -> dict[str, Any]:
     registration_rate = metrics.registration_rate
     alignment = alignment or {}
@@ -51,6 +52,18 @@ def build_quality_report(
         if sorted_residuals
         else None
     )
+    report_warnings = list(warnings)
+    if not confidence_available:
+        report_warnings.append(
+            {
+                "code": "CONFIDENCE_UNAVAILABLE",
+                "message": (
+                    "No valid explicit point-confidence artifact was declared; photographic RGB "
+                    "must not be interpreted as verification confidence."
+                ),
+            }
+        )
+    genuine_real_evidence = record.source_provenance == ProvenanceOrigin.REAL
     return {
         "schema_version": "1.0",
         "project_id": record.project_id,
@@ -60,7 +73,11 @@ def build_quality_report(
         "created_at": utc_now(),
         "config_version": record.config_version,
         "run_configuration": record.config.model_dump(mode="json"),
-        "synthetic_fixture": synthetic,
+        "synthetic_fixture": record.source_provenance == ProvenanceOrigin.SYNTHETIC,
+        "source_provenance": record.source_provenance,
+        "video_origin": record.video_origin,
+        "telemetry_origin": record.telemetry_origin,
+        "genuine_real_evidence": genuine_real_evidence,
         "metrics": {
             "eligible_frames": metrics.eligible_frames,
             "registered_frames": metrics.registered_frames,
@@ -79,17 +96,33 @@ def build_quality_report(
                 "median_camera_prior_residual_m": median_residual,
                 "p95_camera_prior_residual_m": p95_residual,
             },
+            "telemetry_sync": {
+                "telemetry_offset_s": record.telemetry_offset_s,
+                "offset_source": record.offset_source,
+                "rmse_before_m": record.rmse_before_m,
+                "rmse_after_m": record.rmse_after_m,
+            },
             "known_distance": known_distance_metrics(
                 record.config.known_distance_m, record.config.measured_distance_m
             ),
             "coverage": {"status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied."},
         },
-        "confidence_contract": [label.value for label in ConfidenceLabel],
-        "warnings": warnings,
+        "confidence_artifact": {
+            "available": confidence_available,
+            "measurement_confidence_available": confidence_available,
+            "reason": (
+                None
+                if confidence_available
+                else "Confidence unavailable for this run"
+            ),
+            "contract": confidence_contract(),
+        },
+        "warnings": report_warnings,
         "limitations": [
             "Geometry is defensible only where observed by multiple source frames.",
             "Ordinary GNSS is a soft alignment prior and is not survey-grade ground truth.",
-            "AI-assisted geometry is excluded from verified measurement.",
+            "AI-assisted geometry is excluded from measurement evidence.",
+            "Confidence-qualified measurement is unavailable without a valid explicit confidence artifact.",
             "Unseen surfaces are not reconstructed or claimed as measured.",
         ],
     }
