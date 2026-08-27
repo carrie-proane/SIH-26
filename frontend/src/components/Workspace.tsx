@@ -7,8 +7,10 @@ import type {
   MeasurementResult,
   ProjectManifest,
   RunRecord,
+  VisualMode,
   ViewerBundle,
 } from "../types";
+import { visualModeAvailable, visualModeMeasurementEligible } from "../visualModels";
 import { PointCloudViewer } from "./PointCloudViewer";
 
 interface WorkspaceProps {
@@ -111,6 +113,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
     confidenceAvailable ? IDLE_MEASUREMENT : UNVERIFIED_VISUAL_ESTIMATE,
   );
   const [measurementResetKey, setMeasurementResetKey] = useState(0);
+  const [visualMode, setVisualMode] = useState<VisualMode>("EVIDENCE");
   const [showDepth, setShowDepth] = useState(false);
   const [showMask, setShowMask] = useState(false);
   const [panel, setPanel] = useState<"TRUST" | "SOURCE">("TRUST");
@@ -134,9 +137,17 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
     setMeasurementResetKey((value) => value + 1);
   };
 
+  const selectVisualMode = (nextMode: VisualMode) => {
+    if (!visualModeAvailable(nextMode, manifest)) return;
+    setVisualMode(nextMode);
+    setMeasurementEnabled(false);
+    resetMeasurement();
+  };
+
   const measurementReference = manifest.measurement_reference;
   const provenance = manifest.source_provenance ?? quality.source_provenance ?? "UNKNOWN";
   const synthetic = provenance === "SYNTHETIC";
+  const measurementGeometryEligible = visualModeMeasurementEligible(visualMode, manifest);
   const inputAssets = project?.assets ?? bundle.ingest?.input_assets ?? [];
   const liveReferenceError =
     measurement.distanceM !== null && measurementReference.reference_m
@@ -202,6 +213,38 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             <span>This cloud and its metrics are synthetic. They do not pass the real reconstruction gate.</span>
           </div>
         )}
+        <div className="visual-mode-bar" aria-label="Visual reconstruction mode">
+          <button
+            type="button"
+            className={visualMode === "EVIDENCE" ? "is-active" : ""}
+            onClick={() => selectVisualMode("EVIDENCE")}
+          >
+            Evidence Cloud
+          </button>
+          <button
+            type="button"
+            className={visualMode === "TEXTURED" ? "is-active" : ""}
+            disabled={!visualModeAvailable("TEXTURED", manifest)}
+            title={manifest.visual_models?.textured_mesh.statement ?? "Textured model unavailable"}
+            onClick={() => selectVisualMode("TEXTURED")}
+          >
+            Textured Model
+          </button>
+          <button
+            type="button"
+            className={visualMode === "PHOTOREAL" ? "is-active" : ""}
+            disabled={!visualModeAvailable("PHOTOREAL", manifest)}
+            title={manifest.visual_models?.gaussian_splat.statement ?? "Photoreal view unavailable"}
+            onClick={() => selectVisualMode("PHOTOREAL")}
+          >
+            Photoreal View
+          </button>
+          <span>
+            {visualMode === "EVIDENCE"
+              ? "Default verified evidence geometry"
+              : "Visual only — not used for verified measurement"}
+          </span>
+        </div>
         <div className="viewport-toolbar">
           <div className="toolbar-cluster">
             <button type="button" className="tool-button is-active">● Photographic RGB</button>
@@ -237,7 +280,14 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             <button
               type="button"
               className={`measure-button ${measurementEnabled ? "is-active" : ""}`}
+              disabled={!measurementGeometryEligible}
+              title={
+                measurementGeometryEligible
+                  ? "Measure on evidence geometry"
+                  : "Measurements are available only on the Evidence Cloud"
+              }
               onClick={() => {
+                if (!measurementGeometryEligible) return;
                 setMeasurementEnabled((value) => !value);
                 resetMeasurement();
               }}
@@ -252,9 +302,10 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
           cameraPoses={cameraPoses}
           pointConfidence={pointConfidence}
           visibleLabels={visibleLabels}
-          measurementEnabled={measurementEnabled}
+          measurementEnabled={measurementEnabled && measurementGeometryEligible}
           measurementResetKey={measurementResetKey}
           selectedFrameIndex={selectedFrameIndex}
+          visualMode={visualMode}
           onMeasurementChange={setMeasurement}
         />
         <div className="measurement-readout" data-status={measurement.status}>

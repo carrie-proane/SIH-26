@@ -286,6 +286,37 @@ def test_artifact_serving_rejects_undeclared_and_traversal(tmp_path: Path) -> No
     with pytest.raises(FileNotFoundError):
         store.resolve_declared_artifact(result.run_id, "../manifest.json")
 
+    undeclared_dense = store.run_dir(result.project_id, result.run_id) / "dense/fused.ply"
+    undeclared_dense.write_text("not declared", encoding="utf-8")
+    with pytest.raises(FileNotFoundError):
+        store.resolve_declared_artifact(result.run_id, "dense/fused.ply")
+
+
+def test_optional_dense_blocker_does_not_fail_sparse_run(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(
+        store,
+        tmp_path,
+        video_origin=ProvenanceOrigin.SYNTHETIC,
+        telemetry_origin=ProvenanceOrigin.SYNTHETIC,
+    )
+    record = store.create_run(
+        project.project_id,
+        RunConfig(execution_mode="SYNTHETIC_DEMO", enable_dense_reconstruction=True),
+    )
+
+    result = PipelineRunner(store).run(record.run_id)
+
+    assert result.status == RunStatus.COMPLETED
+    declared = {artifact.relative_path for artifact in result.artifacts}
+    assert "sparse/sparse_local.ply" in declared
+    assert {"dense_report.json", "dense_commands.json", "logs/dense.log"} <= declared
+    report = json.loads(
+        (store.run_dir(project.project_id, result.run_id) / "dense_report.json").read_text()
+    )
+    assert report["status"] == "UNAVAILABLE"
+    assert report["sparse_evidence_preserved"] is True
+
 
 def test_real_run_retains_ingest_artifact_when_automatic_preprocessing_fails(
     tmp_path: Path, monkeypatch

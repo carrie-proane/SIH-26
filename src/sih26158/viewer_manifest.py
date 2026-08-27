@@ -92,8 +92,23 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "measured_m": known_distance.get("measured_m"),
         "percent_error": known_distance.get("percent_error"),
         "passes_10_percent_gate": known_distance.get("passes_10_percent_gate"),
-            "synthetic_fixture": record.synthetic_fixture,
+        "synthetic_fixture": record.synthetic_fixture,
     }
+    dense_cloud_path = "dense/fused.ply" if "dense/fused.ply" in artifacts else None
+    textured_mesh_path = next(
+        (
+            path
+            for path in sorted(artifacts)
+            if path.startswith("dense/textured/") and path.lower().endswith(".ply")
+        ),
+        None,
+    )
+    texture_paths = [
+        path
+        for path in sorted(artifacts)
+        if path.startswith("dense/textured/")
+        and path.lower().endswith((".png", ".jpg", ".jpeg"))
+    ]
 
     return {
         "schema_version": "1.0",
@@ -112,6 +127,44 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
             "coordinate_frame": coordinate_frame,
             "color_mode": "PHOTOGRAPHIC_RGB",
             "color_mode_label": "Photographic RGB",
+        },
+        "visual_models": {
+            "evidence_cloud": {
+                "available": True,
+                "url": artifacts[cloud_path].url,
+                "format": "PLY",
+                "coordinate_frame": coordinate_frame,
+                "measurement_eligible": True,
+                "default": True,
+            },
+            "dense_cloud": {
+                "available": dense_cloud_path is not None,
+                "url": artifacts[dense_cloud_path].url if dense_cloud_path else None,
+                "format": "PLY" if dense_cloud_path else None,
+                "coordinate_frame": "LOCAL_ENU_METRES" if dense_cloud_path else None,
+                "measurement_eligible": False,
+            },
+            "textured_mesh": {
+                "available": textured_mesh_path is not None,
+                "url": artifacts[textured_mesh_path].url if textured_mesh_path else None,
+                "format": "PLY" if textured_mesh_path else None,
+                "texture_urls": [artifacts[path].url for path in texture_paths],
+                "coordinate_frame": "LOCAL_ENU_METRES" if textured_mesh_path else None,
+                "measurement_eligible": False,
+                "statement": "Visual model - not used for verified measurement",
+            },
+            "gaussian_splat": {
+                "available": False,
+                "url": None,
+                "format": None,
+                "measurement_eligible": False,
+                "statement": "Photoreal View unavailable; no Gaussian Splatting was installed or run.",
+            },
+            "dense_report_url": (
+                artifacts["dense_report.json"].url
+                if "dense_report.json" in artifacts
+                else None
+            ),
         },
         "camera_path": {
             "url": artifacts["camera_poses.csv"].url,

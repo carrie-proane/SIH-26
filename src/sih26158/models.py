@@ -94,6 +94,8 @@ class RunConfig(BaseModel):
     force_exclude_frame_indices: list[int] = Field(default_factory=list)
     enable_segmentation: bool = False
     segmentation_model_path: str | None = None
+    enable_dense_reconstruction: bool = False
+    dense_provider: Literal["auto", "colmap", "openmvs"] = "auto"
 
     @field_validator("measured_distance_m")
     @classmethod

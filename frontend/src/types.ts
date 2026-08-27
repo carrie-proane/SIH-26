@@ -106,6 +106,13 @@ export interface ViewerManifest {
     color_mode: "PHOTOGRAPHIC_RGB";
     color_mode_label: "Photographic RGB";
   };
+  visual_models?: {
+    evidence_cloud: VisualModel;
+    dense_cloud: VisualModel;
+    textured_mesh: VisualModel & { texture_urls?: string[] };
+    gaussian_splat: VisualModel;
+    dense_report_url?: string | null;
+  };
   camera_path: {
     url: string;
     coordinate_frame: string;
@@ -146,6 +153,18 @@ export interface ViewerManifest {
     model?: string;
   };
 }
+
+export interface VisualModel {
+  available: boolean;
+  url?: string | null;
+  format?: "PLY" | "GLB" | "SPLAT" | null;
+  coordinate_frame?: string | null;
+  measurement_eligible: boolean;
+  default?: boolean;
+  statement?: string;
+}
+
+export type VisualMode = "EVIDENCE" | "TEXTURED" | "PHOTOREAL";
 
 export interface Keyframe {
   frame_index: number;

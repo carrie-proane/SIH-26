@@ -151,6 +151,10 @@ describe("operator application", () => {
     expect(screen.getByText(/provenance: synthetic/i)).toBeInTheDocument();
     expect(screen.getByText(/confidence unavailable for this run/i)).toBeVisible();
     expect(screen.getByRole("button", { name: /photographic rgb/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /evidence cloud/i })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: /textured model/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /photoreal view/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /measure/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /ai depth/i })).toBeDisabled();
     expect(screen.getByText(/measurement: disabled/i)).toBeVisible();
   });

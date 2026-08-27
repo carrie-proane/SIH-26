@@ -19,7 +19,13 @@ from telemetry.srt_parser import parse_srt
 
 from .colmap import ColmapRunner, ExternalToolError, ReconstructionResult, write_matcher_benchmark
 from .confidence import validate_point_confidence_for_ply
-from .geo import geodetic_to_enu, transform_ply
+from .dense import (
+    DenseContext,
+    UnavailableProvider,
+    run_dense_stage,
+    select_dense_provider,
+)
+from .geo import SimilarityTransform, geodetic_to_enu, transform_ply
 from .models import (
     MatcherMetrics,
     OffsetSource,
@@ -747,6 +753,58 @@ class PipelineRunner:
             return ReconstructionResult(metrics, [ply, poses], [])
         return ColmapRunner().run(run_dir / "frames", run_dir, record.config)
 
+    def _run_optional_dense(
+        self,
+        record: RunRecord,
+        result: ReconstructionResult,
+        alignment_report: dict[str, object],
+        warnings: list[dict[str, str]],
+    ) -> list[Path]:
+        if not record.config.enable_dense_reconstruction:
+            return []
+        run_dir = self.store.run_dir(record.project_id, record.run_id)
+        residuals = np.asarray(alignment_report.get("residuals_m", []), dtype=float)
+        inlier_count = int(alignment_report.get("inlier_count", 0))
+        transform = SimilarityTransform(
+            scale=float(alignment_report.get("scale", 1.0)),
+            rotation=np.asarray(alignment_report.get("rotation", np.eye(3)), dtype=float),
+            translation=np.asarray(
+                alignment_report.get("translation_m", [0.0, 0.0, 0.0]), dtype=float
+            ),
+            inliers=np.ones(len(residuals), dtype=bool),
+            residuals_m=residuals,
+        )
+        selection_path = run_dir / "sparse" / "model_selection.json"
+        selected_model = ""
+        if selection_path.is_file():
+            selection = json.loads(selection_path.read_text(encoding="utf-8"))
+            selected_model = str(selection.get("selected_model", ""))
+        sparse_model_dir = run_dir / "sparse" / "model" / selected_model
+        context = DenseContext(
+            run_dir=run_dir,
+            frames_dir=run_dir / "frames",
+            sparse_model_dir=sparse_model_dir,
+            registered_images=result.metrics.registered_frames,
+            transform=transform,
+        )
+        gate_reasons: list[str] = []
+        if record.synthetic_fixture:
+            gate_reasons.append("synthetic fixtures cannot produce real dense evidence")
+        if result.metrics.registration_rate < 0.8:
+            gate_reasons.append("sparse registration is below the 80% gate")
+        if inlier_count < 3 or transform.scale <= 0:
+            gate_reasons.append("local metric alignment gate did not produce three valid inliers")
+        if not sparse_model_dir.is_dir() and not record.synthetic_fixture:
+            gate_reasons.append("selected sparse COLMAP model directory is unavailable")
+        provider = (
+            UnavailableProvider("; ".join(gate_reasons))
+            if gate_reasons
+            else select_dense_provider(record.config.dense_provider)
+        )
+        dense_result = run_dense_stage(context, provider)
+        warnings.extend(dense_result.warnings)
+        return dense_result.artifacts
+
     def run(self, run_id: str) -> RunRecord:
         record = self.store.get_run(run_id)
         warnings: list[dict[str, str]] = []
@@ -793,14 +851,25 @@ class PipelineRunner:
             benchmark_path = self.store.run_dir(record.project_id, record.run_id) / "matcher_benchmark.json"
             write_matcher_benchmark(benchmark_path, result.metrics, None)
             self.store.register_artifacts(record, [metrics_path, benchmark_path])
-            self._transition(record, RunStatus.REPORTING, 85, "Generating trust and known-distance report.")
-            quality_path = self.store.run_dir(record.project_id, record.run_id) / "quality_report.json"
             alignment_report = json.loads(
                 (
                     self.store.run_dir(record.project_id, record.run_id)
                     / "local_transform.json"
                 ).read_text(encoding="utf-8")
             )
+            if record.config.enable_dense_reconstruction:
+                self._transition(
+                    record,
+                    RunStatus.RECONSTRUCTING,
+                    75,
+                    "Running optional dense visual reconstruction after sparse metric gates.",
+                )
+                dense_artifacts = self._run_optional_dense(
+                    record, result, alignment_report, warnings
+                )
+                self.store.register_artifacts(record, dense_artifacts)
+            self._transition(record, RunStatus.REPORTING, 85, "Generating trust and known-distance report.")
+            quality_path = self.store.run_dir(record.project_id, record.run_id) / "quality_report.json"
             confidence_available = False
             if any(
                 artifact.relative_path == "point_confidence.json"

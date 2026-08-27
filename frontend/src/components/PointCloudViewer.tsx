@@ -14,6 +14,7 @@ import type {
   ConfidenceLabel,
   MeasurementResult,
   PointConfidenceArtifact,
+  VisualMode,
   ViewerManifest,
 } from "../types";
 
@@ -25,6 +26,7 @@ interface PointCloudViewerProps {
   measurementEnabled: boolean;
   measurementResetKey: number;
   selectedFrameIndex: number | null;
+  visualMode: VisualMode;
   onMeasurementChange: (result: MeasurementResult) => void;
 }
 
@@ -60,6 +62,7 @@ export function PointCloudViewer({
   measurementEnabled,
   measurementResetKey,
   selectedFrameIndex,
+  visualMode,
   onMeasurementChange,
 }: PointCloudViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -251,8 +254,11 @@ export function PointCloudViewer({
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
 
     const loader = new PLYLoader();
+    const selectedVisualModel =
+      visualMode === "TEXTURED" ? manifest.visual_models?.textured_mesh : undefined;
+    const modelUrl = selectedVisualModel?.url ?? manifest.cloud.url;
     loader.load(
-      resolveAssetUrl(manifest.cloud.url),
+      resolveAssetUrl(modelUrl),
       (geometry) => {
         if (disposed) {
           geometry.dispose();
@@ -260,19 +266,55 @@ export function PointCloudViewer({
         }
         const position = geometry.getAttribute("position");
         const color = geometry.getAttribute("color");
+        const renderedPositions: number[] = [];
+        for (let index = 0; index < position.count; index += 1) {
+          renderedPositions.push(
+            position.getX(index),
+            position.getZ(index),
+            -position.getY(index),
+          );
+        }
+        const renderedPosition = new THREE.Float32BufferAttribute(renderedPositions, 3);
         const pointGroup = new THREE.Group();
         const explicitConfidence =
-          pointConfidence !== null && pointConfidence.points.length === position.count;
+          visualMode === "EVIDENCE" &&
+          pointConfidence !== null &&
+          pointConfidence.points.length === position.count;
         confidenceReadyRef.current = explicitConfidence;
-        if (explicitConfidence) {
+        if (visualMode === "TEXTURED") {
+          pointGroup.name = "textured-visual-model-not-measurement-evidence";
+          const meshGeometry = new THREE.BufferGeometry();
+          meshGeometry.setAttribute("position", renderedPosition);
+          if (geometry.index) meshGeometry.setIndex(geometry.index.clone());
+          const uv = geometry.getAttribute("uv");
+          if (uv) meshGeometry.setAttribute("uv", uv.clone());
+          if (color) meshGeometry.setAttribute("color", color.clone());
+          meshGeometry.computeVertexNormals();
+          const textureUrl = selectedVisualModel?.texture_urls?.[0];
+          const texture = textureUrl
+            ? new THREE.TextureLoader().load(resolveAssetUrl(textureUrl))
+            : null;
+          if (texture) texture.colorSpace = THREE.SRGBColorSpace;
+          const mesh = new THREE.Mesh(
+            meshGeometry,
+            new THREE.MeshStandardMaterial({
+              map: texture,
+              color: texture || color ? "#ffffff" : "#aabbb5",
+              vertexColors: Boolean(color),
+              side: THREE.DoubleSide,
+              roughness: 0.9,
+            }),
+          );
+          pointGroup.add(mesh);
+        } else if (explicitConfidence) {
           pointGroup.name = "explicit-confidence-point-cloud";
           const grouped = new Map<ConfidenceLabel, number[]>();
           for (const item of manifest.confidence_legend) grouped.set(item.label, []);
           for (const point of pointConfidence.points) {
             grouped.get(point.confidence_class)?.push(
-              position.getX(point.point_id),
-              position.getZ(point.point_id),
-              -position.getY(point.point_id),
+              renderedPosition.getX(point.point_id),
+              renderedPosition.getY(point.point_id),
+              renderedPosition.getZ(point.point_id),
             );
           }
           for (const item of manifest.confidence_legend) {
@@ -299,19 +341,13 @@ export function PointCloudViewer({
         } else {
           pointGroup.name = "photographic-rgb-point-cloud";
           const photographicGeometry = new THREE.BufferGeometry();
-          const positions: number[] = [];
           const colors: number[] = [];
           for (let index = 0; index < position.count; index += 1) {
-            positions.push(
-              position.getX(index),
-              position.getZ(index),
-              -position.getY(index),
-            );
             if (color) colors.push(color.getX(index), color.getY(index), color.getZ(index));
           }
           photographicGeometry.setAttribute(
             "position",
-            new THREE.Float32BufferAttribute(positions, 3),
+            renderedPosition,
           );
           if (color) {
             photographicGeometry.setAttribute(
@@ -337,7 +373,7 @@ export function PointCloudViewer({
 
         // Sparse COLMAP clouds can contain a handful of kilometre-scale outliers.
         // Use robust bounds only for the initial camera; retain every point in the scene.
-        const bounds = robustSceneBounds(position);
+        const bounds = robustSceneBounds(renderedPosition);
         for (const point of cameraPathPoints) bounds.expandByPoint(point);
         if (!bounds.isEmpty()) {
           const center = bounds.getCenter(new THREE.Vector3());
@@ -392,7 +428,7 @@ export function PointCloudViewer({
       cameraMarkerGroupRef.current = null;
       selectedCameraMarkerRef.current = null;
     };
-  }, [cameraPoses, manifest, pointConfidence]);
+  }, [cameraPoses, manifest, pointConfidence, visualMode]);
 
   useEffect(() => {
     for (const [label, object] of labelObjectsRef.current) {
@@ -428,9 +464,15 @@ export function PointCloudViewer({
     >
       <div className="viewport-chrome viewport-chrome--top">
         <span className="live-dot" />
-        <span>{manifest.cloud.coordinate_frame.replaceAll("_", " ")}</span>
+        <span>{(visualMode === "TEXTURED"
+          ? manifest.visual_models?.textured_mesh.coordinate_frame
+          : manifest.cloud.coordinate_frame)?.replaceAll("_", " ")}</span>
         <span className="viewport-divider" />
-        <span>PLY · sparse evidence · {manifest.cloud.color_mode_label}</span>
+        <span>
+          {visualMode === "TEXTURED"
+            ? "PLY · textured visual model · not measurement evidence"
+            : `PLY · sparse evidence · ${manifest.cloud.color_mode_label}`}
+        </span>
       </div>
       <div className="axis-readout" aria-hidden="true">
         <span className="axis axis--x">E</span>
@@ -444,7 +486,7 @@ export function PointCloudViewer({
             : "Select two visible points"
           : "Drag to orbit · Scroll to zoom"}
       </div>
-      {loadState === "LOADING" && <div className="viewer-state">Loading declared point cloud…</div>}
+      {loadState === "LOADING" && <div className="viewer-state">Loading declared visual model…</div>}
       {loadState === "ERROR" && (
         <div className="viewer-state viewer-state--error">
           <strong>Cloud unavailable</strong>

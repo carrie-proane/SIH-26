@@ -71,6 +71,9 @@ def _run(args: argparse.Namespace) -> int:
         telemetry_offset_source=args.telemetry_offset_source,
         force_include_frame_indices=args.force_include,
         force_exclude_frame_indices=args.force_exclude,
+        use_gpu=args.use_gpu,
+        enable_dense_reconstruction=args.dense,
+        dense_provider=args.dense_provider,
     )
     record = store.create_run(project.project_id, config)
     result = PipelineRunner(store).run(record.run_id)
@@ -122,6 +125,9 @@ def parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--telemetry-offset", type=float)
     run.add_argument("--telemetry-offset-source", choices=["manual", "calibrated"])
+    run.add_argument("--use-gpu", action="store_true")
+    run.add_argument("--dense", action="store_true", help="Attempt optional visual-only dense reconstruction")
+    run.add_argument("--dense-provider", choices=["auto", "colmap", "openmvs"], default="auto")
     run.set_defaults(func=_run)
     benchmark = sub.add_parser("benchmark-matchers")
     benchmark.add_argument("--sift", required=True)

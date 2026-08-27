@@ -376,6 +376,11 @@ button:focus-visible, input:focus-visible {
 .viewport-section { min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; background: #07100f; }
 .truth-banner { min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 7px 16px; border-bottom: 1px solid rgba(252,221,120,.15); color: #b99e50; background: rgba(252,221,120,.055); font-size: 8px; }
 .truth-banner strong { color: var(--amber); text-transform: uppercase; letter-spacing: .08em; }
+.visual-mode-bar { min-height: 37px; padding: 5px 11px; display: flex; align-items: center; gap: 5px; border-bottom: 1px solid var(--line); background: #081310; }
+.visual-mode-bar button { height: 25px; padding: 0 9px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: #6e827b; font-size: 8px; cursor: pointer; }
+.visual-mode-bar button.is-active { color: #062219; border-color: var(--mint); background: var(--mint); }
+.visual-mode-bar button:disabled { opacity: .3; cursor: not-allowed; }
+.visual-mode-bar span { margin-left: auto; color: #8d7d51; font: 700 7px ui-monospace,monospace; letter-spacing: .04em; }
 .viewport-toolbar { height: 47px; padding: 0 11px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: #091512; }
 .toolbar-cluster { display: flex; align-items: center; gap: 5px; }
 .tool-button, .measure-button, .icon-button { height: 29px; padding: 0 9px; border: 1px solid var(--line); border-radius: 5px; background: rgba(255,255,255,.015); color: #738781; font-size: 8px; cursor: pointer; }
@@ -384,6 +389,7 @@ button:focus-visible, input:focus-visible {
 .tool-button.is-ai-active { color: #d8b6ff; border-color: rgba(191,124,255,.3); background: rgba(191,124,255,.08); }
 .tool-button.is-mask-active { color: var(--amber); border-color: rgba(252,221,120,.3); background: rgba(252,221,120,.07); }
 .measure-button { color: #b5c7c1; }
+.measure-button:disabled { opacity: .3; cursor: not-allowed; }
 .measure-button span { color: var(--mint); margin-right: 3px; }
 .measure-button.is-active { color: #052019; border-color: var(--mint); background: var(--mint); }
 .measure-button.is-active span { color: #052019; }

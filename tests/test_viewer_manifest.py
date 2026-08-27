@@ -60,6 +60,11 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
         assert abs(payload["measurement_reference"]["percent_error"] - 6) < 1e-9
         assert payload["ai_overlay"]["measurement"] == "DISABLED"
         assert payload["cloud"]["color_mode_label"] == "Photographic RGB"
+        assert payload["visual_models"]["evidence_cloud"]["available"] is True
+        assert payload["visual_models"]["evidence_cloud"]["default"] is True
+        assert payload["visual_models"]["textured_mesh"]["available"] is False
+        assert payload["visual_models"]["gaussian_splat"]["available"] is False
+        assert payload["visual_models"]["gaussian_splat"]["measurement_eligible"] is False
         assert payload["confidence"]["available"] is False
         assert payload["confidence"]["reason"] == "Confidence unavailable for this run"
         assert {item["label"] for item in payload["confidence_legend"]} == {
@@ -94,6 +99,22 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
         with_confidence = client.get(f"/api/runs/{run_id}/viewer-manifest").json()
         assert with_confidence["confidence"]["available"] is True
         assert with_confidence["confidence"]["url"].endswith("/point_confidence.json")
+
+        dense_cloud = app.state.store.run_dir(project_id, run_id) / "dense/fused.ply"
+        textured_mesh = (
+            app.state.store.run_dir(project_id, run_id) / "dense/textured/model.ply"
+        )
+        texture = app.state.store.run_dir(project_id, run_id) / "dense/textured/atlas.png"
+        textured_mesh.parent.mkdir(parents=True, exist_ok=True)
+        dense_cloud.write_text("declared dense cloud", encoding="utf-8")
+        textured_mesh.write_text("declared textured mesh", encoding="utf-8")
+        texture.write_bytes(b"declared texture")
+        app.state.store.register_artifacts(record, [dense_cloud, textured_mesh, texture])
+        with_dense = client.get(f"/api/runs/{run_id}/viewer-manifest").json()
+        assert with_dense["visual_models"]["dense_cloud"]["available"] is True
+        assert with_dense["visual_models"]["textured_mesh"]["available"] is True
+        assert with_dense["visual_models"]["textured_mesh"]["measurement_eligible"] is False
+        assert len(with_dense["visual_models"]["textured_mesh"]["texture_urls"]) == 1
 
 
 def test_viewer_manifest_is_not_fabricated_for_queued_run(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ interface UploadInput {
   forceExcludeFrameIndices: number[];
   knownDistanceM?: number;
   useGpu: boolean;
+  enableDenseReconstruction: boolean;
 }
 
 interface SetupScreenProps {
@@ -44,6 +45,7 @@ export function SetupScreen({
   const [forceExclude, setForceExclude] = useState("");
   const [knownDistance, setKnownDistance] = useState("");
   const [useGpu, setUseGpu] = useState(false);
+  const [enableDenseReconstruction, setEnableDenseReconstruction] = useState(false);
   const [localError, setLocalError] = useState("");
 
   const submit = (event: FormEvent) => {
@@ -74,6 +76,7 @@ export function SetupScreen({
       forceExcludeFrameIndices: excluded,
       knownDistanceM: knownDistance ? Number(knownDistance) : undefined,
       useGpu,
+      enableDenseReconstruction,
     });
   };
 
@@ -201,6 +204,14 @@ export function SetupScreen({
               <span>Use COLMAP GPU</span>
             </label>
           </div>
+          <label className="check-field dense-option">
+            <input
+              type="checkbox"
+              checked={enableDenseReconstruction}
+              onChange={(event) => setEnableDenseReconstruction(event.target.checked)}
+            />
+            <span>Attempt optional dense visual model</span>
+          </label>
 
           {(localError || error) && <div className="form-error" role="alert">{localError || error}</div>}
           <button className="primary-action" type="submit" disabled={busy}>

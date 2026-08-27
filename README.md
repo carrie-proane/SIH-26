@@ -51,6 +51,23 @@ images to COLMAP. `--preprocessing-run` remains an optional advanced override fo
 existing handoff. Real runs never substitute synthetic geometry when a dependency or input is
 missing.
 
+Optional Phase 2 dense visual reconstruction can be requested without changing the sparse evidence
+result:
+
+```bash
+PYTHONPATH=src python -m sih26158.cli run \
+  --video /path/pass.mp4 \
+  --telemetry /path/pass.srt \
+  --dense \
+  --dense-provider auto
+```
+
+The provider runs only after sparse registration and local-metric alignment gates pass. CUDA COLMAP
+is preferred; an installed OpenMVS command suite is the external fallback. If neither is available,
+or if dense processing fails, `dense_report.json`, `dense_commands.json`, and `logs/dense.log`
+record the blocker while the valid sparse run remains completed. Dense and textured artifacts are
+visual-only and are never promoted to verified measurement geometry.
+
 Run the complete backend, lint, frontend build and browser verification gate with `make verify`.
 
 ## Important files
@@ -84,8 +101,9 @@ Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evide
 - Only directly observed multi-view geometry is measurable.
 - Ordinary GNSS is a soft prior; absolute horizontal and vertical errors require independent checks.
 - AI-assisted geometry is never accepted as verified measurement.
-- Dense reconstruction, mesh/GLB and orthomosaic remain stretch work until the sparse/metric gates
-  pass on the real primary sample. Telemetry offset estimation is a bounded per-run search, but
-  ordinary GNSS remains a soft prior.
+- Dense reconstruction and textured meshes are optional visual outputs after sparse/metric gates;
+  their availability depends on CUDA COLMAP or an external OpenMVS installation. GLB conversion,
+  Gaussian Splatting and orthomosaics are not implemented. Telemetry offset estimation is a bounded
+  per-run search, but ordinary GNSS remains a soft prior.
 - YOLO segmentation, SuperPoint/LightGlue and Depth Anything are optional experiments. Missing
   models never block the core SIFT reconstruction path.

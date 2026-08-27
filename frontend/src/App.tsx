@@ -82,6 +82,7 @@ export default function App() {
         profile: "preview",
         matcher: "SIFT",
         use_gpu: input.useGpu,
+        enable_dense_reconstruction: input.enableDenseReconstruction,
       };
       if (input.preprocessingRun) config.preprocessing_run = input.preprocessingRun;
       if (input.forceIncludeFrameIndices.length) {
