@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import csv
 import json
+import platform
 import re
 import shutil
 import struct
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
+from .confidence import classify_observed_point
 from .models import MatcherMetrics, RunConfig
 
 
@@ -72,6 +75,11 @@ def write_matcher_benchmark(
         "selected_matcher": selected,
         "decision": reason,
         "policy": "Keep SuperPoint+LightGlue only when registration or reprojection improves.",
+        "learned_status": "BLOCKED_UNAVAILABLE" if learned is None else "EXECUTED",
+        "environment": {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+        },
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -262,11 +270,6 @@ class ColmapRunner:
         selection_path = run_dir / "sparse" / "model_selection.json"
         selected = self.select_best_model(run_dir / "sparse" / "model", selection_path)
         model_dir = selected.path
-        ply = run_dir / "sparse" / "sparse.ply"
-        self._execute(
-            [self.binary, "model_converter", "--input_path", str(model_dir), "--output_path", str(ply), "--output_type", "PLY"],
-            log,
-        )
         text_model = run_dir / "sparse" / "text_model"
         text_model.mkdir(exist_ok=True)
         self._execute(
@@ -281,6 +284,14 @@ class ColmapRunner:
                 "TXT",
             ],
             log,
+        )
+        ply = run_dir / "sparse" / "sparse.ply"
+        confidence_path = run_dir / "point_confidence.json"
+        self._export_points_and_confidence(
+            text_model / "points3D.txt",
+            text_model / "images.txt",
+            ply,
+            confidence_path,
         )
         poses = run_dir / "camera_poses.csv"
         self._export_camera_poses(text_model / "images.txt", poses)
@@ -318,6 +329,7 @@ class ColmapRunner:
                 log,
                 run_dir / "sparse" / "model_analysis.txt",
                 selection_path,
+                confidence_path,
             ],
             commands,
         )
@@ -361,3 +373,113 @@ class ColmapRunner:
             writer = csv.writer(stream)
             writer.writerow(["image_id", "image_name", "sfm_x", "sfm_y", "sfm_z", "qw", "qx", "qy", "qz"])
             writer.writerows(rows)
+
+    @classmethod
+    def _camera_centres(cls, images_txt: Path) -> dict[int, np.ndarray]:
+        centres: dict[int, np.ndarray] = {}
+        image_line = True
+        for raw in images_txt.read_text(encoding="utf-8").splitlines():
+            if not raw or raw.startswith("#"):
+                continue
+            if image_line:
+                values = raw.split()
+                if len(values) < 10:
+                    raise ExternalToolError("Malformed COLMAP images.txt camera record.")
+                qw, qx, qy, qz = map(float, values[1:5])
+                translation = np.array(list(map(float, values[5:8])))
+                rotation = cls._quaternion_rotation(qw, qx, qy, qz)
+                centres[int(values[0])] = -(rotation.T @ translation)
+            image_line = not image_line
+        return centres
+
+    @staticmethod
+    def _triangulation_angle(
+        point: np.ndarray, image_ids: list[int], camera_centres: dict[int, np.ndarray]
+    ) -> float:
+        rays = []
+        for image_id in sorted(set(image_ids)):
+            centre = camera_centres.get(image_id)
+            if centre is None:
+                continue
+            ray = centre - point
+            norm = float(np.linalg.norm(ray))
+            if norm > 0:
+                rays.append(ray / norm)
+        maximum = 0.0
+        for first_index, first in enumerate(rays):
+            for second in rays[first_index + 1 :]:
+                cosine = float(np.clip(np.dot(first, second), -1.0, 1.0))
+                maximum = max(maximum, float(np.degrees(np.arccos(cosine))))
+        return maximum
+
+    @classmethod
+    def _export_points_and_confidence(
+        cls, points_txt: Path, images_txt: Path, ply_path: Path, confidence_path: Path
+    ) -> None:
+        """Export PLY and confidence together in ascending COLMAP point-ID order."""
+        if not points_txt.is_file() or not images_txt.is_file():
+            raise ExternalToolError("COLMAP text export lacks points3D.txt or images.txt.")
+        camera_centres = cls._camera_centres(images_txt)
+        points: list[tuple[int, np.ndarray, tuple[int, int, int], float, list[int]]] = []
+        for raw in points_txt.read_text(encoding="utf-8").splitlines():
+            if not raw or raw.startswith("#"):
+                continue
+            values = raw.split()
+            if len(values) < 8 or (len(values) - 8) % 2:
+                raise ExternalToolError("Malformed COLMAP points3D.txt point record.")
+            source_id = int(values[0])
+            position = np.array(list(map(float, values[1:4])))
+            color = tuple(map(int, values[4:7]))
+            error = float(values[7])
+            image_ids = [int(values[index]) for index in range(8, len(values), 2)]
+            points.append((source_id, position, color, error, image_ids))
+        if not points:
+            raise ExternalToolError("COLMAP sparse model contains no triangulated points.")
+        points.sort(key=lambda item: item[0])
+        ply_lines = [
+            "ply",
+            "format ascii 1.0",
+            "comment vertex order is ascending COLMAP POINT3D_ID",
+            f"element vertex {len(points)}",
+            "property float x",
+            "property float y",
+            "property float z",
+            "property uchar red",
+            "property uchar green",
+            "property uchar blue",
+            "end_header",
+        ]
+        confidence_records: list[dict[str, object]] = []
+        for vertex_id, (_, position, color, error, image_ids) in enumerate(points):
+            angle = cls._triangulation_angle(position, image_ids, camera_centres)
+            track_length = len(image_ids)
+            ply_lines.append(
+                " ".join(
+                    [*(f"{value:.12g}" for value in position), *(str(value) for value in color)]
+                )
+            )
+            confidence_records.append(
+                {
+                    "point_id": vertex_id,
+                    "supporting_views": len(set(image_ids)),
+                    "track_length": track_length,
+                    "reprojection_error": error,
+                    "triangulation_angle": angle,
+                    "confidence_class": classify_observed_point(
+                        track_length, error, angle
+                    ).value,
+                }
+            )
+        ply_path.write_text("\n".join(ply_lines) + "\n", encoding="utf-8")
+        confidence_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "point_order": "PLY_VERTEX_ORDER",
+                    "points": confidence_records,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )

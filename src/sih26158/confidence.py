@@ -16,6 +16,40 @@ CONFIDENCE_REQUIRED_FIELDS = [
     "confidence_class",
 ]
 
+OBSERVED_CONFIDENCE_THRESHOLDS = {
+    "OBSERVED_HIGH": {
+        "min_track_length": 4,
+        "max_reprojection_error_px": 1.0,
+        "min_triangulation_angle_deg": 5.0,
+    },
+    "OBSERVED_MEDIUM": {
+        "min_track_length": 3,
+        "max_reprojection_error_px": 2.0,
+        "min_triangulation_angle_deg": 2.0,
+    },
+}
+
+
+def classify_observed_point(
+    track_length: int, reprojection_error: float, triangulation_angle: float
+) -> ConfidenceLabel:
+    """Classify only COLMAP-observed points using documented geometric evidence."""
+    high = OBSERVED_CONFIDENCE_THRESHOLDS["OBSERVED_HIGH"]
+    if (
+        track_length >= high["min_track_length"]
+        and reprojection_error <= high["max_reprojection_error_px"]
+        and triangulation_angle >= high["min_triangulation_angle_deg"]
+    ):
+        return ConfidenceLabel.OBSERVED_HIGH
+    medium = OBSERVED_CONFIDENCE_THRESHOLDS["OBSERVED_MEDIUM"]
+    if (
+        track_length >= medium["min_track_length"]
+        and reprojection_error <= medium["max_reprojection_error_px"]
+        and triangulation_angle >= medium["min_triangulation_angle_deg"]
+    ):
+        return ConfidenceLabel.OBSERVED_MEDIUM
+    return ConfidenceLabel.OBSERVED_LOW
+
 
 def load_point_confidence(path: Path) -> PointConfidenceArtifact:
     try:
@@ -59,4 +93,5 @@ def confidence_contract() -> dict[str, object]:
         "required_fields": CONFIDENCE_REQUIRED_FIELDS,
         "valid_classes": [label.value for label in ConfidenceLabel],
         "rgb_derivation_prohibited": True,
+        "observed_thresholds": OBSERVED_CONFIDENCE_THRESHOLDS,
     }
