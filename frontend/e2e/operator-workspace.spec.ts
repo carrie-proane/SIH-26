@@ -12,6 +12,8 @@ test("offline fixture opens the WebGL operator workspace", async ({ page }) => {
   const viewport = await page.getByLabel("Interactive reconstruction viewport").boundingBox();
   expect(viewport?.height).toBeLessThan(900);
   await page.screenshot({ path: "../evidence/arnav/operator-ui-fixture.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByLabel("Interactive reconstruction viewport")).toBeVisible();
 
   await page.getByRole("button", { name: /Measure/i }).click();
   await expect(page.getByText("Select two visible points", { exact: true })).toBeVisible();

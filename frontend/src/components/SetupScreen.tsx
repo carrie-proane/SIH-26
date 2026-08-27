@@ -6,6 +6,8 @@ interface UploadInput {
   video: File;
   telemetry: File;
   preprocessingRun: string;
+  forceIncludeFrameIndices: number[];
+  forceExcludeFrameIndices: number[];
   knownDistanceM?: number;
   useGpu: boolean;
 }
@@ -38,6 +40,8 @@ export function SetupScreen({
   const [name, setName] = useState("Campus facade run");
   const [description, setDescription] = useState("");
   const [preprocessingRun, setPreprocessingRun] = useState("");
+  const [forceInclude, setForceInclude] = useState("");
+  const [forceExclude, setForceExclude] = useState("");
   const [knownDistance, setKnownDistance] = useState("");
   const [useGpu, setUseGpu] = useState(false);
   const [localError, setLocalError] = useState("");
@@ -48,6 +52,17 @@ export function SetupScreen({
       setLocalError("Choose both the video and its matching telemetry file.");
       return;
     }
+    const parseIndices = (value: string): number[] | null => {
+      if (!value.trim()) return [];
+      const parsed = value.split(",").map((item) => Number(item.trim()));
+      return parsed.every((item) => Number.isInteger(item) && item >= 0) ? parsed : null;
+    };
+    const included = parseIndices(forceInclude);
+    const excluded = parseIndices(forceExclude);
+    if (!included || !excluded) {
+      setLocalError("Frame overrides must be comma-separated non-negative frame indices.");
+      return;
+    }
     setLocalError("");
     onUpload({
       name,
@@ -55,6 +70,8 @@ export function SetupScreen({
       video,
       telemetry,
       preprocessingRun: preprocessingRun.trim(),
+      forceIncludeFrameIndices: included,
+      forceExcludeFrameIndices: excluded,
       knownDistanceM: knownDistance ? Number(knownDistance) : undefined,
       useGpu,
     });
@@ -134,14 +151,35 @@ export function SetupScreen({
             </label>
           </div>
 
-          <label className="field">
-            <span>Preprocessing handoff path <small>optional advanced input</small></span>
-            <input
-              value={preprocessingRun}
-              onChange={(event) => setPreprocessingRun(event.target.value)}
-              placeholder="Leave blank to preprocess this upload automatically"
-            />
-          </label>
+          <details className="advanced-settings">
+            <summary>Advanced preprocessing options</summary>
+            <label className="field">
+              <span>External handoff path <small>optional debugging override</small></span>
+              <input
+                value={preprocessingRun}
+                onChange={(event) => setPreprocessingRun(event.target.value)}
+                placeholder="Leave blank for automatic scored preprocessing"
+              />
+            </label>
+            <div className="compact-fields">
+              <label className="field">
+                <span>Force include frames <small>comma-separated indices</small></span>
+                <input
+                  value={forceInclude}
+                  onChange={(event) => setForceInclude(event.target.value)}
+                  placeholder="e.g. 30, 90"
+                />
+              </label>
+              <label className="field">
+                <span>Force exclude frames <small>comma-separated indices</small></span>
+                <input
+                  value={forceExclude}
+                  onChange={(event) => setForceExclude(event.target.value)}
+                  placeholder="e.g. 45"
+                />
+              </label>
+            </div>
+          </details>
           <div className="compact-fields">
             <label className="field">
               <span>Known distance <small>metres</small></span>

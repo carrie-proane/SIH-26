@@ -161,6 +161,8 @@ export interface Keyframe {
   exposure_score?: number;
   redundancy_score?: number;
   dynamic_mask_fraction?: number;
+  selected_automatically?: boolean;
+  override?: "NONE" | "FORCE_INCLUDE" | "FORCE_EXCLUDE";
   confidence?: ConfidenceLabel;
 }
 

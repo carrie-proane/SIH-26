@@ -467,6 +467,10 @@ button:focus-visible, input:focus-visible {
 .probe-note { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: #5b6e69; font-size: 7px; }
 .probe-note strong { color: #82968f; font: 7px ui-monospace,monospace; }
 .empty-inline { padding: 18px 8px; color: #5b6e68; font-size: 9px; text-align: center; }
+.advanced-settings { margin: 4px 0 16px; padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: rgba(5,13,12,.45); }
+.advanced-settings summary { color: #8da39c; font-size: 10px; cursor: pointer; }
+.advanced-settings[open] summary { margin-bottom: 12px; color: var(--mint); }
+.frame-list button.is-rejected { opacity: .48; }
 
 @media (max-width: 1120px) {
   .workspace { grid-template-columns: 210px minmax(390px, 1fr) 290px; }

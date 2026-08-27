@@ -7,7 +7,7 @@ Arnav's React/TypeScript operator workspace consumes the exact viewer manifest d
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -31,6 +31,6 @@ The end-to-end test uses the locally installed Google Chrome channel and does no
 
 ## Live preprocessing
 
-When the handoff field is blank, the backend creates a dataset-specific preview handoff from the
-uploaded video and matching SRT/CSV: uniform 2 Hz frames plus normalized telemetry. An external
-handoff can still be supplied for reviewed frame scoring, masks, or a custom selection policy.
+The ordinary form needs no handoff path. The backend adaptively extracts candidates, scores blur,
+exposure and redundancy, applies temporal selection and copies only selected images to COLMAP.
+External handoffs and frame include/exclude overrides are hidden under Advanced preprocessing.

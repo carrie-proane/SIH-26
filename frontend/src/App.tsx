@@ -84,6 +84,12 @@ export default function App() {
         use_gpu: input.useGpu,
       };
       if (input.preprocessingRun) config.preprocessing_run = input.preprocessingRun;
+      if (input.forceIncludeFrameIndices.length) {
+        config.force_include_frame_indices = input.forceIncludeFrameIndices;
+      }
+      if (input.forceExcludeFrameIndices.length) {
+        config.force_exclude_frame_indices = input.forceExcludeFrameIndices;
+      }
       if (input.knownDistanceM) config.known_distance_m = input.knownDistanceM;
       const createdRun = await startRun(createdProject.project_id, config);
       await watchRun(createdRun);

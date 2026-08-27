@@ -137,7 +137,8 @@ describe("operator application", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: /see what the camera proved/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /run api smoke fixture/i })).toBeEnabled();
-    expect(screen.getByPlaceholderText(/preprocess this upload automatically/i)).toBeInTheDocument();
+    expect(screen.getByText(/advanced preprocessing options/i)).toBeVisible();
+    expect(screen.getByPlaceholderText(/automatic scored preprocessing/i)).toBeInTheDocument();
   });
 
   it("loads the offline manifest through the complete operator workspace", async () => {

@@ -165,11 +165,11 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             <span>Selected frames</span>
             <b>{keyframes.filter((frame) => frame.selected).length}</b>
           </div>
-          <div className="frame-list" aria-label="Selected source frames">
+          <div className="frame-list" aria-label="Frame selection review">
             {keyframes.map((frame) => (
               <button
                 type="button"
-                className={frame.frame_index === selectedFrameIndex ? "is-active" : ""}
+                className={`${frame.frame_index === selectedFrameIndex ? "is-active" : ""} ${frame.selected ? "" : "is-rejected"}`}
                 key={frame.frame_index}
                 onClick={() => {
                   setSelectedFrameIndex(frame.frame_index);
