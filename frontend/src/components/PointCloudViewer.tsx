@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 
-import { resolveAssetUrl } from "../api";
+import {
+  declaredVisualArtifactUrls,
+  fetchDeclaredVisualArtifact,
+  formatByteSize,
+  isDeclaredVisualArtifact,
+  modelFormat,
+  visualModelLabel,
+} from "../modelLoading";
 import {
   cameraDistanceForSphere,
   pointSizeForRadius,
@@ -78,6 +86,11 @@ export function PointCloudViewer({
   const visibleLabelsRef = useRef(visibleLabels);
   const [loadState, setLoadState] = useState<"LOADING" | "READY" | "ERROR">("LOADING");
   const [loadError, setLoadError] = useState("");
+  const [loadProgress, setLoadProgress] = useState({ loaded: 0, total: null as number | null });
+  const [loadedBytes, setLoadedBytes] = useState<number | null>(null);
+  const [loadNotice, setLoadNotice] = useState("");
+  const [loadedModelMode, setLoadedModelMode] = useState<VisualMode>(visualMode);
+  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   measurementEnabledRef.current = measurementEnabled;
   onMeasurementChangeRef.current = onMeasurementChange;
@@ -253,151 +266,245 @@ export function PointCloudViewer({
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
 
-    const loader = new PLYLoader();
-    const selectedVisualModel =
-      visualMode === "TEXTURED" ? manifest.visual_models?.textured_mesh : undefined;
-    const modelUrl = selectedVisualModel?.url ?? manifest.cloud.url;
-    loader.load(
-      resolveAssetUrl(modelUrl),
-      (geometry) => {
-        if (disposed) {
-          geometry.dispose();
-          return;
+    const abortController = new AbortController();
+    const declaredUrls = declaredVisualArtifactUrls(manifest);
+    setLoadState("LOADING");
+    setLoadError("");
+    setLoadNotice("");
+    setLoadProgress({ loaded: 0, total: null });
+    setLoadedBytes(null);
+    setLoadedModelMode(visualMode);
+    setFallbackUsed(false);
+
+    const modelForMode = (mode: VisualMode) => {
+      if (mode === "EVIDENCE") {
+        return manifest.visual_models?.evidence_cloud ?? {
+          available: true,
+          url: manifest.cloud.url,
+          format: "PLY" as const,
+          coordinate_frame: manifest.cloud.coordinate_frame,
+          measurement_eligible: true,
+        };
+      }
+      return mode === "TEXTURED"
+        ? manifest.visual_models?.textured_mesh
+        : manifest.visual_models?.gaussian_splat;
+    };
+
+    const fitLoadedObject = (object: THREE.Object3D, positions?: THREE.BufferAttribute) => {
+      const bounds = positions
+        ? robustSceneBounds(positions)
+        : new THREE.Box3().setFromObject(object);
+      for (const point of cameraPathPoints) bounds.expandByPoint(point);
+      if (bounds.isEmpty()) return;
+      const center = bounds.getCenter(new THREE.Vector3());
+      const radius = Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius, 1);
+      for (const points of pointObjectsRef.current) {
+        if (points.material instanceof THREE.PointsMaterial) {
+          points.material.size = pointSizeForRadius(radius);
+          points.material.needsUpdate = true;
         }
-        const position = geometry.getAttribute("position");
-        const color = geometry.getAttribute("color");
-        const renderedPositions: number[] = [];
-        for (let index = 0; index < position.count; index += 1) {
-          renderedPositions.push(
-            position.getX(index),
-            position.getZ(index),
-            -position.getY(index),
+      }
+      fittedSphere = new THREE.Sphere(center, radius);
+      fitCamera(true);
+    };
+
+    const loadTexture = async (textureUrl: string): Promise<THREE.Texture> => {
+      if (!isDeclaredVisualArtifact(manifest, textureUrl)) {
+        throw new Error("Refusing to load an undeclared texture artifact.");
+      }
+      const { buffer } = await fetchDeclaredVisualArtifact(
+        manifest,
+        textureUrl,
+        (loaded, total) => setLoadProgress({ loaded, total }),
+        abortController.signal,
+      );
+      const objectUrl = URL.createObjectURL(new Blob([buffer]));
+      try {
+        const texture = await new THREE.TextureLoader().loadAsync(objectUrl);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+
+    const buildPlyObject = async (
+      geometry: THREE.BufferGeometry,
+      targetMode: VisualMode,
+      visualModel: ReturnType<typeof modelForMode>,
+    ): Promise<{ object: THREE.Group; positions: THREE.BufferAttribute }> => {
+      const position = geometry.getAttribute("position");
+      if (!position) throw new Error("Declared PLY has no vertex positions.");
+      const color = geometry.getAttribute("color");
+      const renderedPositions: number[] = [];
+      for (let index = 0; index < position.count; index += 1) {
+        renderedPositions.push(position.getX(index), position.getZ(index), -position.getY(index));
+      }
+      const renderedPosition = new THREE.Float32BufferAttribute(renderedPositions, 3);
+      const pointGroup = new THREE.Group();
+      const explicitConfidence =
+        targetMode === "EVIDENCE" &&
+        pointConfidence !== null &&
+        pointConfidence.points.length === position.count;
+      confidenceReadyRef.current = explicitConfidence;
+      if (targetMode === "TEXTURED") {
+        pointGroup.name = "textured-visual-model-not-measurement-evidence";
+        const meshGeometry = new THREE.BufferGeometry();
+        meshGeometry.setAttribute("position", renderedPosition);
+        if (geometry.index) meshGeometry.setIndex(geometry.index.clone());
+        const uv = geometry.getAttribute("uv");
+        if (uv) meshGeometry.setAttribute("uv", uv.clone());
+        if (color) meshGeometry.setAttribute("color", color.clone());
+        meshGeometry.computeVertexNormals();
+        let texture: THREE.Texture | null = null;
+        const textureUrl =
+          targetMode === "TEXTURED"
+            ? manifest.visual_models?.textured_mesh?.texture_urls?.[0]
+            : undefined;
+        if (textureUrl) {
+          try {
+            texture = await loadTexture(textureUrl);
+          } catch (cause) {
+            if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+            setLoadNotice(
+              `Texture atlas unavailable (${cause instanceof Error ? cause.message : "unknown error"}). ` +
+                "Showing the declared mesh with its available vertex colours.",
+            );
+          }
+        }
+        const mesh = new THREE.Mesh(
+          meshGeometry,
+          new THREE.MeshStandardMaterial({
+            map: texture,
+            color: texture || color ? "#ffffff" : "#aabbb5",
+            vertexColors: Boolean(color),
+            side: THREE.DoubleSide,
+            roughness: 0.9,
+          }),
+        );
+        pointGroup.add(mesh);
+      } else if (explicitConfidence) {
+        pointGroup.name = "explicit-confidence-point-cloud";
+        const grouped = new Map<ConfidenceLabel, number[]>();
+        for (const item of manifest.confidence_legend) grouped.set(item.label, []);
+        for (const point of pointConfidence.points) {
+          grouped.get(point.confidence_class)?.push(
+            renderedPosition.getX(point.point_id),
+            renderedPosition.getY(point.point_id),
+            renderedPosition.getZ(point.point_id),
           );
         }
-        const renderedPosition = new THREE.Float32BufferAttribute(renderedPositions, 3);
-        const pointGroup = new THREE.Group();
-        const explicitConfidence =
-          visualMode === "EVIDENCE" &&
-          pointConfidence !== null &&
-          pointConfidence.points.length === position.count;
-        confidenceReadyRef.current = explicitConfidence;
-        if (visualMode === "TEXTURED") {
-          pointGroup.name = "textured-visual-model-not-measurement-evidence";
-          const meshGeometry = new THREE.BufferGeometry();
-          meshGeometry.setAttribute("position", renderedPosition);
-          if (geometry.index) meshGeometry.setIndex(geometry.index.clone());
-          const uv = geometry.getAttribute("uv");
-          if (uv) meshGeometry.setAttribute("uv", uv.clone());
-          if (color) meshGeometry.setAttribute("color", color.clone());
-          meshGeometry.computeVertexNormals();
-          const textureUrl = selectedVisualModel?.texture_urls?.[0];
-          const texture = textureUrl
-            ? new THREE.TextureLoader().load(resolveAssetUrl(textureUrl))
-            : null;
-          if (texture) texture.colorSpace = THREE.SRGBColorSpace;
-          const mesh = new THREE.Mesh(
-            meshGeometry,
-            new THREE.MeshStandardMaterial({
-              map: texture,
-              color: texture || color ? "#ffffff" : "#aabbb5",
-              vertexColors: Boolean(color),
-              side: THREE.DoubleSide,
-              roughness: 0.9,
-            }),
-          );
-          pointGroup.add(mesh);
-        } else if (explicitConfidence) {
-          pointGroup.name = "explicit-confidence-point-cloud";
-          const grouped = new Map<ConfidenceLabel, number[]>();
-          for (const item of manifest.confidence_legend) grouped.set(item.label, []);
-          for (const point of pointConfidence.points) {
-            grouped.get(point.confidence_class)?.push(
-              renderedPosition.getX(point.point_id),
-              renderedPosition.getY(point.point_id),
-              renderedPosition.getZ(point.point_id),
-            );
-          }
-          for (const item of manifest.confidence_legend) {
-            const values = grouped.get(item.label) ?? [];
-            if (!values.length) continue;
-            const labelGeometry = new THREE.BufferGeometry();
-            labelGeometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
-            const points = new THREE.Points(
-              labelGeometry,
-              new THREE.PointsMaterial({
-                color: item.color,
-                size: 0.13,
-                sizeAttenuation: true,
-                transparent: true,
-                opacity: 0.95,
-              }),
-            );
-            points.userData.confidence = item.label;
-            points.visible = visibleLabelsRef.current.has(item.label);
-            labelObjectsRef.current.set(item.label, points);
-            pointObjectsRef.current.push(points);
-            pointGroup.add(points);
-          }
-        } else {
-          pointGroup.name = "photographic-rgb-point-cloud";
-          const photographicGeometry = new THREE.BufferGeometry();
-          const colors: number[] = [];
-          for (let index = 0; index < position.count; index += 1) {
-            if (color) colors.push(color.getX(index), color.getY(index), color.getZ(index));
-          }
-          photographicGeometry.setAttribute(
-            "position",
-            renderedPosition,
-          );
-          if (color) {
-            photographicGeometry.setAttribute(
-              "color",
-              new THREE.Float32BufferAttribute(colors, 3),
-            );
-          }
+        for (const item of manifest.confidence_legend) {
+          const values = grouped.get(item.label) ?? [];
+          if (!values.length) continue;
+          const labelGeometry = new THREE.BufferGeometry();
+          labelGeometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
           const points = new THREE.Points(
-            photographicGeometry,
+            labelGeometry,
             new THREE.PointsMaterial({
-              color: color ? "#ffffff" : "#b8c6c2",
-              vertexColors: Boolean(color),
+              color: item.color,
               size: 0.13,
               sizeAttenuation: true,
               transparent: true,
               opacity: 0.95,
             }),
           );
+          points.userData.confidence = item.label;
+          points.visible = visibleLabelsRef.current.has(item.label);
+          labelObjectsRef.current.set(item.label, points);
           pointObjectsRef.current.push(points);
           pointGroup.add(points);
         }
-        scene.add(pointGroup);
+      } else {
+        pointGroup.name = "photographic-rgb-point-cloud";
+        const photographicGeometry = new THREE.BufferGeometry();
+        photographicGeometry.setAttribute("position", renderedPosition);
+        if (color) photographicGeometry.setAttribute("color", color.clone());
+        const points = new THREE.Points(
+          photographicGeometry,
+          new THREE.PointsMaterial({
+            color: color ? "#ffffff" : "#b8c6c2",
+            vertexColors: Boolean(color),
+            size: 0.13,
+            sizeAttenuation: true,
+            transparent: true,
+            opacity: 0.95,
+          }),
+        );
+        pointObjectsRef.current.push(points);
+        pointGroup.add(points);
+      }
+      return { object: pointGroup, positions: renderedPosition };
+    };
 
-        // Sparse COLMAP clouds can contain a handful of kilometre-scale outliers.
-        // Use robust bounds only for the initial camera; retain every point in the scene.
-        const bounds = robustSceneBounds(renderedPosition);
-        for (const point of cameraPathPoints) bounds.expandByPoint(point);
-        if (!bounds.isEmpty()) {
-          const center = bounds.getCenter(new THREE.Vector3());
-          const radius = Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius, 1);
-          const renderedPointSize = pointSizeForRadius(radius);
-          for (const points of pointObjectsRef.current) {
-            if (points.material instanceof THREE.PointsMaterial) {
-              points.material.size = renderedPointSize;
-              points.material.needsUpdate = true;
-            }
-          }
-          fittedSphere = new THREE.Sphere(center, radius);
-          fitCamera(true);
+    const parseGlb = (buffer: ArrayBuffer): Promise<THREE.Group> =>
+      new Promise((resolve, reject) => {
+        const manager = new THREE.LoadingManager();
+        manager.setURLModifier((url) => {
+          if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+          throw new Error("GLB references an undeclared external asset.");
+        });
+        new GLTFLoader(manager).parse(buffer, "", (gltf) => resolve(gltf.scene), reject);
+      });
+
+    const loadRequested = async (targetMode: VisualMode, allowFallback: boolean): Promise<void> => {
+      const visualModel = modelForMode(targetMode);
+      const modelUrl = visualModel?.url ?? (targetMode === "EVIDENCE" ? manifest.cloud.url : null);
+      const label = visualModelLabel(targetMode);
+      try {
+        if (!modelUrl || !declaredUrls.has(modelUrl) || !isDeclaredVisualArtifact(manifest, modelUrl)) {
+          throw new Error(`${label} is not declared by this run's viewer manifest.`);
         }
-        geometry.dispose();
-        setLoadState("READY");
-      },
-      undefined,
-      (error) => {
+        if (visualModel?.available === false) {
+          throw new Error(visualModel.statement ?? `${label} is unavailable for this run.`);
+        }
+        pointObjectsRef.current = [];
+        labelObjectsRef.current.clear();
+        confidenceReadyRef.current = false;
+        setLoadedModelMode(targetMode);
+        const format = modelFormat(visualModel, modelUrl);
+        const { buffer, totalBytes } = await fetchDeclaredVisualArtifact(
+          manifest,
+          modelUrl,
+          (loaded, total) => setLoadProgress({ loaded, total }),
+          abortController.signal,
+        );
         if (disposed) return;
-        setLoadError(error instanceof Error ? error.message : "Point cloud could not be loaded.");
+        setLoadedBytes(totalBytes ?? buffer.byteLength);
+        let loaded: { object: THREE.Object3D; positions?: THREE.BufferAttribute };
+        if (format === "PLY") {
+          const geometry = new PLYLoader().parse(buffer);
+          const ply = await buildPlyObject(geometry, targetMode, visualModel);
+          loaded = ply;
+          geometry.dispose();
+        } else if (format === "GLB") {
+          const glb = await parseGlb(buffer);
+          glb.rotation.x = -Math.PI / 2;
+          loaded = { object: glb };
+          confidenceReadyRef.current = false;
+        } else {
+          throw new Error("Gaussian Splat artifacts are not supported by this browser build.");
+        }
+        if (disposed) return;
+        scene.add(loaded.object);
+        fitLoadedObject(loaded.object, loaded.positions);
+        setLoadState("READY");
+      } catch (cause) {
+        if (disposed || (cause instanceof DOMException && cause.name === "AbortError")) return;
+        const reason = cause instanceof Error ? cause.message : "The declared visual artifact could not be parsed.";
+        if (allowFallback && targetMode !== "EVIDENCE") {
+          setFallbackUsed(true);
+          setLoadNotice(`${label} unavailable (${reason}). Showing the declared Evidence Cloud instead.`);
+          await loadRequested("EVIDENCE", false);
+          return;
+        }
+        setLoadError(reason);
         setLoadState("ERROR");
-      },
-    );
+      }
+    };
+
+    void loadRequested(visualMode, true);
 
     const animate = () => {
       controls.update();
@@ -408,6 +515,7 @@ export function PointCloudViewer({
 
     return () => {
       disposed = true;
+      abortController.abort();
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
@@ -464,15 +572,15 @@ export function PointCloudViewer({
     >
       <div className="viewport-chrome viewport-chrome--top">
         <span className="live-dot" />
-        <span>{(visualMode === "TEXTURED"
-          ? manifest.visual_models?.textured_mesh.coordinate_frame
+        <span>{(loadedModelMode === "TEXTURED"
+          ? manifest.visual_models?.textured_mesh?.coordinate_frame
           : manifest.cloud.coordinate_frame)?.replaceAll("_", " ")}</span>
         <span className="viewport-divider" />
-        <span>
-          {visualMode === "TEXTURED"
-            ? "PLY · textured visual model · not measurement evidence"
-            : `PLY · sparse evidence · ${manifest.cloud.color_mode_label}`}
-        </span>
+        <span>{visualModelLabel(loadedModelMode)}</span>
+        <span className="viewport-divider" />
+        <span>{loadedModelMode === "EVIDENCE" ? "MEASUREMENT ELIGIBLE" : "VISUAL ONLY"}</span>
+        <span className="viewport-divider" />
+        <span>{manifest.source_provenance} INPUT</span>
       </div>
       <div className="axis-readout" aria-hidden="true">
         <span className="axis axis--x">E</span>
@@ -486,11 +594,35 @@ export function PointCloudViewer({
             : "Select two visible points"
           : "Drag to orbit · Scroll to zoom"}
       </div>
-      {loadState === "LOADING" && <div className="viewer-state">Loading declared visual model…</div>}
+      {loadNotice && <div className="viewer-notice" role="status">{loadNotice}</div>}
+      {loadState === "LOADING" && (
+        <div className="viewer-state">
+          <strong>Loading {visualModelLabel(visualMode)}…</strong>
+          <span>
+            {loadProgress.total
+              ? `${Math.min(100, Math.round((loadProgress.loaded / loadProgress.total) * 100))}% · `
+              : "Streaming · "}
+            {formatByteSize(loadProgress.loaded)}
+            {loadProgress.total ? ` / ${formatByteSize(loadProgress.total)}` : ""}
+          </span>
+          <progress
+            max={loadProgress.total ?? undefined}
+            value={loadProgress.total ? Math.min(loadProgress.loaded, loadProgress.total) : undefined}
+            aria-label="Visual model loading progress"
+          />
+        </div>
+      )}
       {loadState === "ERROR" && (
         <div className="viewer-state viewer-state--error">
-          <strong>Cloud unavailable</strong>
+          <strong>{visualModelLabel(visualMode)} unavailable</strong>
           <span>{loadError}</span>
+          {loadedBytes !== null && <small>Artifact size: {formatByteSize(loadedBytes)}</small>}
+        </div>
+      )}
+      {loadState === "READY" && loadedBytes !== null && (
+        <div className="viewer-file-meta" aria-label="Loaded visual artifact details">
+          <span>{fallbackUsed ? "FALLBACK · " : ""}{visualModelLabel(loadedModelMode)}</span>
+          <small>{formatByteSize(loadedBytes)} · {loadedModelMode === "EVIDENCE" ? "measurable" : "visual only"}</small>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ViewerManifest } from "./types";
-import { visualModeAvailable, visualModeMeasurementEligible } from "./visualModels";
+import { visualModeAvailable, visualModeMeasurementEligible, visualModeReason } from "./visualModels";
 
 const manifest = {
   visual_models: {
@@ -32,5 +32,7 @@ describe("visual reconstruction protections", () => {
     expect(visualModeAvailable("TEXTURED", {} as ViewerManifest)).toBe(false);
     expect(visualModeAvailable("TEXTURED", manifest)).toBe(true);
     expect(visualModeAvailable("PHOTOREAL", manifest)).toBe(false);
+    expect(visualModeReason("PHOTOREAL", manifest)).toMatch(/Photoreal View unavailable/);
+    expect(visualModeReason("TEXTURED", {} as ViewerManifest)).toMatch(/not declared/);
   });
 });

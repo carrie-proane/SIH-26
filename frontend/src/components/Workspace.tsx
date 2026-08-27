@@ -10,7 +10,11 @@ import type {
   VisualMode,
   ViewerBundle,
 } from "../types";
-import { visualModeAvailable, visualModeMeasurementEligible } from "../visualModels";
+import {
+  visualModeAvailable,
+  visualModeMeasurementEligible,
+  visualModeReason,
+} from "../visualModels";
 import { PointCloudViewer } from "./PointCloudViewer";
 
 interface WorkspaceProps {
@@ -225,7 +229,8 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             type="button"
             className={visualMode === "TEXTURED" ? "is-active" : ""}
             disabled={!visualModeAvailable("TEXTURED", manifest)}
-            title={manifest.visual_models?.textured_mesh.statement ?? "Textured model unavailable"}
+            title={visualModeReason("TEXTURED", manifest)}
+            aria-label={`Textured Model — ${visualModeReason("TEXTURED", manifest)}`}
             onClick={() => selectVisualMode("TEXTURED")}
           >
             Textured Model
@@ -234,16 +239,13 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             type="button"
             className={visualMode === "PHOTOREAL" ? "is-active" : ""}
             disabled={!visualModeAvailable("PHOTOREAL", manifest)}
-            title={manifest.visual_models?.gaussian_splat.statement ?? "Photoreal view unavailable"}
+            title={visualModeReason("PHOTOREAL", manifest)}
+            aria-label={`Photoreal View — ${visualModeReason("PHOTOREAL", manifest)}`}
             onClick={() => selectVisualMode("PHOTOREAL")}
           >
             Photoreal View
           </button>
-          <span>
-            {visualMode === "EVIDENCE"
-              ? "Default verified evidence geometry"
-              : "Visual only — not used for verified measurement"}
-          </span>
+          <span>{visualModeReason(visualMode, manifest)}</span>
         </div>
         <div className="viewport-toolbar">
           <div className="toolbar-cluster">

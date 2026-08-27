@@ -11,7 +11,8 @@
 
 **0:00–0:30 — trustworthy input**
 
-- Show video + telemetry selection and the required preprocessing-handoff path.
+- Show the matching video + SRT/CSV selection. Leave the optional preprocessing handoff blank to
+  demonstrate that the backend creates a dataset-specific scored handoff from the immutable upload.
 - State that uploads remain local and are checksummed into an immutable manifest.
 - Do not call the synthetic fixture a reconstruction.
 
@@ -23,7 +24,9 @@
 
 **1:00–1:45 — reconstruction and provenance**
 
-- Orbit the PLY, show the camera path, then select two source-frame entries.
+- Orbit the Evidence Cloud, show the camera path, then select two source-frame entries. If the run
+  declares a textured mesh, switch to Textured Model and point out the visual-only badge; a missing
+  or corrupt dense artifact must visibly fall back to the declared sparse cloud.
 - Toggle high, medium and low observed confidence layers.
 - Show the source-frame unavailable state only if the backend did not declare image URLs; do not
   pretend the procedural placeholder is source imagery.
