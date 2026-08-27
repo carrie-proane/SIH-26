@@ -248,7 +248,8 @@ def test_synthetic_noise_is_temporally_correlated():
     ground speed. Real GPS error drifts over seconds, so the generator uses an
     AR(1) process. If this fails, any velocity or path-length analysis built on
     synthetic bundles is reading noise."""
-    import math, importlib
+    import importlib
+    import math
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     gen = importlib.import_module("make_synthetic_telemetry")
     from src.telemetry.checks import haversine_m

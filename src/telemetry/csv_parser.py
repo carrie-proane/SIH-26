@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .checks import run_post_checks
@@ -80,8 +81,6 @@ def _to_float(value: str | None) -> float | None:
 
 def _parse_datetime_to_epoch(value: str) -> float | None:
     """Best-effort absolute-time parse. Returns epoch seconds."""
-    from datetime import datetime
-
     v = value.strip().replace("T", " ").replace("Z", "")
     for fmt in (
         "%Y-%m-%d %H:%M:%S.%f",
@@ -91,10 +90,17 @@ def _parse_datetime_to_epoch(value: str) -> float | None:
         "%d-%m-%Y %H:%M:%S",
     ):
         try:
-            return datetime.strptime(v, fmt).timestamp()
+            return datetime.strptime(v, fmt).replace(tzinfo=UTC).timestamp()
         except ValueError:
             continue
     return None
+
+
+def _cell(row: list[str], column: tuple[int, str | None] | None) -> str | None:
+    if column is None:
+        return None
+    index = column[0]
+    return row[index] if index < len(row) else None
 
 
 
@@ -193,21 +199,15 @@ def parse_csv(path: str | Path) -> ParseResult:
             if not row or all(c.strip() == "" for c in row):
                 continue
 
-            def cell(col):
-                if col is None:
-                    return None
-                i = col[0]
-                return row[i] if i < len(row) else None
-
             # time
             if time_mode == "elapsed":
-                t_raw = _to_float(cell(time_col))
+                t_raw = _to_float(_cell(row, time_col))
                 if t_raw is None:
                     warnings.add("ROW_NO_TIME", f"row {row_idx} has no usable time")
                     continue
                 ts = t_raw * time_scale
             else:
-                dt_val = cell(dt_col)
+                dt_val = _cell(row, dt_col)
                 epoch = _parse_datetime_to_epoch(dt_val) if dt_val else None
                 if epoch is None:
                     warnings.add("ROW_NO_TIME", f"row {row_idx} has unparsable datetime")
@@ -216,9 +216,9 @@ def parse_csv(path: str | Path) -> ParseResult:
                     first_abs = epoch
                 ts = epoch - first_abs
 
-            lat = _to_float(cell(lat_col))
-            lon = _to_float(cell(lon_col))
-            alt = _to_float(cell(alt_col))
+            lat = _to_float(_cell(row, lat_col))
+            lon = _to_float(_cell(row, lon_col))
+            alt = _to_float(_cell(row, alt_col))
 
             if alt is not None and alt_unit_is_feet:
                 alt *= _FEET_TO_M
@@ -241,10 +241,9 @@ def parse_csv(path: str | Path) -> ParseResult:
             warnings.add("ZERO_ISLAND", "lat/lon both exactly 0; treated as no fix")
             lat = lon = None
 
-        if last_ts is not None:
-            if ts == last_ts:
-                warnings.add("DUPLICATE_TIMESTAMP", "collapsed, first kept")
-                continue
+        if last_ts is not None and ts == last_ts:
+            warnings.add("DUPLICATE_TIMESTAMP", "collapsed, first kept")
+            continue
 
         fix = "ok" if (lat is not None and lon is not None) else "missing"
         if fix == "missing":
@@ -270,5 +269,4 @@ def parse_csv(path: str | Path) -> ParseResult:
 
     run_post_checks(result, warnings)
     return result
-
 

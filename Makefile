@@ -5,7 +5,7 @@ else
 PYTHON ?= python3
 endif
 
-.PHONY: install test demo api doctor clean ui-install ui ui-test ui-build ui-e2e ui-check
+.PHONY: install test lint verify demo api doctor clean ui-install ui ui-test ui-build ui-e2e ui-check
 
 install:
 	python3 -m venv .venv
@@ -13,6 +13,11 @@ install:
 
 test:
 	PYTHONPATH=src $(PYTHON) -m pytest -q
+
+lint:
+	PYTHONPATH=src $(PYTHON) -m ruff check src tests
+
+verify: test lint ui-test ui-build ui-e2e
 
 demo:
 	PYTHONPATH=src $(PYTHON) -m sih26158.cli demo --data-root data/projects
@@ -24,7 +29,7 @@ doctor:
 	PYTHONPATH=src $(PYTHON) -m sih26158.cli doctor
 
 ui-install:
-	cd frontend && npm install
+	cd frontend && npm ci
 
 ui:
 	cd frontend && npm run dev

@@ -7,7 +7,7 @@ of which format it arrived in.
 
 from __future__ import annotations
 
-from math import radians, sin, cos, asin, sqrt
+from math import asin, cos, radians, sin, sqrt
 
 from .models import ParseResult, WarningCollector
 
