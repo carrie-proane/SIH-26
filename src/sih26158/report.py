@@ -101,6 +101,8 @@ def build_quality_report(
                 "offset_source": record.offset_source,
                 "rmse_before_m": record.rmse_before_m,
                 "rmse_after_m": record.rmse_after_m,
+                "matched_camera_count": record.matched_camera_count,
+                "inlier_count": record.inlier_count,
             },
             "known_distance": known_distance_metrics(
                 record.config.known_distance_m, record.config.measured_distance_m

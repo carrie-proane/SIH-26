@@ -90,6 +90,10 @@ class RunConfig(BaseModel):
     preprocessing_run: str | None = None
     telemetry_offset_s: float | None = Field(default=None, ge=-5.0, le=5.0)
     telemetry_offset_source: Literal["manual", "calibrated"] | None = None
+    force_include_frame_indices: list[int] = Field(default_factory=list)
+    force_exclude_frame_indices: list[int] = Field(default_factory=list)
+    enable_segmentation: bool = False
+    segmentation_model_path: str | None = None
 
     @field_validator("measured_distance_m")
     @classmethod
@@ -104,6 +108,18 @@ class RunConfig(BaseModel):
             raise ValueError("telemetry_offset_s is required when telemetry_offset_source is set")
         if self.telemetry_offset_s is not None and self.telemetry_offset_source is None:
             self.telemetry_offset_source = "manual"
+        for name in ("force_include_frame_indices", "force_exclude_frame_indices"):
+            values = getattr(self, name)
+            if any(value < 0 for value in values):
+                raise ValueError(f"{name} cannot contain negative frame indices")
+            if len(values) != len(set(values)):
+                raise ValueError(f"{name} cannot contain duplicate frame indices")
+        if set(self.force_include_frame_indices) & set(self.force_exclude_frame_indices):
+            raise ValueError("A frame cannot be both force-included and force-excluded")
+        if self.enable_segmentation and not self.segmentation_model_path:
+            raise ValueError(
+                "segmentation_model_path is required when optional segmentation is enabled"
+            )
         return self
 
 
@@ -149,6 +165,8 @@ class RunRecord(BaseModel):
     offset_source: OffsetSource = OffsetSource.NOT_APPLICABLE
     rmse_before_m: float | None = Field(default=None, ge=0)
     rmse_after_m: float | None = Field(default=None, ge=0)
+    matched_camera_count: int = Field(default=0, ge=0)
+    inlier_count: int = Field(default=0, ge=0)
 
 
 class PointConfidenceRecord(BaseModel):

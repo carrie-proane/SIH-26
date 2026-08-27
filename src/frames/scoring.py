@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from itertools import pairwise
 from pathlib import Path
-from typing import Sequence
 
 import cv2
 import numpy as np
@@ -71,7 +72,7 @@ def redundancy_scores(images: Sequence[np.ndarray]) -> list[float]:
         return []
     if len(images) == 1:
         return [1.0]
-    adjacent_similarity = [_ssim(first, second) for first, second in zip(images, images[1:])]
+    adjacent_similarity = [_ssim(first, second) for first, second in pairwise(images)]
     raw: list[float] = []
     for index in range(len(images)):
         neighbours = []

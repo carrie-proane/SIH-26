@@ -63,12 +63,12 @@ def runtime_environment() -> dict[str, str | None]:
         "python": sys.version.split()[0],
         "platform": platform.platform(),
     }
-    for package in ("fastapi", "numpy", "pydantic"):
+    for package in ("fastapi", "numpy", "opencv-python-headless", "pydantic"):
         try:
             environment[package] = version(package)
         except PackageNotFoundError:
             environment[package] = None
-    for tool, flag in (("ffprobe", "-version"), ("colmap", "-h")):
+    for tool, flag in (("ffmpeg", "-version"), ("ffprobe", "-version"), ("colmap", "-h")):
         executable = shutil.which(tool)
         if executable is None:
             environment[tool] = None

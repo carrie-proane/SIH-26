@@ -38,3 +38,11 @@ def test_upload_run_poll_and_artifact_index(tmp_path: Path) -> None:
         assert all(item["url"].startswith(f"/api/runs/{run_id}/artifacts/") for item in index.json()["artifacts"])
         assert client.get(f"/api/runs/{run_id}/artifacts/quality_report.json").status_code == 200
         assert client.get(f"/api/runs/{run_id}/artifacts/run_manifest.json").status_code == 404
+
+        record = app.state.store.get_run(run_id)
+        frame = app.state.store.run_dir(project_id, run_id) / "frames" / "selected.jpg"
+        frame.write_bytes(b"declared-source-frame")
+        app.state.store.register_artifacts(record, [frame])
+        assert client.get(f"/api/runs/{run_id}/artifacts/frames/selected.jpg").status_code == 200
+        assert client.get(f"/api/runs/{run_id}/artifacts/frames/undeclared.jpg").status_code == 404
+        assert client.get(f"/api/runs/{run_id}/artifacts/../run_manifest.json").status_code == 404

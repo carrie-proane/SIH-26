@@ -94,7 +94,7 @@ def test_pipeline_artifacts_match_contract_and_contact_sheet_is_valid(tmp_path: 
         assert next(csv.reader(handle)) == FRAME_SCORE_COLUMNS
     payload = json.loads((run / "keyframes.json").read_text())
     assert payload["schema_version"] == "1.0"
-    assert len(payload["frames"]) == 4
+    assert sum(frame["selected"] for frame in payload["frames"]) == 4
     assert all(set(FRAME_SCORE_COLUMNS + ["image_name", "path"]) <= set(frame) for frame in payload["frames"])
     assert cv2.imread(str(run / "contact_sheet.png")) is not None
 
@@ -106,3 +106,23 @@ def test_weights_must_sum_to_one() -> None:
         assert "sum to 1" in str(exc)
     else:
         raise AssertionError("invalid weights were accepted")
+
+
+def test_overrides_are_recorded_and_preserve_minimum_selection(tmp_path: Path) -> None:
+    video = tmp_path / "synthetic.avi"
+    run = tmp_path / "run"
+    make_video(video, frame_count=12)
+    extraction = extract_frames(video, run, every_nth=1)
+    rows = select_keyframes(
+        extraction.frames,
+        run,
+        target_frames=4,
+        force_include={11},
+        force_exclude={0},
+    )
+    decisions = {row["frame_index"]: row for row in rows}
+    assert decisions[11]["override"] == "FORCE_INCLUDE"
+    assert decisions[11]["selected"] is True
+    assert decisions[0]["override"] == "FORCE_EXCLUDE"
+    assert decisions[0]["selected"] is False
+    assert sum(bool(row["selected"]) for row in rows) >= 3

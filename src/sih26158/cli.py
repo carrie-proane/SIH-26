@@ -69,6 +69,8 @@ def _run(args: argparse.Namespace) -> int:
         measured_distance_m=args.measured_distance,
         telemetry_offset_s=args.telemetry_offset,
         telemetry_offset_source=args.telemetry_offset_source,
+        force_include_frame_indices=args.force_include,
+        force_exclude_frame_indices=args.force_exclude,
     )
     record = store.create_run(project.project_id, config)
     result = PipelineRunner(store).run(record.run_id)
@@ -100,10 +102,12 @@ def parser() -> argparse.ArgumentParser:
     demo = sub.add_parser("demo", help="Run an explicitly synthetic orchestration smoke test")
     demo.add_argument("--data-root", default="data/projects")
     demo.set_defaults(func=_demo)
-    run = sub.add_parser("run", help="Run a real COLMAP pipeline from a preprocessing handoff")
+    run = sub.add_parser("run", help="Run a real COLMAP pipeline with automatic preprocessing")
     run.add_argument("--video", required=True)
     run.add_argument("--telemetry", required=True)
-    run.add_argument("--preprocessing-run", required=True)
+    run.add_argument("--preprocessing-run")
+    run.add_argument("--force-include", type=int, action="append", default=[])
+    run.add_argument("--force-exclude", type=int, action="append", default=[])
     run.add_argument("--data-root", default="data/projects")
     run.add_argument("--name", default="CLI mission")
     run.add_argument("--description", default="")

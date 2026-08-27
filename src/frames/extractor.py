@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ def detect_rotation(video_path: str | Path) -> int:
     for value in values:
         if value is not None:
             try:
-                return int(round(float(value))) % 360
+                return round(float(value)) % 360
             except (TypeError, ValueError):
                 continue
     return 0
@@ -73,12 +74,13 @@ def extract_frames(
     output_dir: str | Path,
     every_nth: int | None = None,
     target_fps: float | None = None,
+    frames_subdir: str = "frames",
 ) -> ExtractionResult:
     """Decode a video with OpenCV and retain frames at a deterministic interval."""
 
     video_path = Path(video_path).resolve()
     output_dir = Path(output_dir)
-    frames_dir = output_dir / "frames"
+    frames_dir = output_dir / frames_subdir
     frames_dir.mkdir(parents=True, exist_ok=True)
     if every_nth is not None and every_nth < 1:
         raise ValueError("every_nth must be at least 1")
@@ -96,10 +98,10 @@ def extract_frames(
         capture.release()
         raise ValueError("Video reports an invalid frame rate")
     duration_s = source_count / fps if source_count > 0 else 0.0
-    # The contract targets ~2 fps for ordinary 30-60 s passes, but the
-    # 16.16 s primary needs ~6 fps (every fifth source frame at 30 fps) so
-    # enough candidates exist for a 60-120-frame selection.
-    effective_target_fps = target_fps or (6.0 if duration_s and duration_s < 20.0 else 2.0)
+    # Aim for roughly 160 candidates, bounded to avoid decoding an excessive
+    # number of near-duplicates on long videos or starving short captures.
+    adaptive_fps = 160.0 / duration_s if duration_s > 0 else 2.0
+    effective_target_fps = target_fps or min(8.0, max(2.0, adaptive_fps))
     if effective_target_fps <= 0:
         capture.release()
         raise ValueError("target_fps must be positive")
@@ -116,7 +118,14 @@ def extract_frames(
             if not cv2.imwrite(str(destination), _rotate(frame, rotation)):
                 capture.release()
                 raise OSError(f"Could not write extracted frame: {destination}")
-            retained.append(ExtractedFrame(index, index / fps, str(video_path), str(destination)))
+            decoded_timestamp_s = float(capture.get(cv2.CAP_PROP_POS_MSEC)) / 1000.0
+            if not np.isfinite(decoded_timestamp_s) or decoded_timestamp_s < 0:
+                decoded_timestamp_s = index / fps
+                if "DECODED_TIMESTAMP_UNAVAILABLE" not in messages:
+                    messages.append("DECODED_TIMESTAMP_UNAVAILABLE")
+            retained.append(
+                ExtractedFrame(index, round(decoded_timestamp_s, 9), video_path.name, str(destination))
+            )
         index += 1
     capture.release()
     if not retained:

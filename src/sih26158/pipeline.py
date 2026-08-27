@@ -9,6 +9,9 @@ from pathlib import Path
 
 import numpy as np
 
+from frames.contact_sheet import create_contact_sheet
+from frames.extractor import extract_frames
+from frames.selector import FRAME_SCORE_COLUMNS, SelectionWeights, select_keyframes
 from telemetry.csv_parser import parse_csv
 from telemetry.models import sha256_file as telemetry_sha256_file
 from telemetry.models import write_csv as write_telemetry_csv
@@ -26,6 +29,7 @@ from .models import (
     StageEvent,
 )
 from .report import build_quality_report, write_quality_report
+from .segmentation import run_optional_segmentation
 from .storage import ProjectStore, atomic_json
 from .sync import calibrate_telemetry_offset
 
@@ -213,19 +217,67 @@ class PipelineRunner:
             ]
             missing = [path.name for path in required if not path.exists()]
             if not missing:
-                shutil.copyfile(required[0], run_dir / "keyframes.json")
+                try:
+                    payload = json.loads(required[0].read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    missing.append("valid keyframes.json")
+                    payload = {}
+                frame_rows = payload.get("frames", []) if isinstance(payload, dict) else []
+                if not isinstance(frame_rows, list):
+                    missing.append("keyframes.json frames list")
+                    frame_rows = []
+                selected_frame_rows = [
+                    item
+                    for item in frame_rows
+                    if isinstance(item, dict) and item.get("selected", True)
+                ]
+                if len(selected_frame_rows) < 3:
+                    missing.append("at least three selected keyframes")
+                copied_frames: list[Path] = []
+                for item in frame_rows:
+                    if not isinstance(item, dict) or not item.get("selected", True):
+                        continue
+                    raw_name = item.get("image_name") or item.get("filename")
+                    safe_name = Path(str(raw_name or "")).name
+                    source_image = required[4] / safe_name
+                    if not safe_name or not source_image.is_file():
+                        missing.append(f"frames/{safe_name or '<missing image_name>'}")
+                        continue
+                    destination = run_dir / "frames" / safe_name
+                    shutil.copyfile(source_image, destination)
+                    copied_frames.append(destination)
+                    item["image_name"] = safe_name
+                    item["image_url"] = (
+                        f"/api/runs/{record.run_id}/artifacts/frames/{safe_name}"
+                    )
+                    item.pop("path", None)
+                    item.pop("frame_path", None)
+                if missing:
+                    handoff_problem = (
+                        f"Configured handoff {source} was incomplete; missing: "
+                        f"{', '.join(sorted(set(missing)))}. Generated a dataset-specific handoff "
+                        "from this run's immutable inputs instead."
+                    )
+                    for copied in copied_frames:
+                        copied.unlink(missing_ok=True)
+                    return self._preprocess_uploaded_inputs(record, handoff_problem)
+                atomic_json(run_dir / "keyframes.json", payload)
                 shutil.copyfile(required[1], run_dir / "frame_scores.csv")
                 shutil.copyfile(required[2], run_dir / "normalized_telemetry.csv")
                 shutil.copyfile(required[3], run_dir / "normalized_telemetry.meta.json")
-                for image in required[4].iterdir():
-                    if image.is_file() and image.suffix.lower() in {".jpg", ".jpeg", ".png"}:
-                        shutil.copyfile(image, run_dir / "frames" / image.name)
-                return [
+                artifacts = [
                     run_dir / "keyframes.json",
                     run_dir / "frame_scores.csv",
                     run_dir / "normalized_telemetry.csv",
                     run_dir / "normalized_telemetry.meta.json",
+                    *copied_frames,
                 ]
+                for optional_name in ("frame_index.csv", "contact_sheet.png"):
+                    optional = source / optional_name
+                    if optional.is_file():
+                        shutil.copyfile(optional, run_dir / optional_name)
+                        artifacts.append(run_dir / optional_name)
+                return artifacts
             handoff_problem = (
                 f"Configured handoff {source} was incomplete; missing: {', '.join(missing)}. "
                 "Generated a dataset-specific handoff from this run's immutable inputs instead."
@@ -235,76 +287,95 @@ class PipelineRunner:
     def _preprocess_uploaded_inputs(
         self, record: RunRecord, handoff_problem: str | None = None
     ) -> list[Path]:
-        """Create a conservative per-run handoff directly from the uploaded pair."""
+        """Create a scored, dataset-specific handoff from immutable uploaded inputs."""
         run_dir = self.store.run_dir(record.project_id, record.run_id)
-        ffmpeg = shutil.which("ffmpeg")
-        if ffmpeg is None:
-            raise PipelineError(
-                "No valid preprocessing handoff was supplied and ffmpeg is unavailable. "
-                "Install FFmpeg or provide a complete dataset-specific handoff."
-            )
         video = _asset_path(self.store, record, "video")
         telemetry = _asset_path(self.store, record, "telemetry")
-        frames_dir = run_dir / "frames"
-        frames_dir.mkdir(parents=True, exist_ok=True)
-        extraction = subprocess.run(
-            [
-                ffmpeg,
-                "-v",
-                "error",
-                "-i",
-                str(video),
-                "-vf",
-                "fps=2,scale=1600:-2:force_original_aspect_ratio=decrease",
-                "-q:v",
-                "2",
-                "-start_number",
-                "1",
-                str(frames_dir / "frame_%04d.jpg"),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if extraction.returncode:
-            raise PipelineError(
-                "Automatic frame extraction failed for the uploaded video: "
-                + (extraction.stderr.strip() or f"ffmpeg exit code {extraction.returncode}")
+        preprocessing_dir = run_dir / "preprocessing"
+        preprocessing_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            extraction = extract_frames(
+                video,
+                run_dir,
+                frames_subdir="preprocessing/candidates",
             )
-        images = sorted(frames_dir.glob("frame_*.jpg"))
-        if len(images) < 3:
+        except (ValueError, OSError) as exc:
+            raise PipelineError(f"Automatic frame extraction failed: {exc}") from exc
+        candidates = extraction.frames
+        if len(candidates) < 3:
             raise PipelineError(
                 "Automatic preprocessing extracted fewer than three frames; provide a longer "
                 "video or a complete dataset-specific preprocessing handoff."
             )
+        self._transition(
+            record,
+            RunStatus.PREPROCESSING,
+            36,
+            f"Decoded {len(candidates)} timestamped candidate frames.",
+        )
+        target_frames = min(100, len(candidates))
+        try:
+            rows = select_keyframes(
+                candidates,
+                run_dir,
+                target_frames=target_frames,
+                weights=SelectionWeights(),
+                force_include=set(record.config.force_include_frame_indices),
+                force_exclude=set(record.config.force_exclude_frame_indices),
+            )
+        except ValueError as exc:
+            raise PipelineError(f"Automatic frame selection failed: {exc}") from exc
+        contact_sheet_path = create_contact_sheet(rows, run_dir / "contact_sheet.png")
+        self._transition(
+            record,
+            RunStatus.PREPROCESSING,
+            44,
+            f"Scored candidates and selected {sum(bool(row['selected']) for row in rows)} frames.",
+        )
 
-        keyframes = [
-            {
-                "frame_index": index,
-                "image_name": image.name,
-                "timestamp_s": round(index / 2.0, 3),
-                "selected": True,
-                "source": "AUTO_UNIFORM_2_HZ_FROM_UPLOADED_VIDEO",
-            }
-            for index, image in enumerate(images)
-        ]
+        frames_dir = run_dir / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        selected_paths: list[Path] = []
+        keyframes: list[dict[str, object]] = []
+        for row in rows:
+            candidate = Path(str(row["frame_path"]))
+            selected = bool(row["selected"])
+            if selected:
+                destination = frames_dir / candidate.name
+                shutil.copyfile(candidate, destination)
+                selected_paths.append(destination)
+            safe_row = dict(row)
+            safe_row["source_video"] = video.name
+            safe_row["frame_path"] = f"preprocessing/candidates/{candidate.name}"
+            safe_row["image_name"] = candidate.name
+            safe_row["path"] = safe_row["frame_path"]
+            safe_row["source"] = "AUTO_SCORED_SELECTION_FROM_UPLOADED_VIDEO"
+            if selected:
+                safe_row["image_url"] = (
+                    f"/api/runs/{record.run_id}/artifacts/frames/{candidate.name}"
+                )
+            keyframes.append(safe_row)
         keyframes_path = run_dir / "keyframes.json"
         atomic_json(
             keyframes_path,
             {
                 "schema_version": "1.0",
-                "selection_method": "UNIFORM_2_HZ",
+                "selection_method": "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY",
+                "override_actions": {
+                    "force_include": record.config.force_include_frame_indices,
+                    "force_exclude": record.config.force_exclude_frame_indices,
+                },
                 "frames": keyframes,
             },
         )
         scores_path = run_dir / "frame_scores.csv"
         with scores_path.open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.writer(stream)
-            writer.writerow(
-                ["frame_index", "timestamp_s", "blur_score", "exposure_score", "selected"]
+            writer = csv.DictWriter(stream, fieldnames=FRAME_SCORE_COLUMNS)
+            writer.writeheader()
+            writer.writerows(
+                {column: item.get(column, "") for column in FRAME_SCORE_COLUMNS}
+                for item in keyframes
             )
-            for item in keyframes:
-                writer.writerow([item["frame_index"], item["timestamp_s"], "", "", True])
 
         suffix = telemetry.suffix.lower()
         parsed = parse_srt(telemetry) if suffix == ".srt" else parse_csv(telemetry)
@@ -316,14 +387,71 @@ class PipelineRunner:
             )
         if handoff_problem:
             parsed.warnings.add("HANDOFF_FALLBACK", handoff_problem)
+        duration_s = (
+            extraction.source_frame_count / extraction.fps
+            if extraction.source_frame_count > 0
+            else max((frame.timestamp_s for frame in candidates), default=0.0)
+        )
+        selected_rows = [row for row in rows if row["selected"]]
+        if len(candidates) < 60:
+            parsed.warnings.add(
+                "TOO_FEW_FRAME_CANDIDATES",
+                f"Only {len(candidates)} candidate frames were decoded; 60 or more are preferred.",
+            )
+        if len(selected_rows) < 60:
+            parsed.warnings.add(
+                "TOO_FEW_SELECTED_FRAMES",
+                f"Only {len(selected_rows)} frames were selected; the target range is 60-120.",
+            )
+        if duration_s < 20:
+            parsed.warnings.add(
+                "VERY_SHORT_VIDEO",
+                f"Video duration is approximately {duration_s:.2f}s; controlled passes should be 30-60s.",
+            )
+        averages = {
+            name: float(np.mean([float(row[name]) for row in rows]))
+            for name in ("blur_score", "exposure_score", "redundancy_score")
+        }
+        if averages["blur_score"] < 0.3:
+            parsed.warnings.add("EXCESSIVE_BLUR", "Mean normalized sharpness is below 0.30.")
+        if averages["exposure_score"] < 0.4:
+            parsed.warnings.add("POOR_EXPOSURE", "Mean exposure score is below 0.40.")
+        if averages["redundancy_score"] < 0.25:
+            parsed.warnings.add("HIGHLY_REDUNDANT_FOOTAGE", "Mean uniqueness score is below 0.25.")
+        telemetry_duration = parsed.duration_s
+        if telemetry_duration and abs(telemetry_duration - duration_s) > max(2.0, duration_s * 0.1):
+            parsed.warnings.add(
+                "TELEMETRY_DURATION_MISMATCH",
+                f"Video is ~{duration_s:.2f}s but telemetry is ~{telemetry_duration:.2f}s.",
+            )
+        for warning in extraction.warnings:
+            parsed.warnings.add(warning, "Decoded timestamps were unavailable for some frames.")
         telemetry_path = run_dir / "normalized_telemetry.csv"
         write_telemetry_csv(parsed.records, telemetry_path)
         telemetry_meta_path = run_dir / "normalized_telemetry.meta.json"
         metadata = parsed.meta(telemetry_sha256_file(telemetry))
         metadata["preprocessing_source"] = "AUTO_FROM_IMMUTABLE_RUN_INPUTS"
-        metadata["frame_selection_method"] = "UNIFORM_2_HZ"
+        metadata["frame_selection_method"] = "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY"
+        metadata["candidate_frame_count"] = len(candidates)
+        metadata["selected_frame_count"] = len(selected_rows)
+        metadata["video_duration_s"] = duration_s
+        metadata["quality_score_means"] = averages
         atomic_json(telemetry_meta_path, metadata)
-        return [keyframes_path, scores_path, telemetry_path, telemetry_meta_path]
+        self._transition(
+            record,
+            RunStatus.PREPROCESSING,
+            50,
+            f"Normalized {len(parsed.records)} telemetry samples and finalized preprocessing.",
+        )
+        return [
+            run_dir / "frame_index.csv",
+            scores_path,
+            keyframes_path,
+            contact_sheet_path,
+            telemetry_path,
+            telemetry_meta_path,
+            *selected_paths,
+        ]
 
     def _merge_telemetry_metadata(
         self, record: RunRecord, warnings: list[dict[str, str]]
@@ -364,7 +492,9 @@ class PipelineRunner:
         atomic_json(ingest_path, ingest)
         return ingest_path
 
-    def _align_to_local_metric(self, record: RunRecord) -> list[Path]:
+    def _align_to_local_metric(
+        self, record: RunRecord, warnings: list[dict[str, str]]
+    ) -> list[Path]:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
         if _is_synthetic_demo(record):
             transform_path = run_dir / "local_transform.json"
@@ -400,6 +530,8 @@ class PipelineRunner:
             record.offset_source = OffsetSource.NOT_APPLICABLE
             record.rmse_before_m = 0.0
             record.rmse_after_m = 0.0
+            record.matched_camera_count = 10
+            record.inlier_count = 10
             self.store.save_run(record)
             local_ply = run_dir / "sparse" / "sparse_local.ply"
             shutil.copyfile(run_dir / "sparse" / "sparse.ply", local_ply)
@@ -531,6 +663,39 @@ class PipelineRunner:
         transform_path = run_dir / "local_transform.json"
         sync_path = run_dir / "sync_report.json"
         sync_report = calibration.as_report()
+        selected_keyframes = [
+            item for item in keyframes if isinstance(item, dict) and item.get("selected", True)
+        ]
+        out_of_range: list[int] = []
+        latitudes = np.array([float(row["lat"]) for row in telemetry])
+        longitudes = np.array([float(row["lon"]) for row in telemetry])
+        altitudes = np.array([float(row["alt_m"]) for row in telemetry])
+        for item in selected_keyframes:
+            shifted_timestamp = float(item["timestamp_s"]) + selected.offset_s
+            item["telemetry_timestamp_s"] = shifted_timestamp
+            if shifted_timestamp < times[0] or shifted_timestamp > times[-1]:
+                item["telemetry_status"] = "OUT_OF_RANGE"
+                out_of_range.append(int(item["frame_index"]))
+                continue
+            item["telemetry_status"] = "INTERPOLATED"
+            item["telemetry"] = {
+                "lat": float(np.interp(shifted_timestamp, times, latitudes)),
+                "lon": float(np.interp(shifted_timestamp, times, longitudes)),
+                "alt_m": float(np.interp(shifted_timestamp, times, altitudes)),
+            }
+        sync_report["out_of_range_frame_indices"] = out_of_range
+        sync_report["selected_keyframe_count"] = len(selected_keyframes)
+        if out_of_range:
+            warnings.append(
+                {
+                    "code": "TELEMETRY_EXTRAPOLATION_REJECTED",
+                    "message": (
+                        f"{len(out_of_range)} selected frame(s) fell outside telemetry coverage "
+                        "after applying the run-specific offset; no extrapolated position was used."
+                    ),
+                }
+            )
+        atomic_json(run_dir / "keyframes.json", keyframe_payload)
         atomic_json(sync_path, sync_report)
         atomic_json(
             transform_path,
@@ -553,10 +718,12 @@ class PipelineRunner:
         record.offset_source = calibration.source
         record.rmse_before_m = calibration.before.rmse_m
         record.rmse_after_m = selected.rmse_m
+        record.matched_camera_count = len(selected.matched_indices)
+        record.inlier_count = selected.inlier_count
         self.store.save_run(record)
         local_ply = run_dir / "sparse" / "sparse_local.ply"
         transform_ply(run_dir / "sparse" / "sparse.ply", local_ply, transform)
-        return [pose_path, transform_path, sync_path, local_ply]
+        return [pose_path, transform_path, sync_path, local_ply, run_dir / "keyframes.json"]
 
     def _reconstruct(self, record: RunRecord) -> ReconstructionResult:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
@@ -587,15 +754,35 @@ class PipelineRunner:
             self._transition(record, RunStatus.INGESTING, 10, "Inspecting immutable input assets.")
             ingest, warnings = self._probe(record)
             self.store.register_artifacts(record, [ingest])
-            self._transition(record, RunStatus.PREPROCESSING, 30, "Validating selected-frame handoff.")
+            self._transition(
+                record,
+                RunStatus.PREPROCESSING,
+                30,
+                "Preparing scored frame selection and normalized telemetry.",
+            )
             handoff = self._preprocess_contract(record)
             self.store.register_artifacts(record, handoff)
+            if record.config.enable_segmentation:
+                keyframes_path = self.store.run_dir(record.project_id, record.run_id) / "keyframes.json"
+                keyframe_payload = json.loads(keyframes_path.read_text(encoding="utf-8"))
+                frame_rows = keyframe_payload.get("frames", [])
+                segmentation_artifacts, segmentation_warnings = run_optional_segmentation(
+                    self.store.run_dir(record.project_id, record.run_id),
+                    record.run_id,
+                    frame_rows,
+                    record.config.segmentation_model_path,
+                )
+                warnings.extend(segmentation_warnings)
+                atomic_json(keyframes_path, keyframe_payload)
+                self.store.register_artifacts(
+                    record, [keyframes_path, *segmentation_artifacts]
+                )
             updated_ingest = self._merge_telemetry_metadata(record, warnings)
             self.store.register_artifacts(record, [updated_ingest])
             self._transition(record, RunStatus.RECONSTRUCTING, 55, "Running sparse reconstruction.")
             result = self._reconstruct(record)
             self.store.register_artifacts(record, result.artifacts)
-            alignment = self._align_to_local_metric(record)
+            alignment = self._align_to_local_metric(record, warnings)
             self.store.register_artifacts(record, alignment)
             metrics_path = self.store.run_dir(record.project_id, record.run_id) / "sparse_metrics.json"
             atomic_json(

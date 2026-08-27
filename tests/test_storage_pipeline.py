@@ -2,11 +2,11 @@ import csv
 import json
 import math
 from pathlib import Path
-from types import SimpleNamespace
 
+import cv2
+import numpy as np
 import pytest
 
-import sih26158.pipeline as pipeline_module
 from sih26158.models import ProvenanceOrigin, RunConfig, RunStatus
 from sih26158.pipeline import PipelineRunner
 from sih26158.storage import ProjectStore, sha256_file
@@ -55,9 +55,17 @@ def test_missing_handoff_is_generated_from_matching_uploaded_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = ProjectStore(tmp_path / "projects")
-    video = tmp_path / "new-flight.mp4"
+    video = tmp_path / "new-flight.avi"
     telemetry = tmp_path / "new-flight.csv"
-    video.write_bytes(b"video fixture")
+    writer = cv2.VideoWriter(
+        str(video), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (160, 96)
+    )
+    assert writer.isOpened()
+    for index in range(20):
+        image = np.full((96, 160, 3), 30 + index * 5, np.uint8)
+        cv2.rectangle(image, (index * 4, 20), (index * 4 + 30, 75), (220, 220, 220), -1)
+        writer.write(image)
+    writer.release()
     telemetry.write_text(
         "timestamp_s,lat,lon,alt_m\n"
         "0,18.5,73.8,10\n"
@@ -76,32 +84,37 @@ def test_missing_handoff_is_generated_from_matching_uploaded_inputs(
     )
     record = store.create_run(
         project.project_id,
-        RunConfig(preprocessing_run=str(tmp_path / "deleted-old-handoff")),
+        RunConfig(),
     )
 
-    monkeypatch.setattr(pipeline_module.shutil, "which", lambda tool: f"/usr/bin/{tool}")
-
-    def fake_ffmpeg(command, **_kwargs):
-        output = Path(command[-1])
-        output.parent.mkdir(parents=True, exist_ok=True)
-        for index in range(1, 5):
-            (output.parent / f"frame_{index:04d}.jpg").write_bytes(b"jpg")
-        return SimpleNamespace(returncode=0, stderr="")
-
-    monkeypatch.setattr(pipeline_module.subprocess, "run", fake_ffmpeg)
+    monkeypatch.setattr("frames.extractor.detect_rotation", lambda _: 0)
     artifacts = PipelineRunner(store)._preprocess_contract(record)
     run_dir = store.run_dir(project.project_id, record.run_id)
 
-    assert len(list((run_dir / "frames").glob("*.jpg"))) == 4
-    assert {path.name for path in artifacts} == {
+    assert len(list((run_dir / "frames").glob("*.jpg"))) >= 3
+    assert {
         "keyframes.json",
         "frame_scores.csv",
+        "frame_index.csv",
+        "contact_sheet.png",
         "normalized_telemetry.csv",
         "normalized_telemetry.meta.json",
-    }
+    } <= {path.name for path in artifacts}
     metadata = json.loads((run_dir / "normalized_telemetry.meta.json").read_text())
     assert metadata["preprocessing_source"] == "AUTO_FROM_IMMUTABLE_RUN_INPUTS"
-    assert any(item["code"] == "HANDOFF_FALLBACK" for item in metadata["warnings"])
+    assert metadata["frame_selection_method"] == "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY"
+    keyframes = json.loads((run_dir / "keyframes.json").read_text())["frames"]
+    selected = [frame for frame in keyframes if frame["selected"]]
+    assert selected
+    assert all(frame["image_url"].startswith(f"/api/runs/{record.run_id}/artifacts/frames/") for frame in selected)
+    with (run_dir / "frame_scores.csv").open(newline="", encoding="utf-8") as stream:
+        score_rows = list(csv.DictReader(stream))
+    assert score_rows
+    assert all(row["blur_score"] and row["exposure_score"] for row in score_rows)
+    assert {row["selected"] for row in score_rows} <= {"True", "False"}
+    store.register_artifacts(record, artifacts)
+    relative = selected[0]["image_url"].split("/artifacts/", 1)[1]
+    assert store.resolve_declared_artifact(record.run_id, relative).is_file()
 
 
 def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_path: Path) -> None:
@@ -242,7 +255,8 @@ def test_calibrated_telemetry_offset_is_persisted_per_run(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    artifacts = PipelineRunner(store)._align_to_local_metric(record)
+    warnings: list[dict[str, str]] = []
+    artifacts = PipelineRunner(store)._align_to_local_metric(record, warnings)
 
     assert run_dir / "sync_report.json" in artifacts
     persisted = store.get_run(record.run_id)
@@ -250,9 +264,15 @@ def test_calibrated_telemetry_offset_is_persisted_per_run(tmp_path: Path) -> Non
     assert persisted.offset_source == "calibrated"
     assert persisted.rmse_before_m is not None
     assert persisted.rmse_after_m is not None
+    assert persisted.matched_camera_count == 5
+    assert persisted.inlier_count >= 3
     sync = json.loads((run_dir / "sync_report.json").read_text(encoding="utf-8"))
     assert sync["telemetry_offset_s"] == pytest.approx(0.30)
     assert sync["offset_source"] == "calibrated"
+    updated_keyframes = json.loads((run_dir / "keyframes.json").read_text())["frames"]
+    assert all(frame["telemetry_status"] == "INTERPOLATED" for frame in updated_keyframes)
+    assert updated_keyframes[0]["telemetry_timestamp_s"] == pytest.approx(0.8)
+    assert not warnings
 
 
 def test_artifact_serving_rejects_undeclared_and_traversal(tmp_path: Path) -> None:
@@ -282,7 +302,5 @@ def test_real_run_retains_ingest_artifact_when_automatic_preprocessing_fails(
     monkeypatch.setattr("sih26158.pipeline.subprocess.run", lambda *args, **kwargs: Completed())
     result = PipelineRunner(store).run(record.run_id)
     assert result.status == RunStatus.FAILED
-    assert "Automatic preprocessing extracted fewer than three frames" in (
-        result.failure_reason or ""
-    )
+    assert "Automatic frame extraction failed" in (result.failure_reason or "")
     assert "ingest_report.json" in {item.relative_path for item in result.artifacts}
