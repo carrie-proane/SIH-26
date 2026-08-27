@@ -29,3 +29,7 @@ frontend/test-results/
 frontend/playwright-report/
 .venv-depth/
 evidence/arnav/depth-anything/*.png
+data/handoff/
+gemini-*.txt
+src/colmap/
+*.egg-info/
