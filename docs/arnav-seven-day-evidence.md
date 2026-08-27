@@ -6,7 +6,7 @@ work complete when the required real inputs do not exist.
 ## Day 1 — baseline
 
 - React + TypeScript + Vite operator shell: `frontend/`.
-- Three.js PLY viewer, orbit controls, confidence-coloured points and camera flight path:
+- Three.js photographic-RGB PLY viewer, explicit-confidence filters and camera flight path:
   `frontend/src/components/PointCloudViewer.tsx`.
 - Deterministic, explicitly synthetic offline fixture: `frontend/public/demo/`.
 - Chrome-rendered UI evidence: `evidence/arnav/operator-ui-fixture.png`.
@@ -24,7 +24,8 @@ work complete when the required real inputs do not exist.
 
 - Video + SRT/CSV upload, immutable project creation and real COLMAP run submission:
   `frontend/src/components/SetupScreen.tsx` and `frontend/src/App.tsx`.
-- The real form requires Jay's current `preprocessing_run` handoff instead of hiding the dependency.
+- Normal uploads use automatic scored preprocessing. The external `preprocessing_run` path and
+  include/exclude frame overrides are contained in an Advanced section.
 - Exact backend stages, progress, event log, actionable failure and retained-artifact count:
   `frontend/src/components/ProgressScreen.tsx`.
 

@@ -32,7 +32,8 @@ real synchronized bundle and installed external tools; they are never marked pas
 
 ## Day 5 - Vertical slice
 
-- Selected-frame handoff validation and COLMAP feature/match/map/PLY flow: `pipeline.py` and `colmap.py`.
+- Automatic scored frame extraction/selection, optional handoff validation, and COLMAP
+  feature/match/map/PLY flow: `pipeline.py`, `src/frames/`, and `colmap.py`.
 - Sparse metrics, matcher decision, and trust report registered as immutable artifacts.
 - Synthetic upload-to-report slice: `make demo`; real vertical slice awaits the data/tool prerequisites.
 
@@ -48,4 +49,6 @@ real synchronized bundle and installed external tools; they are never marked pas
 - Locked dependency ranges and console command: `pyproject.toml`.
 - Clean start commands: `README.md`, `Makefile`, and `.env.example`.
 - Backend walkthrough: `docs/demo-script.md`.
-- Tests cover state, hashing, path safety, reports, alignment, matcher selection, API, and failure retention.
+- `make verify` covers backend tests, Ruff, frontend tests/build, and browser integration.
+- Tests cover state, hashing, path safety, scored selection, overrides, reports, alignment, explicit
+  point confidence, matcher selection, API, and failure retention.

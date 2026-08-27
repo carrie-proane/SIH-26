@@ -43,16 +43,15 @@ COLMAP sparse-first reconstruction, a stable small viewer payload, and stretch d
 For this build, the seven-day contract wins wherever the documents differ. In particular:
 
 - no Postgres, Redis/Valkey, Celery, Kubernetes, cloud dependency, or custom distributed scheduler;
-- no dense, GLB, orthomosaic, automatic time-offset, or learned-depth work before sparse gates pass;
+- no dense, GLB, orthomosaic, or learned-depth work before sparse gates pass; bounded per-run
+  automatic time-offset calibration is implemented as an integrity fix;
 - Three.js/Potree-compatible PLY and a compact viewer manifest instead of mandatory Cesium/3D Tiles;
 - the contract's seven exact states instead of the playbook's larger long-term state machine;
 - the contract's five confidence labels, including `AI_ASSISTED_NOT_MEASURABLE`.
 
 ## Evidence boundary
 
-No synchronized video/telemetry bundle, selected real frames, camera details, known scene dimension,
-FFmpeg installation, or COLMAP installation was present in the workspace. The repository therefore
-contains complete implementation and synthetic orchestration evidence, but it does not claim the
-real Day-1/2/4/5 empirical gates. Those gates become executable as soon as the real input handoff and
-external tools are supplied.
-
+FFmpeg and COLMAP are available locally, and approved DJI video/SRT inputs have been exercised.
+However, no independently surveyed known distance or scientifically valid learned-model evidence is
+available. The repository therefore does not claim the real scale, learned-matcher, segmentation, or
+depth gates. Synthetic orchestration remains explicitly separate from genuine evidence.

@@ -23,9 +23,9 @@ declared artifact index -> quality report / PLY / camera poses / viewer payload
 ## Ownership boundary
 
 Jay owns the project/run API, run state, ffprobe report, COLMAP invocation, alignment utilities,
-matcher decision, quality report, known-distance evidence, and end-to-end command. Yosha's
-preprocessor hands off `keyframes.json`, `frame_scores.csv`, `normalized_telemetry.csv`, its
-`.meta.json` sidecar, and `frames/`. Arnav owns the final
+matcher decision, quality report, known-distance evidence, and end-to-end command. Yosha's frame
+and telemetry modules are integrated into the ordinary upload route; a compatible external handoff
+remains an optional debugging override. Arnav owns the final
 `viewer-manifest` endpoint and browser implementation; `examples/viewer-manifest.json` freezes the
 payload Jay publishes for UI development.
 
@@ -39,6 +39,9 @@ payload Jay publishes for UI development.
 - A failed run retains its manifest, events, logs, and every prior declared artifact.
 - `SYNTHETIC_DEMO` is labeled in every artifact and cannot be mistaken for genuine geometry.
 - A real run never falls back to synthetic geometry.
+- Candidate images stay under `preprocessing/candidates/`; only selected images enter `frames/`.
+- PLY RGB is photographic display data. Explicit confidence is exported with the PLY in the same
+  deterministic point order and validated by vertex count.
 
 ## Local coordinate alignment
 

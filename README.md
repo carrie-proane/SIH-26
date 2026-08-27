@@ -18,6 +18,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 make test
+make lint
 make doctor
 make api
 ```
@@ -40,14 +41,17 @@ registration, reprojection, scale, or COLMAP gates.
 PYTHONPATH=src python -m sih26158.cli run \
   --video /path/pass.mp4 \
   --telemetry /path/pass.csv \
-  --preprocessing-run /path/yosha-handoff \
   --known-distance 12.4 \
   --measured-distance 12.1
 ```
 
-The handoff must contain `keyframes.json`, `frame_scores.csv`, `normalized_telemetry.csv`, its
-`.meta.json` sidecar, and a `frames/` directory. Real runs
-never substitute synthetic geometry when a dependency or input is missing.
+The normal upload/CLI route extracts candidates with decoded timestamps, computes normalized blur,
+exposure and redundancy scores, selects a temporally distributed subset, and sends only selected
+images to COLMAP. `--preprocessing-run` remains an optional advanced override for debugging an
+existing handoff. Real runs never substitute synthetic geometry when a dependency or input is
+missing.
+
+Run the complete backend, lint, frontend build and browser verification gate with `make verify`.
 
 ## Important files
 
@@ -80,5 +84,8 @@ Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evide
 - Only directly observed multi-view geometry is measurable.
 - Ordinary GNSS is a soft prior; absolute horizontal and vertical errors require independent checks.
 - AI-assisted geometry is never accepted as verified measurement.
-- Dense reconstruction, mesh/GLB, orthomosaic, and automatic time-offset estimation remain stretch
-  work until the sparse/metric gates pass on the real primary sample.
+- Dense reconstruction, mesh/GLB and orthomosaic remain stretch work until the sparse/metric gates
+  pass on the real primary sample. Telemetry offset estimation is a bounded per-run search, but
+  ordinary GNSS remains a soft prior.
+- YOLO segmentation, SuperPoint/LightGlue and Depth Anything are optional experiments. Missing
+  models never block the core SIFT reconstruction path.

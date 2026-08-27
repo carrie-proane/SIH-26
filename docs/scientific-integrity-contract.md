@@ -48,3 +48,8 @@ vertex count. Valid classes are `OBSERVED_HIGH`, `OBSERVED_MEDIUM`, `OBSERVED_LO
 `AI_ASSISTED_NOT_MEASURABLE`, and `UNSEEN`. If validation fails or the artifact is absent, confidence
 filters are disabled and measurements are labelled `Visual estimate - verification confidence
 unavailable`.
+
+Observed thresholds are geometric and transparent. HIGH requires track length at least four,
+reprojection error at most 1.0 px, and triangulation angle at least 5 degrees. MEDIUM requires track
+length at least three, error at most 2.0 px, and angle at least 2 degrees. Other COLMAP-observed
+points are LOW. RGB never enters classification.
