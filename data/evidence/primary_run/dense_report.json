@@ -1,0 +1,40 @@
+{
+  "artifacts": {
+    "fused_ply": null,
+    "mesh": null,
+    "texture_dir": null
+  },
+  "available": false,
+  "dense_point_count": null,
+  "environment": {
+    "colmap": "",
+    "fastapi": "0.141.1",
+    "ffmpeg": "ffmpeg version n9.0.1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version n9.0.1 Copyright (c) 2007-2026 the FFmpeg developers",
+    "machine": "x86_64",
+    "numpy": "2.5.2",
+    "opencv-python-headless": null,
+    "platform": "Linux-7.1.8-arch1-3-x86_64-with-glibc2.44",
+    "pydantic": "2.13.4",
+    "python": "3.14.7"
+  },
+  "face_count": null,
+  "failure_reason": "synthetic fixtures cannot produce real dense evidence",
+  "measurement_eligible": false,
+  "measurement_ineligible_reason": "Dense geometry is not used for verified measurement per contract \u00a71",
+  "metric_alignment_preserved": false,
+  "provider": "unavailable",
+  "registered_inputs": 100,
+  "runtime_s": 2.9879000067012385e-05,
+  "schema_version": "1.0",
+  "sparse_evidence_preserved": true,
+  "status": "UNAVAILABLE",
+  "texture_coverage": null,
+  "vertex_count": null,
+  "warnings": [
+    {
+      "code": "DENSE_PROVIDER_UNAVAILABLE",
+      "message": "synthetic fixtures cannot produce real dense evidence"
+    }
+  ]
+}

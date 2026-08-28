@@ -1,0 +1,141 @@
+{
+  "schema_version": "1.0",
+  "project_id": "prj_2f719e1e1d1d",
+  "run_id": "run_5398fb75fd96",
+  "stage": "REPORTING",
+  "status": "COMPLETED",
+  "created_at": "2026-08-28T09:42:48.190378+00:00",
+  "config_version": "1.0",
+  "run_configuration": {
+    "config_version": "1.0",
+    "profile": "preview",
+    "matcher": "SIFT",
+    "execution_mode": "COLMAP",
+    "camera_model": "SIMPLE_RADIAL",
+    "sequential_overlap": 10,
+    "use_gpu": false,
+    "known_distance_m": null,
+    "measured_distance_m": null,
+    "local_origin": null,
+    "preprocessing_run": null,
+    "telemetry_offset_s": null,
+    "telemetry_offset_source": null,
+    "force_include_frame_indices": [],
+    "force_exclude_frame_indices": [],
+    "enable_segmentation": false,
+    "segmentation_model_path": null,
+    "enable_dense_reconstruction": true,
+    "dense_provider": "auto"
+  },
+  "synthetic_fixture": true,
+  "source_provenance": "SYNTHETIC",
+  "video_origin": "REAL",
+  "telemetry_origin": "SYNTHETIC",
+  "genuine_real_evidence": false,
+  "metrics": {
+    "eligible_frames": 100,
+    "registered_frames": 100,
+    "registered_frame_rate": 1.0,
+    "registered_frame_gate_80_percent": true,
+    "median_reprojection_error_px": 0.8124834214072638,
+    "p95_reprojection_error_px": 1.7272543777470724,
+    "reprojection_gate_1_5_px": true,
+    "runtime_s": 98.32844028600084,
+    "metric_alignment": {
+      "scale": 0.4636513947840017,
+      "origin_wgs84": {
+        "alt_m": 1.771,
+        "lat": 18.5204024,
+        "lon": 73.8566792
+      },
+      "camera_pairs": 99,
+      "inlier_count": 84,
+      "outlier_count": 15,
+      "median_camera_prior_residual_m": 0.42057082809546475,
+      "p95_camera_prior_residual_m": 1.6252110416105134
+    },
+    "telemetry_sync": {
+      "telemetry_offset_s": -0.95,
+      "offset_source": "automatic",
+      "rmse_before_m": 0.5422320445795064,
+      "rmse_after_m": 0.4251537162261466,
+      "matched_camera_count": 99,
+      "inlier_count": 84
+    },
+    "known_distance": {
+      "status": "NOT_PROVIDED",
+      "reference_m": null,
+      "measured_m": null,
+      "absolute_error_m": null,
+      "percent_error": null,
+      "passes_10_percent_gate": null
+    },
+    "coverage": {
+      "status": "NOT_EVALUATED",
+      "reason": "Reference visible-region mask not supplied."
+    }
+  },
+  "confidence_artifact": {
+    "available": true,
+    "measurement_confidence_available": true,
+    "reason": null,
+    "contract": {
+      "schema_version": "1.0",
+      "supported_artifact": "point_confidence.json",
+      "point_order": "PLY_VERTEX_ORDER",
+      "required_fields": [
+        "point_id",
+        "supporting_views",
+        "track_length",
+        "reprojection_error",
+        "triangulation_angle",
+        "confidence_class"
+      ],
+      "valid_classes": [
+        "OBSERVED_HIGH",
+        "OBSERVED_MEDIUM",
+        "OBSERVED_LOW",
+        "AI_ASSISTED_NOT_MEASURABLE",
+        "UNSEEN"
+      ],
+      "rgb_derivation_prohibited": true,
+      "observed_thresholds": {
+        "OBSERVED_HIGH": {
+          "min_track_length": 4,
+          "max_reprojection_error_px": 1.0,
+          "min_triangulation_angle_deg": 5.0
+        },
+        "OBSERVED_MEDIUM": {
+          "min_track_length": 3,
+          "max_reprojection_error_px": 2.0,
+          "min_triangulation_angle_deg": 2.0
+        }
+      }
+    }
+  },
+  "warnings": [
+    {
+      "code": "SHORT_DURATION",
+      "message": "16.1s telemetry; contract targets a 30-60s scene"
+    },
+    {
+      "code": "VERY_SHORT_VIDEO",
+      "message": "Video duration is approximately 16.16s; controlled passes should be 30-60s."
+    },
+    {
+      "code": "TELEMETRY_EXTRAPOLATION_REJECTED",
+      "message": "1 selected frame(s) fell outside telemetry coverage after applying the run-specific offset; no extrapolated position was used."
+    },
+    {
+      "code": "DENSE_PROVIDER_UNAVAILABLE",
+      "message": "synthetic fixtures cannot produce real dense evidence"
+    }
+  ],
+  "limitations": [
+    "Geometry is defensible only where observed by multiple source frames.",
+    "Ordinary GNSS is a soft alignment prior and is not survey-grade ground truth.",
+    "AI-assisted geometry is excluded from measurement evidence.",
+    "Confidence-qualified measurement is unavailable without a valid explicit confidence artifact.",
+    "Unseen surfaces are not reconstructed or claimed as measured."
+  ]
+}

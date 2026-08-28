@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "project_id": "prj_2f719e1e1d1d",
+  "run_id": "run_5398fb75fd96",
+  "eligible_frames": 100,
+  "registered_frames": 100,
+  "registration_rate": 1.0,
+  "passes_80_percent_gate": true,
+  "median_reprojection_error_px": 0.8124834214072638,
+  "p95_reprojection_error_px": 1.7272543777470724,
+  "source_provenance": "SYNTHETIC",
+  "video_origin": "REAL",
+  "telemetry_origin": "SYNTHETIC",
+  "genuine_real_evidence": false,
+  "provenance_note": "The reconstructed imagery is real, but normalized_telemetry.csv was generated from synthetic_telemetry.srt. This run is not genuine combined real evidence."
+}

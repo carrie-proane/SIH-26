@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "status": "NOT_RUN",
+  "scale_reference": {
+    "id": "M6",
+    "kind": "derived",
+    "true_m": 2.934,
+    "cloud_points": null
+  },
+  "validation_reference": {
+    "id": "M3",
+    "kind": "measured",
+    "true_m": 1.04,
+    "cloud_points": null
+  },
+  "error_pct": null,
+  "passes_10_percent_gate": null,
+  "reason": "No operator-selected M6 scale points or M3 validation points were supplied. Computing a result without those observations would fabricate evidence.",
+  "honesty_note": "M6 is derived from step dimensions and must not be described as independently measured."
+}
