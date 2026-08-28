@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep host paths unchanged inside the container so paths emitted by the API
+# can be passed to COLMAP without translation.
+workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+exec docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --volume "${workspace_root}:${workspace_root}" \
+  --workdir "${workspace_root}" \
+  colmap/colmap:latest \
+  colmap "$@"
