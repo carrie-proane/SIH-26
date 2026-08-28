@@ -102,9 +102,9 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
 
         dense_cloud = app.state.store.run_dir(project_id, run_id) / "dense/fused.ply"
         textured_mesh = (
-            app.state.store.run_dir(project_id, run_id) / "dense/textured/model.ply"
+            app.state.store.run_dir(project_id, run_id) / "dense/texture/model.ply"
         )
-        texture = app.state.store.run_dir(project_id, run_id) / "dense/textured/atlas.png"
+        texture = app.state.store.run_dir(project_id, run_id) / "dense/texture/atlas.png"
         textured_mesh.parent.mkdir(parents=True, exist_ok=True)
         dense_cloud.write_text("declared dense cloud", encoding="utf-8")
         textured_mesh.write_text("declared textured mesh", encoding="utf-8")

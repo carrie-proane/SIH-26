@@ -9,6 +9,9 @@ data/samples/*/
 !data/samples/*/normalized_telemetry.csv
 !data/samples/*/normalized_telemetry.meta.json
 !data/samples/*/*.truth.json
+!data/samples/primary_staircase/
+data/samples/primary_staircase/*
+!data/samples/primary_staircase/viewer_manifest_sample.json
 *.mp4
 *.MP4
 *.mov

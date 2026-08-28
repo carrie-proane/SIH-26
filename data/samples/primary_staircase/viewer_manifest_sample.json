@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "project_id": "prj_2f719e1e1d1d",
+  "run_id": "run_5398fb75fd96",
+  "stage": "COMPLETED",
+  "status": "COMPLETED",
+  "synthetic_fixture": true,
+  "source_provenance": "SYNTHETIC",
+  "video_origin": "REAL",
+  "telemetry_origin": "SYNTHETIC",
+  "genuine_real_evidence": false,
+  "registration_stats": {
+    "eligible_frames": 100,
+    "registered_frames": 100,
+    "registration_rate": 1.0
+  },
+  "visual_models": {
+    "evidence_cloud": {
+      "available": true,
+      "url": "/api/runs/run_5398fb75fd96/artifacts/sparse/sparse_local.ply",
+      "format": "PLY",
+      "coordinate_frame": "LOCAL_ENU_METRES",
+      "measurement_eligible": true,
+      "default": true
+    },
+    "dense_cloud": {
+      "available": false,
+      "url": null,
+      "measurement_eligible": false,
+      "reason": "synthetic fixtures cannot produce real dense evidence"
+    },
+    "textured_mesh": {
+      "available": false,
+      "url": null,
+      "texture_urls": [],
+      "measurement_eligible": false,
+      "reason": "synthetic fixtures cannot produce real dense evidence"
+    },
+    "gaussian_splat": {
+      "available": false,
+      "url": null,
+      "measurement_eligible": false,
+      "reason": "Gaussian Splatting is cut scope per contract §6"
+    },
+    "dense_report_url": "/api/runs/run_5398fb75fd96/artifacts/dense/dense_report.json"
+  },
+  "measurement_reference": {
+    "status": "NOT_PROVIDED",
+    "reference_m": null,
+    "measured_m": null,
+    "percent_error": null,
+    "passes_10_percent_gate": null,
+    "reason": "No independent cloud points were supplied for the M6 scale and M3 validation spans"
+  },
+  "quality_report_url": "/api/runs/run_5398fb75fd96/artifacts/quality_report.json"
+}

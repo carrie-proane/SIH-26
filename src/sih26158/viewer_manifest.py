@@ -94,20 +94,39 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "passes_10_percent_gate": known_distance.get("passes_10_percent_gate"),
         "synthetic_fixture": record.synthetic_fixture,
     }
-    dense_cloud_path = "dense/fused.ply" if "dense/fused.ply" in artifacts else None
+    def declared_file(relative_path: str) -> bool:
+        return relative_path in artifacts and (run_dir / relative_path).is_file()
+
+    dense_report_path = next(
+        (
+            path
+            for path in ("dense/dense_report.json", "dense_report.json")
+            if declared_file(path)
+        ),
+        None,
+    )
+    dense_report = _read_json(run_dir / dense_report_path) if dense_report_path else {}
+    dense_reason = str(
+        dense_report.get("failure_reason")
+        or "Dense provider unavailable in this environment"
+    )
+    dense_cloud_path = "dense/fused.ply" if declared_file("dense/fused.ply") else None
     textured_mesh_path = next(
         (
             path
             for path in sorted(artifacts)
-            if path.startswith("dense/textured/") and path.lower().endswith(".ply")
+            if path.startswith(("dense/texture/", "dense/textured/"))
+            and path.lower().endswith(".ply")
+            and (run_dir / path).is_file()
         ),
         None,
     )
     texture_paths = [
         path
         for path in sorted(artifacts)
-        if path.startswith("dense/textured/")
+        if path.startswith(("dense/texture/", "dense/textured/"))
         and path.lower().endswith((".png", ".jpg", ".jpeg"))
+        and (run_dir / path).is_file()
     ]
 
     return {
@@ -143,6 +162,7 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 "format": "PLY" if dense_cloud_path else None,
                 "coordinate_frame": "LOCAL_ENU_METRES" if dense_cloud_path else None,
                 "measurement_eligible": False,
+                "reason": None if dense_cloud_path else dense_reason,
             },
             "textured_mesh": {
                 "available": textured_mesh_path is not None,
@@ -152,17 +172,27 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 "coordinate_frame": "LOCAL_ENU_METRES" if textured_mesh_path else None,
                 "measurement_eligible": False,
                 "statement": "Visual model - not used for verified measurement",
+                "reason": (
+                    None
+                    if textured_mesh_path
+                    else (
+                        dense_reason
+                        if not dense_cloud_path
+                        else "Dense fusion completed, but the mesh or texture stage did not complete"
+                    )
+                ),
             },
             "gaussian_splat": {
                 "available": False,
                 "url": None,
                 "format": None,
                 "measurement_eligible": False,
+                "reason": "Gaussian Splatting is cut scope per contract §6",
                 "statement": "Photoreal View unavailable; no Gaussian Splatting was installed or run.",
             },
             "dense_report_url": (
-                artifacts["dense_report.json"].url
-                if "dense_report.json" in artifacts
+                artifacts[dense_report_path].url
+                if dense_report_path
                 else None
             ),
         },
