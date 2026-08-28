@@ -310,9 +310,9 @@ def test_optional_dense_blocker_does_not_fail_sparse_run(tmp_path: Path) -> None
     assert result.status == RunStatus.COMPLETED
     declared = {artifact.relative_path for artifact in result.artifacts}
     assert "sparse/sparse_local.ply" in declared
-    assert {"dense_report.json", "dense_commands.json", "logs/dense.log"} <= declared
+    assert {"dense/dense_report.json", "dense/dense_commands.json", "dense/dense.log"} <= declared
     report = json.loads(
-        (store.run_dir(project.project_id, result.run_id) / "dense_report.json").read_text()
+        (store.run_dir(project.project_id, result.run_id) / "dense/dense_report.json").read_text()
     )
     assert report["status"] == "UNAVAILABLE"
     assert report["sparse_evidence_preserved"] is True

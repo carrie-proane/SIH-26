@@ -13,6 +13,7 @@ from sih26158.dense import (
     DenseReconstructionProvider,
     UnavailableProvider,
     run_dense_stage,
+    select_dense_provider,
 )
 from sih26158.geo import SimilarityTransform
 
@@ -108,21 +109,26 @@ def test_dense_colmap_success_and_metric_transform(
     assert result.metric_alignment_preserved is True
     assert result.measurement_eligible is False
     assert (context.run_dir / "dense/fused.ply").is_file()
-    assert (context.run_dir / "dense/meshed-poisson.ply").is_file()
+    assert (context.run_dir / "dense/meshed.ply").is_file()
     assert (context.run_dir / "dense/meshed-poisson-simplified.ply").is_file()
-    assert (context.run_dir / "dense/textured/textured.ply").is_file()
-    assert (context.run_dir / "dense/textured/atlas.png").is_file()
+    assert (context.run_dir / "dense/texture/textured.ply").is_file()
+    assert (context.run_dir / "dense/texture/atlas.png").is_file()
 
     fused = (context.run_dir / "dense/fused.ply").read_text(encoding="ascii")
     body = fused.split("end_header\n", 1)[1].splitlines()
     assert body[0].split()[:3] == ["1", "2", "3"]
     assert body[1].split()[:3] == ["3", "2", "3"]
 
-    report = json.loads((context.run_dir / "dense_report.json").read_text())
-    assert report["input_registered_images"] == 91
+    report = json.loads((context.run_dir / "dense/dense_report.json").read_text())
+    assert report["registered_inputs"] == 91
+    assert report["available"] is True
+    assert report["failure_reason"] is None
+    assert report["artifacts"]["fused_ply"] == "dense/fused.ply"
+    assert report["artifacts"]["mesh"] == "dense/meshed.ply"
+    assert report["artifacts"]["texture_dir"] == "dense/texture/"
     assert report["metric_alignment_preserved"] is True
     assert report["measurement_eligible"] is False
-    commands = json.loads((context.run_dir / "dense_commands.json").read_text())
+    commands = json.loads((context.run_dir / "dense/dense_commands.json").read_text())
     assert [item[1] for item in commands["commands"]] == [
         "image_undistorter",
         "patch_match_stereo",
@@ -138,9 +144,16 @@ def test_dense_unavailable_records_blocker(tmp_path: Path) -> None:
     result = run_dense_stage(context, UnavailableProvider("CUDA dense unavailable"))
 
     assert result.status == "UNAVAILABLE"
-    report = json.loads((context.run_dir / "dense_report.json").read_text())
+    report = json.loads((context.run_dir / "dense/dense_report.json").read_text())
     assert report["status"] == "UNAVAILABLE"
     assert report["warnings"][0]["code"] == "DENSE_PROVIDER_UNAVAILABLE"
+    assert report["available"] is False
+    assert report["failure_reason"] == "CUDA dense unavailable"
+    assert report["artifacts"] == {
+        "fused_ply": None,
+        "mesh": None,
+        "texture_dir": None,
+    }
     assert not (context.run_dir / "dense/fused.ply").exists()
 
 
@@ -163,10 +176,21 @@ def test_dense_failure_preserves_sparse_success(tmp_path: Path) -> None:
 
     assert result.status == "FAILED_VISUAL_ONLY"
     assert sparse_evidence.read_text(encoding="ascii") == PLY
-    report = json.loads((context.run_dir / "dense_report.json").read_text())
+    report = json.loads((context.run_dir / "dense/dense_report.json").read_text())
     assert report["sparse_evidence_preserved"] is True
     assert report["measurement_eligible"] is False
     assert "mock PatchMatch failure" in report["warnings"][0]["message"]
+    assert report["available"] is False
+    assert report["failure_reason"] == "mock PatchMatch failure"
+    assert set(report) >= {
+        "provider",
+        "available",
+        "runtime_s",
+        "registered_inputs",
+        "failure_reason",
+        "warnings",
+        "artifacts",
+    }
 
 
 def test_non_cuda_colmap_is_honestly_unavailable(
@@ -179,4 +203,56 @@ def test_non_cuda_colmap_is_honestly_unavailable(
 
     available, reason = ColmapDenseProvider(runner=runner).availability()
     assert available is False
-    assert "non-CUDA" in reason
+    assert "CUDA runtime is unavailable" in reason
+
+
+def test_provider_selection_prefers_colmap_then_openmvs(monkeypatch: object) -> None:
+    monkeypatch.setattr(
+        "sih26158.dense.ColmapDenseProvider.availability", lambda _: (True, "CUDA")
+    )
+    monkeypatch.setattr(
+        "sih26158.dense.OpenMVSProvider.availability", lambda _: (True, "OpenMVS")
+    )
+    assert isinstance(select_dense_provider(), ColmapDenseProvider)
+
+    monkeypatch.setattr(
+        "sih26158.dense.ColmapDenseProvider.availability", lambda _: (False, "no CUDA")
+    )
+    from sih26158.dense import OpenMVSProvider
+
+    assert isinstance(select_dense_provider(), OpenMVSProvider)
+
+
+def test_openmvs_detection_requires_named_executable(monkeypatch: object) -> None:
+    from sih26158.dense import OpenMVSProvider
+
+    observed: list[str] = []
+
+    def which(name: str) -> str | None:
+        observed.append(name)
+        return None
+
+    monkeypatch.setattr("sih26158.dense.shutil.which", which)
+    available, reason = OpenMVSProvider().availability()
+
+    assert available is False
+    assert observed == ["OpenMVS"]
+    assert "OpenMVS executable" in reason
+
+
+def test_mesh_failure_is_partial_dense_success(tmp_path: Path, monkeypatch: object) -> None:
+    monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/colmap")
+
+    def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1] == "poisson_mesher" and command[-1] != "-h":
+            return subprocess.CompletedProcess(command, 1, "", "mesh failure")
+        return _successful_runner(command, **kwargs)
+
+    context = _context(tmp_path)
+    result = run_dense_stage(context, ColmapDenseProvider(runner=runner))
+
+    assert result.status == "PARTIAL_SUCCESS"
+    assert result.available is True
+    assert (context.run_dir / "dense/fused.ply").is_file()
+    assert not (context.run_dir / "dense/meshed.ply").exists()
+    assert any(warning["code"] == "DENSE_MESH_FAILED" for warning in result.warnings)

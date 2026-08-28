@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -34,6 +35,7 @@ class DenseContext:
 class DenseResult:
     provider: str
     status: str
+    available: bool = False
     artifacts: list[Path] = field(default_factory=list)
     commands: list[list[str]] = field(default_factory=list)
     warnings: list[dict[str, str]] = field(default_factory=list)
@@ -44,6 +46,8 @@ class DenseResult:
     runtime_s: float = 0.0
     metric_alignment_preserved: bool = False
     measurement_eligible: bool = False
+    failure_reason: str | None = None
+    environment: dict[str, str] = field(default_factory=dict)
 
 
 def ply_counts(path: Path) -> tuple[int, int]:
@@ -67,13 +71,26 @@ def ply_counts(path: Path) -> tuple[int, int]:
 def _write_dense_metadata(
     context: DenseContext, result: DenseResult, report_path: Path, commands_path: Path
 ) -> list[Path]:
-    environment = runtime_environment() | {"machine": platform.machine()}
+    environment = result.environment or (runtime_environment() | {"machine": platform.machine()})
+    relative_artifacts = {
+        path.relative_to(context.run_dir).as_posix(): path for path in result.artifacts
+    }
+    fused_path = next(
+        (path for path in relative_artifacts if path == "dense/fused.ply"), None
+    )
+    mesh_path = next(
+        (path for path in relative_artifacts if path == "dense/meshed.ply"), None
+    )
+    texture_files = [
+        path for path in relative_artifacts if path.startswith("dense/texture/")
+    ]
     atomic_json(
         commands_path,
         {
             "schema_version": "1.0",
             "provider": result.provider,
             "commands": result.commands,
+            "environment": environment,
         },
     )
     atomic_json(
@@ -81,8 +98,9 @@ def _write_dense_metadata(
         {
             "schema_version": "1.0",
             "provider": result.provider,
+            "available": result.available,
             "status": result.status,
-            "input_registered_images": context.registered_images,
+            "registered_inputs": context.registered_images,
             "dense_point_count": result.dense_point_count,
             "vertex_count": result.vertex_count,
             "face_count": result.face_count,
@@ -90,13 +108,18 @@ def _write_dense_metadata(
             "runtime_s": result.runtime_s,
             "environment": environment,
             "warnings": result.warnings,
+            "failure_reason": result.failure_reason,
             "metric_alignment_preserved": result.metric_alignment_preserved,
             "sparse_evidence_preserved": True,
             "measurement_eligible": False,
-            "measurement_statement": (
-                "Visual dense/textured geometry is not used for verified measurement; "
-                "measurements remain bound to sparse evidence geometry."
+            "measurement_ineligible_reason": (
+                "Dense geometry is not used for verified measurement per contract §1"
             ),
+            "artifacts": {
+                "fused_ply": fused_path,
+                "mesh": mesh_path,
+                "texture_dir": "dense/texture/" if texture_files else None,
+            },
         },
     )
     return [report_path, commands_path]
@@ -104,6 +127,10 @@ def _write_dense_metadata(
 
 class DenseReconstructionProvider(ABC):
     name: str
+
+    def is_available(self) -> bool:
+        """Return the boolean capability signal used by callers and tests."""
+        return self.availability()[0]
 
     @abstractmethod
     def availability(self) -> tuple[bool, str]:
@@ -115,11 +142,12 @@ class DenseReconstructionProvider(ABC):
 
 
 class ColmapDenseProvider(DenseReconstructionProvider):
-    name = "COLMAP_DENSE"
+    name = "colmap_dense"
 
     def __init__(self, binary: str = "colmap", runner: CommandRunner = subprocess.run) -> None:
         self.binary = binary
         self.runner = runner
+        self.commands_run: list[list[str]] = []
 
     def _help(self, command: str) -> str:
         completed = self.runner(
@@ -136,8 +164,12 @@ class ColmapDenseProvider(DenseReconstructionProvider):
         output = (completed.stdout or "") + (completed.stderr or "")
         if completed.returncode:
             return False, "COLMAP capability probe failed"
-        if "without CUDA" in output:
-            return False, "Installed COLMAP reports a non-CUDA build; PatchMatch is unavailable"
+        if (
+            "without CUDA" in output
+            or "NVIDIA Driver was not detected" in output
+            or os.getenv("CUDA_VISIBLE_DEVICES") == ""
+        ):
+            return False, "CUDA runtime is unavailable; COLMAP PatchMatch will not be attempted"
         required = {
             "image_undistorter": ("--image_path", "--input_path", "--output_path"),
             "patch_match_stereo": ("--workspace_path", "--PatchMatchStereo.gpu_index"),
@@ -156,6 +188,7 @@ class ColmapDenseProvider(DenseReconstructionProvider):
         return bool(help_text) and all(flag in help_text for flag in required_flags)
 
     def _execute(self, command: list[str], log_path: Path) -> None:
+        self.commands_run.append(command)
         with log_path.open("a", encoding="utf-8") as stream:
             stream.write("$ " + " ".join(command) + "\n")
             completed = self.runner(
@@ -171,6 +204,7 @@ class ColmapDenseProvider(DenseReconstructionProvider):
             )
 
     def run(self, context: DenseContext) -> DenseResult:
+        self.commands_run = []
         available, reason = self.availability()
         if not available:
             raise DenseProviderError(reason)
@@ -179,10 +213,10 @@ class ColmapDenseProvider(DenseReconstructionProvider):
         workspace = dense_dir / "workspace"
         raw_dir = dense_dir / "raw_sfm"
         textured_raw = raw_dir / "textured"
-        textured_local = dense_dir / "textured"
+        textured_local = dense_dir / "texture"
         for directory in (workspace, raw_dir, textured_raw, textured_local):
             directory.mkdir(parents=True, exist_ok=True)
-        log_path = context.run_dir / "logs" / "dense.log"
+        log_path = dense_dir / "dense.log"
         log_path.write_text("", encoding="utf-8")
         fused_raw = raw_dir / "fused.ply"
         poisson_raw = raw_dir / "meshed-poisson.ply"
@@ -269,25 +303,54 @@ class ColmapDenseProvider(DenseReconstructionProvider):
                     "TXT",
                 ]
             )
-        for command in commands:
+        for command in commands[:3]:
             self._execute(command, log_path)
-        for required in (fused_raw, poisson_raw):
-            if not required.is_file():
-                raise DenseProviderError(f"Dense command sequence did not produce {required.name}")
+        if not fused_raw.is_file():
+            raise DenseProviderError("Dense fusion did not produce fused.ply")
+
+        warnings: list[dict[str, str]] = []
+        mesh_available = False
+        try:
+            self._execute(commands[3], log_path)
+            mesh_available = poisson_raw.is_file()
+            if not mesh_available:
+                raise DenseProviderError("Poisson meshing did not produce a mesh")
+        except DenseProviderError as exc:
+            warnings.append({"code": "DENSE_MESH_FAILED", "message": str(exc)})
+
+        next_command = 4
+        if simplifier and mesh_available:
+            try:
+                self._execute(commands[next_command], log_path)
+            except DenseProviderError as exc:
+                warnings.append({"code": "DENSE_MESH_SIMPLIFICATION_FAILED", "message": str(exc)})
+            next_command += 1
+        elif simplifier:
+            next_command += 1
+
+        texture_attempted = False
+        if texturer and mesh_available:
+            texture_attempted = True
+            try:
+                self._execute(commands[next_command], log_path)
+            except DenseProviderError as exc:
+                warnings.append({"code": "DENSE_TEXTURE_FAILED", "message": str(exc)})
 
         fused_local = dense_dir / "fused.ply"
-        poisson_local = dense_dir / "meshed-poisson.ply"
+        poisson_local = dense_dir / "meshed.ply"
         transform_ply(fused_raw, fused_local, context.transform)
-        transform_ply(poisson_raw, poisson_local, context.transform)
-        artifacts = [fused_local, poisson_local, log_path]
+        artifacts = [fused_local, log_path]
+        if mesh_available:
+            transform_ply(poisson_raw, poisson_local, context.transform)
+            artifacts.append(poisson_local)
         simplified_local: Path | None = None
-        if simplifier and simplified_raw.is_file():
+        if mesh_available and simplifier and simplified_raw.is_file():
             simplified_local = dense_dir / "meshed-poisson-simplified.ply"
             transform_ply(simplified_raw, simplified_local, context.transform)
             artifacts.append(simplified_local)
 
         textured_mesh: Path | None = None
-        if texturer:
+        if texture_attempted:
             raw_meshes = sorted(textured_raw.glob("*.ply"))
             if raw_meshes:
                 textured_mesh = textured_local / raw_meshes[0].name
@@ -300,10 +363,9 @@ class ColmapDenseProvider(DenseReconstructionProvider):
                         artifacts.append(destination)
 
         dense_points, _ = ply_counts(fused_local)
-        mesh_for_counts = simplified_local or poisson_local
-        vertices, faces = ply_counts(mesh_for_counts)
-        warnings: list[dict[str, str]] = []
-        if texturer and textured_mesh is None:
+        mesh_for_counts = simplified_local or (poisson_local if mesh_available else None)
+        vertices, faces = ply_counts(mesh_for_counts) if mesh_for_counts else (None, None)
+        if texture_attempted and textured_mesh is None:
             warnings.append(
                 {
                     "code": "TEXTURE_OUTPUT_UNAVAILABLE",
@@ -318,9 +380,10 @@ class ColmapDenseProvider(DenseReconstructionProvider):
         )
         return DenseResult(
             provider=self.name,
-            status="COMPLETED",
+            status="COMPLETED" if mesh_available else "PARTIAL_SUCCESS",
+            available=True,
             artifacts=artifacts,
-            commands=commands,
+            commands=list(self.commands_run),
             warnings=warnings,
             dense_point_count=dense_points,
             vertex_count=vertices,
@@ -333,7 +396,7 @@ class ColmapDenseProvider(DenseReconstructionProvider):
 
 
 class OpenMVSProvider(DenseReconstructionProvider):
-    name = "OPENMVS_EXTERNAL"
+    name = "openmvs"
     tools = (
         "InterfaceCOLMAP",
         "DensifyPointCloud",
@@ -349,14 +412,18 @@ class OpenMVSProvider(DenseReconstructionProvider):
     ) -> None:
         self.runner = runner
         self.colmap_binary = colmap_binary
+        self.commands_run: list[list[str]] = []
 
     def availability(self) -> tuple[bool, str]:
+        if shutil.which("OpenMVS") is None:
+            return False, "OpenMVS executable is unavailable"
         missing = [tool for tool in self.tools if shutil.which(tool) is None]
         if missing:
             return False, "OpenMVS tools unavailable: " + ", ".join(missing)
         return True, "OpenMVS external command suite is installed"
 
     def _execute(self, command: list[str], log_path: Path) -> None:
+        self.commands_run.append(command)
         with log_path.open("a", encoding="utf-8") as stream:
             stream.write("$ " + " ".join(command) + "\n")
             completed = self.runner(
@@ -372,6 +439,7 @@ class OpenMVSProvider(DenseReconstructionProvider):
             )
 
     def run(self, context: DenseContext) -> DenseResult:
+        self.commands_run = []
         available, reason = self.availability()
         if not available:
             raise DenseProviderError(reason)
@@ -386,7 +454,7 @@ class OpenMVSProvider(DenseReconstructionProvider):
         input_sparse = input_root / "sparse"
         input_images = input_root / "images"
         input_root.mkdir(exist_ok=True)
-        log_path = context.run_dir / "logs" / "dense.log"
+        log_path = dense_dir / "dense.log"
         log_path.write_text("", encoding="utf-8")
         scene = raw_dir / "scene.mvs"
         dense_scene = raw_dir / "scene_dense.mvs"
@@ -495,8 +563,9 @@ class OpenMVSProvider(DenseReconstructionProvider):
         return DenseResult(
             provider=self.name,
             status="COMPLETED",
+            available=True,
             artifacts=artifacts,
-            commands=commands,
+            commands=list(self.commands_run),
             warnings=[
                 {
                     "code": "TEXTURE_COVERAGE_NOT_MEASURABLE",
@@ -513,7 +582,7 @@ class OpenMVSProvider(DenseReconstructionProvider):
 
 
 class UnavailableProvider(DenseReconstructionProvider):
-    name = "UNAVAILABLE"
+    name = "unavailable"
 
     def __init__(self, reason: str) -> None:
         self.reason = reason
@@ -525,9 +594,11 @@ class UnavailableProvider(DenseReconstructionProvider):
         return DenseResult(
             provider=self.name,
             status="UNAVAILABLE",
+            available=False,
             warnings=[{"code": "DENSE_PROVIDER_UNAVAILABLE", "message": self.reason}],
             metric_alignment_preserved=False,
             measurement_eligible=False,
+            failure_reason=self.reason,
         )
 
 
@@ -558,7 +629,7 @@ def run_dense_stage(
     """Run a visual provider and always persist its honest report/log contract."""
     dense_dir = context.run_dir / "dense"
     dense_dir.mkdir(exist_ok=True)
-    log_path = context.run_dir / "logs" / "dense.log"
+    log_path = dense_dir / "dense.log"
     if not log_path.exists():
         log_path.write_text("", encoding="utf-8")
     started = time.monotonic()
@@ -568,23 +639,26 @@ def run_dense_stage(
         result = DenseResult(
             provider=provider.name,
             status="FAILED_VISUAL_ONLY",
+            available=False,
             warnings=[
                 {
                     "code": "DENSE_RECONSTRUCTION_FAILED_SPARSE_PRESERVED",
                     "message": str(exc),
                 }
             ],
+            commands=list(getattr(provider, "commands_run", [])),
             runtime_s=time.monotonic() - started,
             metric_alignment_preserved=False,
             measurement_eligible=False,
+            failure_reason=str(exc),
         )
         with log_path.open("a", encoding="utf-8") as stream:
             stream.write(f"Dense visual stage failed safely: {exc}\n")
     result.runtime_s = max(result.runtime_s, time.monotonic() - started)
     if log_path not in result.artifacts:
         result.artifacts.append(log_path)
-    report_path = context.run_dir / "dense_report.json"
-    commands_path = context.run_dir / "dense_commands.json"
+    report_path = dense_dir / "dense_report.json"
+    commands_path = dense_dir / "dense_commands.json"
     result.artifacts.extend(
         _write_dense_metadata(context, result, report_path, commands_path)
     )
