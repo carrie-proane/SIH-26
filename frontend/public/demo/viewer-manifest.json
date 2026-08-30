@@ -55,6 +55,12 @@
   },
   "quality_report_url": "/demo/quality_report.json",
   "ingest_report_url": "/demo/ingest_report.json",
+  "scene_policy": {
+    "target": "FULL_SCENE",
+    "masking_mode": "AUTO",
+    "analysis_url": null,
+    "segmentation_report_url": null
+  },
   "ai_overlay": {
     "available": false,
     "label": "AI_ASSISTED_NOT_MEASURABLE",

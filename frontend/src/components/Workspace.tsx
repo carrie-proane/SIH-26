@@ -406,6 +406,31 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
               )}
             </section>
 
+            {manifest.scene_policy && (
+              <section className="inspector-section">
+                <div className="section-title-row">
+                  <span>Reconstruction policy</span>
+                  <b>{manifest.scene_policy.target.replace("_", " ")}</b>
+                </div>
+                <dl className="detail-list">
+                  <div><dt>Target</dt><dd>{manifest.scene_policy.target}</dd></div>
+                  <div><dt>Masking</dt><dd>{manifest.scene_policy.masking_mode}</dd></div>
+                  <div>
+                    <dt>Decision</dt>
+                    <dd>
+                      {String(
+                        (quality.metrics.reconstruction_policy as Record<string, unknown> | undefined)
+                          ?.masking_decision ?? "NOT EVALUATED",
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="metric-disclaimer">
+                  Masks affect reconstruction only when complete operational mask artifacts are declared.
+                </p>
+              </section>
+            )}
+
             <section className="inspector-section">
               <div className="section-title-row">
                 <span>Input provenance</span>

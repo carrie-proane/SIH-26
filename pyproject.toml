@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9", "ruff>=0.8,<1"]
-segmentation = ["ultralytics>=8.3,<9"]
+segmentation = ["ultralytics>=8.3,<9", "opencv-python>=4.10,<5"]
 depth = ["pillow>=10,<13", "torch>=2.2,<3", "transformers>=4.45,<6"]
 learned-matcher = ["torch>=2.2,<3"]
 

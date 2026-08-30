@@ -11,6 +11,8 @@ test("offline fixture opens the WebGL operator workspace", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Textured Model/i })).toBeDisabled();
   await expect(page.getByRole("button", { name: /Photoreal View/i })).toBeDisabled();
   await expect(page.getByText("Confidence unavailable for this run")).toBeVisible();
+  await expect(page.getByText("Reconstruction policy")).toBeVisible();
+  await expect(page.getByText("UNMASKED_FALLBACK")).toBeVisible();
   await page.setViewportSize({ width: 1600, height: 900 });
   const viewport = await page.getByLabel("Interactive reconstruction viewport").boundingBox();
   expect(viewport?.height).toBeLessThan(900);

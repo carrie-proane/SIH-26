@@ -13,10 +13,16 @@ import {
   visualModelLabel,
 } from "../modelLoading";
 import {
+  filterTriangleIndicesByAtlasAlpha,
+  makeTexturedVisualMaterial,
+  prepareOpenMVSAtlasTexture,
+} from "../texturedMaterial";
+import {
   cameraDistanceForSphere,
   pointSizeForRadius,
   robustSceneBounds,
 } from "../viewerBounds";
+import { visualModeMeasurementEligible } from "../visualModels";
 import type {
   CameraPose,
   ConfidenceLabel,
@@ -309,7 +315,9 @@ export function PointCloudViewer({
       fitCamera(true);
     };
 
-    const loadTexture = async (textureUrl: string): Promise<THREE.Texture> => {
+    const loadTexture = async (
+      textureUrl: string,
+    ): Promise<ReturnType<typeof prepareOpenMVSAtlasTexture>> => {
       if (!isDeclaredVisualArtifact(manifest, textureUrl)) {
         throw new Error("Refusing to load an undeclared texture artifact.");
       }
@@ -323,7 +331,11 @@ export function PointCloudViewer({
       try {
         const texture = await new THREE.TextureLoader().loadAsync(objectUrl);
         texture.colorSpace = THREE.SRGBColorSpace;
-        return texture;
+        const validity = manifest.visual_models?.textured_mesh?.texture_validity;
+        return prepareOpenMVSAtlasTexture(
+          texture,
+          validity ? [validity.empty_rgb] : undefined,
+        );
       } finally {
         URL.revokeObjectURL(objectUrl);
       }
@@ -358,13 +370,37 @@ export function PointCloudViewer({
         if (color) meshGeometry.setAttribute("color", color.clone());
         meshGeometry.computeVertexNormals();
         let texture: THREE.Texture | null = null;
+        let removedUntexturedFaces = 0;
         const textureUrl =
           targetMode === "TEXTURED"
             ? manifest.visual_models?.textured_mesh?.texture_urls?.[0]
             : undefined;
         if (textureUrl) {
           try {
-            texture = await loadTexture(textureUrl);
+            const prepared = await loadTexture(textureUrl);
+            texture = prepared.texture;
+            const validity = manifest.visual_models?.textured_mesh?.texture_validity;
+            if (validity && uv) {
+              const sourceIndices = meshGeometry.index
+                ? Array.from(meshGeometry.index.array)
+                : Array.from({ length: renderedPosition.count }, (_, index) => index);
+              const filtered = filterTriangleIndicesByAtlasAlpha(
+                sourceIndices,
+                uv.array,
+                prepared.alphaMask,
+                validity.minimum_supported_samples,
+              );
+              meshGeometry.setIndex(filtered.indices);
+              removedUntexturedFaces = filtered.removedFaces;
+            }
+            setLoadNotice(
+              "Display-only shadow lift applied and OpenMVS empty atlas pixels hidden; " +
+                `the declared source atlas is unchanged${
+                  removedUntexturedFaces
+                    ? `; ${removedUntexturedFaces.toLocaleString()} unsupported face(s) hidden`
+                    : ""
+                }.`,
+            );
           } catch (cause) {
             if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
             setLoadNotice(
@@ -375,35 +411,44 @@ export function PointCloudViewer({
         }
         const mesh = new THREE.Mesh(
           meshGeometry,
-          new THREE.MeshStandardMaterial({
-            map: texture,
-            color: texture || color ? "#ffffff" : "#aabbb5",
-            vertexColors: Boolean(color),
-            side: THREE.DoubleSide,
-            roughness: 0.9,
-          }),
+          makeTexturedVisualMaterial(texture, Boolean(color)),
         );
         pointGroup.add(mesh);
       } else if (explicitConfidence) {
         pointGroup.name = "explicit-confidence-point-cloud";
-        const grouped = new Map<ConfidenceLabel, number[]>();
-        for (const item of manifest.confidence_legend) grouped.set(item.label, []);
+        const grouped = new Map<ConfidenceLabel, { positions: number[]; colors: number[] }>();
+        for (const item of manifest.confidence_legend) {
+          grouped.set(item.label, { positions: [], colors: [] });
+        }
         for (const point of pointConfidence.points) {
-          grouped.get(point.confidence_class)?.push(
+          const group = grouped.get(point.confidence_class);
+          group?.positions.push(
             renderedPosition.getX(point.point_id),
             renderedPosition.getY(point.point_id),
             renderedPosition.getZ(point.point_id),
           );
+          if (group && color) {
+            group.colors.push(
+              color.getX(point.point_id),
+              color.getY(point.point_id),
+              color.getZ(point.point_id),
+            );
+          }
         }
         for (const item of manifest.confidence_legend) {
-          const values = grouped.get(item.label) ?? [];
-          if (!values.length) continue;
+          const values = grouped.get(item.label);
+          if (!values?.positions.length) continue;
           const labelGeometry = new THREE.BufferGeometry();
-          labelGeometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
+          labelGeometry.setAttribute("position", new THREE.Float32BufferAttribute(values.positions, 3));
+          if (values.colors.length) {
+            labelGeometry.setAttribute("color", new THREE.Float32BufferAttribute(values.colors, 3));
+          }
+          const labelColor = labelGeometry.getAttribute("color");
           const points = new THREE.Points(
             labelGeometry,
             new THREE.PointsMaterial({
-              color: item.color,
+              color: labelColor ? "#ffffff" : "#b8c6c2",
+              vertexColors: Boolean(labelColor),
               size: 0.13,
               sizeAttenuation: true,
               transparent: true,
@@ -578,7 +623,13 @@ export function PointCloudViewer({
         <span className="viewport-divider" />
         <span>{visualModelLabel(loadedModelMode)}</span>
         <span className="viewport-divider" />
-        <span>{loadedModelMode === "EVIDENCE" ? "MEASUREMENT ELIGIBLE" : "VISUAL ONLY"}</span>
+        <span>
+          {visualModeMeasurementEligible(loadedModelMode, manifest)
+            ? "MEASUREMENT ELIGIBLE"
+            : loadedModelMode === "EVIDENCE"
+              ? "MEASUREMENT DISABLED"
+              : "VISUAL ONLY"}
+        </span>
         <span className="viewport-divider" />
         <span>{manifest.source_provenance} INPUT</span>
       </div>

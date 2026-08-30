@@ -92,8 +92,13 @@ class RunConfig(BaseModel):
     telemetry_offset_source: Literal["manual", "calibrated"] | None = None
     force_include_frame_indices: list[int] = Field(default_factory=list)
     force_exclude_frame_indices: list[int] = Field(default_factory=list)
+    frame_min_laplacian_variance: float = Field(default=40.0, ge=0)
+    frame_min_exposure_score: float = Field(default=0.18, ge=0, le=1)
+    frame_relative_sharpness_floor: float = Field(default=0.60, ge=0, le=1)
     enable_segmentation: bool = False
     segmentation_model_path: str | None = None
+    reconstruction_target: Literal["FULL_SCENE", "PRIMARY_SUBJECT"] = "FULL_SCENE"
+    masking_mode: Literal["OFF", "AUTO", "REQUIRED"] = "OFF"
     enable_dense_reconstruction: bool = False
     dense_provider: Literal["auto", "colmap", "openmvs"] = "auto"
 
@@ -118,10 +123,12 @@ class RunConfig(BaseModel):
                 raise ValueError(f"{name} cannot contain duplicate frame indices")
         if set(self.force_include_frame_indices) & set(self.force_exclude_frame_indices):
             raise ValueError("A frame cannot be both force-included and force-excluded")
-        if self.enable_segmentation and not self.segmentation_model_path:
-            raise ValueError(
-                "segmentation_model_path is required when optional segmentation is enabled"
-            )
+        if self.reconstruction_target == "PRIMARY_SUBJECT":
+            self.enable_segmentation = True
+            if self.masking_mode == "OFF":
+                raise ValueError("PRIMARY_SUBJECT reconstruction requires AUTO or REQUIRED masking")
+        if self.enable_segmentation and self.masking_mode == "OFF":
+            self.masking_mode = "AUTO"
         return self
 
 

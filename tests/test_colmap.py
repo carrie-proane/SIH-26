@@ -30,6 +30,33 @@ def test_colmap_uses_current_4_1_command_options(tmp_path: Path) -> None:
     assert "--SiftMatching.use_gpu" not in flattened
 
 
+def test_colmap_sparse_feature_extraction_consumes_complete_masks(tmp_path: Path) -> None:
+    frames = tmp_path / "frames"
+    masks = tmp_path / "masks" / "reconstruction"
+    frames.mkdir()
+    masks.mkdir(parents=True)
+    (frames / "frame.jpg").write_bytes(b"image")
+    (masks / "frame.jpg.png").write_bytes(b"mask")
+
+    feature_command = ColmapRunner().build_commands(frames, tmp_path, RunConfig())[0]
+
+    assert feature_command[-2:] == ["--ImageReader.mask_path", str(masks)]
+
+
+def test_colmap_ignores_incomplete_operational_mask_set(tmp_path: Path) -> None:
+    frames = tmp_path / "frames"
+    masks = tmp_path / "masks" / "reconstruction"
+    frames.mkdir()
+    masks.mkdir(parents=True)
+    (frames / "a.jpg").write_bytes(b"image")
+    (frames / "b.jpg").write_bytes(b"image")
+    (masks / "a.jpg.png").write_bytes(b"mask")
+
+    feature_command = ColmapRunner().build_commands(frames, tmp_path, RunConfig())[0]
+
+    assert "--ImageReader.mask_path" not in feature_command
+
+
 def test_best_sparse_model_prefers_91_registered_frames(tmp_path: Path) -> None:
     model_root = tmp_path / "sparse" / "model"
     _write_binary_model(model_root / "0", 10, [0.2, 0.3])
@@ -84,8 +111,7 @@ def test_deterministic_ply_and_confidence_share_point_order(tmp_path: Path) -> N
     )
     points = tmp_path / "points3D.txt"
     points.write_text(
-        "10 0 0 0 10 20 30 0.5 1 0 2 0 3 0 4 0\n"
-        "3 2 0 0 40 50 60 3.0 1 0 3 0\n",
+        "10 0 0 0 10 20 30 0.5 1 0 2 0 3 0 4 0\n3 2 0 0 40 50 60 3.0 1 0 3 0\n",
         encoding="utf-8",
     )
     ply = tmp_path / "sparse.ply"

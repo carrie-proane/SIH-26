@@ -59,7 +59,10 @@ PYTHONPATH=src python -m sih26158.cli run \
   --video /path/pass.mp4 \
   --telemetry /path/pass.srt \
   --dense \
-  --dense-provider auto
+  --dense-provider auto \
+  --reconstruction-target FULL_SCENE \
+  --masking-mode AUTO \
+  --segmentation-model /path/to/local-segmentation-weights.pt
 ```
 
 The provider runs only after sparse registration and local-metric alignment gates pass. CUDA COLMAP
@@ -67,6 +70,19 @@ is preferred; an installed OpenMVS command suite is the external fallback. If ne
 or if dense processing fails, `dense_report.json`, `dense_commands.json`, and `logs/dense.log`
 record the blocker while the valid sparse run remains completed. Dense and textured artifacts are
 visual-only and are never promoted to verified measurement geometry.
+
+Every run now writes `scene_analysis.json`. Scene-aware masking is optional and configurable:
+
+- `FULL_SCENE` preserves the static environment while excluding supported dynamic/sky classes.
+- `PRIMARY_SUBJECT` keeps one central, dominant detected subject and requires valid masks.
+- `AUTO` falls back honestly to unmasked reconstruction when local weights are unavailable;
+  `REQUIRED` stops before reconstruction instead.
+- No weights are downloaded automatically. A local path or `SIH_SEGMENTATION_MODEL` is required.
+
+When applied, the same declared mask set is consumed by COLMAP sparse feature extraction and by
+OpenMVS dense matching/texturing. Masked dense auto-selection prefers OpenMVS when the installed
+COLMAP PatchMatch command has no documented mask option. OpenMVS also applies target-aware
+spurious-component removal; the exact settings and rationale are persisted in `dense_report.json`.
 
 Run the complete backend, lint, frontend build and browser verification gate with `make verify`.
 
@@ -106,4 +122,4 @@ Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evide
   Gaussian Splatting and orthomosaics are not implemented. Telemetry offset estimation is a bounded
   per-run search, but ordinary GNSS remains a soft prior.
 - YOLO segmentation, SuperPoint/LightGlue and Depth Anything are optional experiments. Missing
-  models never block the core SIFT reconstruction path.
+  segmentation weights fall back only in `AUTO`; `REQUIRED` and `PRIMARY_SUBJECT` stop honestly.

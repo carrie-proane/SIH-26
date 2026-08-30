@@ -124,7 +124,13 @@ def robust_similarity(
 
 
 def transform_ply(source: Path, output: Path, transform: SimilarityTransform) -> None:
-    """Transform vertex XYZ in an ASCII or binary-little-endian PLY and preserve other data."""
+    """Transform vertex XYZ in an ASCII or binary-little-endian PLY and preserve other data.
+
+    OpenMVS dense clouds include variable-length per-vertex view lists.  Those
+    lists do not affect a vertex position, but they do mean a binary vertex
+    record is not fixed-size.  Parse and skip them rather than rejecting an
+    otherwise valid dense artifact.
+    """
     raw = source.read_bytes()
     marker = b"end_header\n"
     end = raw.find(marker)
@@ -138,7 +144,10 @@ def transform_ply(source: Path, output: Path, transform: SimilarityTransform) ->
     lines = header.decode("ascii").splitlines()
     file_format = next((line.split()[1] for line in lines if line.startswith("format ")), None)
     vertex_count = 0
-    vertex_properties: list[tuple[str, str]] = []
+    # Entries are ``(kind, value_type, name)`` for scalar properties and
+    # ``("list", count_type, item_type)`` for list properties.  The list
+    # name is not needed to preserve it; only its encoded length matters.
+    vertex_properties: list[tuple[str, str, str]] = []
     inside_vertices = False
     for line in lines:
         fields = line.split()
@@ -148,36 +157,17 @@ def transform_ply(source: Path, output: Path, transform: SimilarityTransform) ->
         elif fields and fields[0] == "element" and fields[1] != "vertex":
             inside_vertices = False
         elif inside_vertices and fields[:1] == ["property"]:
-            if len(fields) != 3:
-                raise ValueError("List properties are not supported inside PLY vertices")
-            vertex_properties.append((fields[1], fields[2]))
-    names = [name for _, name in vertex_properties]
+            if len(fields) == 3:
+                vertex_properties.append(("scalar", fields[1], fields[2]))
+            elif len(fields) == 5 and fields[1] == "list":
+                vertex_properties.append(("list", fields[2], fields[3]))
+            else:
+                raise ValueError("Unsupported PLY vertex property declaration")
+    names = [name for kind, _, name in vertex_properties if kind == "scalar"]
     if vertex_count <= 0 or not {"x", "y", "z"}.issubset(names):
         raise ValueError("PLY must contain vertex x, y, and z properties")
-    xyz_indices = [names.index(axis) for axis in ("x", "y", "z")]
+    xyz_names = ("x", "y", "z")
 
-    if file_format == "ascii":
-        text_lines = raw[body_start:].decode("ascii").splitlines()
-        if len(text_lines) < vertex_count:
-            raise ValueError("PLY contains fewer vertices than declared")
-        vertices = [line.split() for line in text_lines[:vertex_count]]
-        points = np.array(
-            [[float(values[index]) for index in xyz_indices] for values in vertices], dtype=float
-        )
-        aligned = transform.apply(points)
-        for row, values in enumerate(vertices):
-            for column, value in zip(xyz_indices, aligned[row], strict=True):
-                values[column] = f"{value:.9g}"
-        output.write_bytes(
-            header
-            + ("\n".join(" ".join(values) for values in vertices + [line.split() for line in text_lines[vertex_count:]]) + "\n").encode(
-                "ascii"
-            )
-        )
-        return
-
-    if file_format != "binary_little_endian":
-        raise ValueError(f"Unsupported PLY format: {file_format}")
     formats = {
         "char": "b",
         "int8": "b",
@@ -196,22 +186,93 @@ def transform_ply(source: Path, output: Path, transform: SimilarityTransform) ->
         "double": "d",
         "float64": "d",
     }
+
+    if file_format == "ascii":
+        text_lines = raw[body_start:].decode("ascii").splitlines()
+        if len(text_lines) < vertex_count:
+            raise ValueError("PLY contains fewer vertices than declared")
+        vertices = [line.split() for line in text_lines[:vertex_count]]
+        xyz_indices: list[list[int]] = []
+        for values in vertices:
+            cursor = 0
+            indices_by_name: dict[str, int] = {}
+            for kind, _, name in vertex_properties:
+                if kind == "scalar":
+                    if name in xyz_names:
+                        indices_by_name[name] = cursor
+                    cursor += 1
+                    continue
+                try:
+                    count = int(values[cursor])
+                except (IndexError, ValueError) as exc:
+                    raise ValueError("PLY vertex list property is malformed") from exc
+                if count < 0:
+                    raise ValueError("PLY vertex list property has a negative length")
+                cursor += 1 + count
+            if cursor > len(values) or set(indices_by_name) != set(xyz_names):
+                raise ValueError("PLY vertex data does not match its header")
+            xyz_indices.append([indices_by_name[axis] for axis in xyz_names])
+        points = np.array(
+            [
+                [float(values[index]) for index in indices]
+                for values, indices in zip(vertices, xyz_indices, strict=True)
+            ],
+            dtype=float,
+        )
+        aligned = transform.apply(points)
+        for row, (values, indices) in enumerate(zip(vertices, xyz_indices, strict=True)):
+            for column, value in zip(indices, aligned[row], strict=True):
+                values[column] = f"{value:.9g}"
+        output.write_bytes(
+            header
+            + ("\n".join(" ".join(values) for values in vertices + [line.split() for line in text_lines[vertex_count:]]) + "\n").encode(
+                "ascii"
+            )
+        )
+        return
+
+    if file_format != "binary_little_endian":
+        raise ValueError(f"Unsupported PLY format: {file_format}")
+    body = bytearray(raw[body_start:])
+    offset = 0
+    points: list[list[float]] = []
+    coordinate_offsets: list[list[tuple[int, str]]] = []
     try:
-        vertex_struct = struct.Struct("<" + "".join(formats[kind] for kind, _ in vertex_properties))
+        for _ in range(vertex_count):
+            values: dict[str, tuple[float, int, str]] = {}
+            for kind, value_type, name in vertex_properties:
+                if kind == "scalar":
+                    value_format = formats[value_type]
+                    size = struct.calcsize("<" + value_format)
+                    if offset + size > len(body):
+                        raise ValueError("PLY binary vertex data is truncated")
+                    value = struct.unpack_from("<" + value_format, body, offset)[0]
+                    values[name] = (float(value), offset, value_format)
+                    offset += size
+                    continue
+                count_format = formats[value_type]
+                item_format = formats[name]
+                count_size = struct.calcsize("<" + count_format)
+                if offset + count_size > len(body):
+                    raise ValueError("PLY binary vertex list is truncated")
+                count = struct.unpack_from("<" + count_format, body, offset)[0]
+                if count < 0:
+                    raise ValueError("PLY binary vertex list has a negative length")
+                offset += count_size + count * struct.calcsize("<" + item_format)
+                if offset > len(body):
+                    raise ValueError("PLY binary vertex list is truncated")
+            try:
+                xyz = [values[axis] for axis in xyz_names]
+            except KeyError as exc:
+                raise ValueError("PLY must contain vertex x, y, and z properties") from exc
+            points.append([value for value, _, _ in xyz])
+            coordinate_offsets.append([(position, value_format) for _, position, value_format in xyz])
     except KeyError as exc:
         raise ValueError(f"Unsupported PLY vertex type: {exc.args[0]}") from exc
-    vertex_bytes = vertex_count * vertex_struct.size
-    if len(raw) < body_start + vertex_bytes:
-        raise ValueError("PLY binary vertex data is truncated")
-    records = [
-        list(vertex_struct.unpack_from(raw, body_start + index * vertex_struct.size))
-        for index in range(vertex_count)
-    ]
-    points = np.array([[record[index] for index in xyz_indices] for record in records], dtype=float)
-    aligned = transform.apply(points)
-    encoded = bytearray()
-    for row, record in enumerate(records):
-        for column, value in zip(xyz_indices, aligned[row], strict=True):
-            record[column] = float(value)
-        encoded.extend(vertex_struct.pack(*record))
-    output.write_bytes(header + encoded + raw[body_start + vertex_bytes :])
+
+    points_array = np.array(points, dtype=float)
+    aligned = transform.apply(points_array)
+    for locations, point in zip(coordinate_offsets, aligned, strict=True):
+        for (position, value_format), value in zip(locations, point, strict=True):
+            struct.pack_into("<" + value_format, body, position, float(value))
+    output.write_bytes(header + body)

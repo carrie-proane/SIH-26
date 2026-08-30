@@ -63,7 +63,14 @@ def runtime_environment() -> dict[str, str | None]:
         "python": sys.version.split()[0],
         "platform": platform.platform(),
     }
-    for package in ("fastapi", "numpy", "opencv-python-headless", "pydantic"):
+    for package in (
+        "fastapi",
+        "numpy",
+        "opencv-python-headless",
+        "opencv-python",
+        "pydantic",
+        "ultralytics",
+    ):
         try:
             environment[package] = version(package)
         except PackageNotFoundError:

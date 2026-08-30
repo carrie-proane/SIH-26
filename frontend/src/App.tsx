@@ -83,7 +83,13 @@ export default function App() {
         matcher: "SIFT",
         use_gpu: input.useGpu,
         enable_dense_reconstruction: input.enableDenseReconstruction,
+        reconstruction_target: input.reconstructionTarget,
+        masking_mode: input.maskingMode,
+        enable_segmentation: input.maskingMode !== "OFF",
       };
+      if (input.segmentationModelPath) {
+        config.segmentation_model_path = input.segmentationModelPath;
+      }
       if (input.preprocessingRun) config.preprocessing_run = input.preprocessingRun;
       if (input.forceIncludeFrameIndices.length) {
         config.force_include_frame_indices = input.forceIncludeFrameIndices;

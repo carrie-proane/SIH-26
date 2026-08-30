@@ -16,6 +16,7 @@ data/samples/*/
 *.SRT
 !tests/fixtures/*.srt
 data/projects/
+data/prj_*/
 .env
 .DS_Store
 

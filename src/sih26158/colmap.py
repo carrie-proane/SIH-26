@@ -45,11 +45,12 @@ class SparseModelCandidate:
         return (-self.registered_images, error, str(self.path))
 
 
-def choose_matcher(
-    sift: MatcherMetrics, learned: MatcherMetrics | None
-) -> tuple[str, str]:
+def choose_matcher(sift: MatcherMetrics, learned: MatcherMetrics | None) -> tuple[str, str]:
     if learned is None:
-        return "SIFT", "Learned matcher was unavailable; the CPU-safe SIFT baseline remains selected."
+        return (
+            "SIFT",
+            "Learned matcher was unavailable; the CPU-safe SIFT baseline remains selected.",
+        )
     registration_gain = learned.registration_rate - sift.registration_rate
     reprojection_gain = sift.median_reprojection_error_px - learned.median_reprojection_error_px
     if registration_gain > 0.005 or (registration_gain >= 0 and reprojection_gain > 0.05):
@@ -104,21 +105,34 @@ class ColmapRunner:
         model = run_dir / "sparse" / "model"
         model.mkdir(parents=True, exist_ok=True)
         gpu = "1" if config.use_gpu else "0"
-        return [
+        feature_command = [
+            self.binary,
+            "feature_extractor",
+            "--database_path",
+            str(database),
+            "--image_path",
+            str(frames),
+            "--ImageReader.camera_model",
+            config.camera_model,
+            "--ImageReader.single_camera",
+            "1",
+            "--FeatureExtraction.use_gpu",
+            gpu,
+        ]
+        mask_dir = run_dir / "masks" / "reconstruction"
+        image_names = (
             [
-                self.binary,
-                "feature_extractor",
-                "--database_path",
-                str(database),
-                "--image_path",
-                str(frames),
-                "--ImageReader.camera_model",
-                config.camera_model,
-                "--ImageReader.single_camera",
-                "1",
-                "--FeatureExtraction.use_gpu",
-                gpu,
-            ],
+                path.name
+                for path in frames.iterdir()
+                if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+            ]
+            if frames.is_dir()
+            else []
+        )
+        if image_names and all((mask_dir / f"{name}.png").is_file() for name in image_names):
+            feature_command.extend(["--ImageReader.mask_path", str(mask_dir)])
+        return [
+            feature_command,
             [
                 self.binary,
                 "sequential_matcher",
@@ -205,9 +219,7 @@ class ColmapRunner:
                 SparseModelCandidate(
                     path=model_dir,
                     registered_images=cls._read_registered_image_count(images_bin),
-                    median_reprojection_error_px=(
-                        float(np.median(errors)) if errors else None
-                    ),
+                    median_reprojection_error_px=(float(np.median(errors)) if errors else None),
                     p95_reprojection_error_px=(
                         float(np.percentile(errors, 95)) if errors else None
                     ),
@@ -304,7 +316,10 @@ class ColmapRunner:
         (run_dir / "sparse" / "model_analysis.txt").write_text(
             analysis.stdout + analysis.stderr, encoding="utf-8"
         )
-        values = {k.lower().replace(" ", "_"): v for k, v in re.findall(r"^([^:]+):\s*(.+)$", analysis.stdout, re.MULTILINE)}
+        values = {
+            k.lower().replace(" ", "_"): v
+            for k, v in re.findall(r"^([^:]+):\s*(.+)$", analysis.stdout, re.MULTILINE)
+        }
         registered = selected.registered_images
         analyzer_error = float(str(values.get("mean_reprojection_error", "0")).split()[0])
         median_error = selected.median_reprojection_error_px
@@ -316,9 +331,7 @@ class ColmapRunner:
             median_reprojection_error_px=max(
                 0.0, analyzer_error if median_error is None else median_error
             ),
-            p95_reprojection_error_px=max(
-                0.0, analyzer_error if p95_error is None else p95_error
-            ),
+            p95_reprojection_error_px=max(0.0, analyzer_error if p95_error is None else p95_error),
             runtime_s=time.monotonic() - started,
         )
         return ReconstructionResult(
@@ -371,7 +384,9 @@ class ColmapRunner:
             raise ExternalToolError("COLMAP sparse model contains no registered camera poses.")
         with output.open("w", newline="", encoding="utf-8") as stream:
             writer = csv.writer(stream)
-            writer.writerow(["image_id", "image_name", "sfm_x", "sfm_y", "sfm_z", "qw", "qx", "qy", "qz"])
+            writer.writerow(
+                ["image_id", "image_name", "sfm_x", "sfm_y", "sfm_z", "qw", "qx", "qy", "qz"]
+            )
             writer.writerows(rows)
 
     @classmethod
@@ -465,9 +480,7 @@ class ColmapRunner:
                     "track_length": track_length,
                     "reprojection_error": error,
                     "triangulation_angle": angle,
-                    "confidence_class": classify_observed_point(
-                        track_length, error, angle
-                    ).value,
+                    "confidence_class": classify_observed_point(track_length, error, angle).value,
                 }
             )
         ply_path.write_text("\n".join(ply_lines) + "\n", encoding="utf-8")

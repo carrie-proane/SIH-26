@@ -38,15 +38,17 @@ def build_quality_report(
     *,
     alignment: dict[str, Any] | None = None,
     confidence_available: bool = False,
+    scene_analysis: dict[str, Any] | None = None,
+    frame_quality: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     registration_rate = metrics.registration_rate
     alignment = alignment or {}
+    scene_analysis = scene_analysis or {}
+    frame_quality = frame_quality or {}
     residuals = [float(value) for value in alignment.get("residuals_m", [])]
     inlier_count = int(alignment.get("inlier_count", 0))
     sorted_residuals = sorted(residuals)
-    median_residual = (
-        sorted_residuals[len(sorted_residuals) // 2] if sorted_residuals else None
-    )
+    median_residual = sorted_residuals[len(sorted_residuals) // 2] if sorted_residuals else None
     p95_residual = (
         sorted_residuals[min(len(sorted_residuals) - 1, int(0.95 * len(sorted_residuals)))]
         if sorted_residuals
@@ -107,16 +109,28 @@ def build_quality_report(
             "known_distance": known_distance_metrics(
                 record.config.known_distance_m, record.config.measured_distance_m
             ),
-            "coverage": {"status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied."},
+            "coverage": {
+                "status": "NOT_EVALUATED",
+                "reason": "Reference visible-region mask not supplied.",
+            },
+            "frame_quality_gate": frame_quality,
+            "reconstruction_policy": {
+                "target": record.config.reconstruction_target,
+                "masking_mode": record.config.masking_mode,
+                "masking_decision": scene_analysis.get("masking_decision", "NOT_EVALUATED"),
+                "scene_recommendation": scene_analysis.get("recommendation"),
+                "dense_suitability": scene_analysis.get("dense_suitability"),
+                "operational_masks_declared": any(
+                    artifact.relative_path.startswith("masks/reconstruction/")
+                    for artifact in record.artifacts
+                ),
+            },
         },
+        "scene_analysis": scene_analysis,
         "confidence_artifact": {
             "available": confidence_available,
             "measurement_confidence_available": confidence_available,
-            "reason": (
-                None
-                if confidence_available
-                else "Confidence unavailable for this run"
-            ),
+            "reason": (None if confidence_available else "Confidence unavailable for this run"),
             "contract": confidence_contract(),
         },
         "warnings": report_warnings,

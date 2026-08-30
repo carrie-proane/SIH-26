@@ -72,6 +72,10 @@ def _run(args: argparse.Namespace) -> int:
         force_include_frame_indices=args.force_include,
         force_exclude_frame_indices=args.force_exclude,
         use_gpu=args.use_gpu,
+        enable_segmentation=args.masking_mode != "OFF",
+        segmentation_model_path=args.segmentation_model,
+        reconstruction_target=args.reconstruction_target,
+        masking_mode=args.masking_mode,
         enable_dense_reconstruction=args.dense,
         dense_provider=args.dense_provider,
     )
@@ -114,7 +118,11 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--data-root", default="data/projects")
     run.add_argument("--name", default="CLI mission")
     run.add_argument("--description", default="")
-    run.add_argument("--profile", choices=["smoke", "preview", "balanced", "accurate", "diagnostic"], default="preview")
+    run.add_argument(
+        "--profile",
+        choices=["smoke", "preview", "balanced", "accurate", "diagnostic"],
+        default="preview",
+    )
     run.add_argument("--known-distance", type=float)
     run.add_argument("--measured-distance", type=float)
     run.add_argument(
@@ -126,7 +134,16 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--telemetry-offset", type=float)
     run.add_argument("--telemetry-offset-source", choices=["manual", "calibrated"])
     run.add_argument("--use-gpu", action="store_true")
-    run.add_argument("--dense", action="store_true", help="Attempt optional visual-only dense reconstruction")
+    run.add_argument(
+        "--reconstruction-target",
+        choices=["FULL_SCENE", "PRIMARY_SUBJECT"],
+        default="FULL_SCENE",
+    )
+    run.add_argument("--masking-mode", choices=["OFF", "AUTO", "REQUIRED"], default="AUTO")
+    run.add_argument("--segmentation-model", help="Path to local segmentation weights")
+    run.add_argument(
+        "--dense", action="store_true", help="Attempt optional visual-only dense reconstruction"
+    )
     run.add_argument("--dense-provider", choices=["auto", "colmap", "openmvs"], default="auto")
     run.set_defaults(func=_run)
     benchmark = sub.add_parser("benchmark-matchers")

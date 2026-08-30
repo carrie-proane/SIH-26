@@ -71,16 +71,12 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
     coordinate_frame = (
         "LOCAL_ENU_METRES" if cloud_path == "sparse/sparse_local.ply" else "COLMAP_SFM"
     )
-    confidence_path = (
-        "point_confidence.json" if "point_confidence.json" in artifacts else None
-    )
+    confidence_path = "point_confidence.json" if "point_confidence.json" in artifacts else None
     confidence_reason = "Confidence unavailable for this run"
     confidence_available = False
     if confidence_path is not None:
         try:
-            validate_point_confidence_for_ply(
-                run_dir / confidence_path, run_dir / cloud_path
-            )
+            validate_point_confidence_for_ply(run_dir / confidence_path, run_dir / cloud_path)
             confidence_available = True
             confidence_reason = "Explicit point-confidence artifact validated."
         except ValueError as exc:
@@ -106,9 +102,23 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
     texture_paths = [
         path
         for path in sorted(artifacts)
-        if path.startswith("dense/textured/")
-        and path.lower().endswith((".png", ".jpg", ".jpeg"))
+        if path.startswith("dense/textured/") and path.lower().endswith((".png", ".jpg", ".jpeg"))
     ]
+    texture_validity: dict[str, Any] | None = None
+    if "dense_report.json" in artifacts and (run_dir / "dense_report.json").is_file():
+        try:
+            dense_report = _read_json(run_dir / "dense_report.json")
+        except ViewerManifestUnavailable:
+            dense_report = {}
+        validation = dense_report.get("texture_validation", {})
+        if isinstance(validation, dict) and validation.get("accepted") is True:
+            candidate = validation.get("viewer_face_filter_contract")
+            if isinstance(candidate, dict):
+                texture_validity = candidate
+    evidence_measurement_eligible = record.source_provenance not in {
+        ProvenanceOrigin.SYNTHETIC,
+        ProvenanceOrigin.UNKNOWN,
+    }
 
     return {
         "schema_version": "1.0",
@@ -134,7 +144,7 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 "url": artifacts[cloud_path].url,
                 "format": "PLY",
                 "coordinate_frame": coordinate_frame,
-                "measurement_eligible": True,
+                "measurement_eligible": evidence_measurement_eligible,
                 "default": True,
             },
             "dense_cloud": {
@@ -152,6 +162,7 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 "coordinate_frame": "LOCAL_ENU_METRES" if textured_mesh_path else None,
                 "measurement_eligible": False,
                 "statement": "Visual model - not used for verified measurement",
+                "texture_validity": texture_validity,
             },
             "gaussian_splat": {
                 "available": False,
@@ -161,9 +172,7 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 "statement": "Photoreal View unavailable; no Gaussian Splatting was installed or run.",
             },
             "dense_report_url": (
-                artifacts["dense_report.json"].url
-                if "dense_report.json" in artifacts
-                else None
+                artifacts["dense_report.json"].url if "dense_report.json" in artifacts else None
             ),
         },
         "camera_path": {
@@ -184,6 +193,18 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "ingest_report_url": (
             artifacts["ingest_report.json"].url if "ingest_report.json" in artifacts else None
         ),
+        "scene_policy": {
+            "target": record.config.reconstruction_target,
+            "masking_mode": record.config.masking_mode,
+            "analysis_url": (
+                artifacts["scene_analysis.json"].url if "scene_analysis.json" in artifacts else None
+            ),
+            "segmentation_report_url": (
+                artifacts["segmentation_comparison.json"].url
+                if "segmentation_comparison.json" in artifacts
+                else None
+            ),
+        },
         "ai_overlay": {
             "available": False,
             "label": "AI_ASSISTED_NOT_MEASURABLE",

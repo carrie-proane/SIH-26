@@ -139,6 +139,11 @@ describe("operator application", () => {
     expect(screen.getByRole("button", { name: /run api smoke fixture/i })).toBeEnabled();
     expect(screen.getByText(/advanced preprocessing options/i)).toBeVisible();
     expect(screen.getByPlaceholderText(/automatic scored preprocessing/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /reconstruction target/i })).toHaveValue(
+      "FULL_SCENE",
+    );
+    expect(screen.getByRole("combobox", { name: /scene-aware masking/i })).toHaveValue("AUTO");
+    expect(screen.getByPlaceholderText(/nothing is downloaded automatically/i)).toBeVisible();
   });
 
   it("loads the offline manifest through the complete operator workspace", async () => {

@@ -11,7 +11,12 @@ import numpy as np
 
 from frames.contact_sheet import create_contact_sheet
 from frames.extractor import extract_frames
-from frames.selector import FRAME_SCORE_COLUMNS, SelectionWeights, select_keyframes
+from frames.selector import (
+    FRAME_SCORE_COLUMNS,
+    FrameQualityThresholds,
+    SelectionWeights,
+    select_keyframes,
+)
 from telemetry.csv_parser import parse_csv
 from telemetry.models import sha256_file as telemetry_sha256_file
 from telemetry.models import write_csv as write_telemetry_csv
@@ -35,6 +40,7 @@ from .models import (
     StageEvent,
 )
 from .report import build_quality_report, write_quality_report
+from .scene_policy import analyze_scene
 from .segmentation import run_optional_segmentation
 from .storage import ProjectStore, atomic_json
 from .sync import calibrate_telemetry_offset
@@ -58,18 +64,25 @@ def _asset_path(store: ProjectStore, record: RunRecord, role: str) -> Path:
 
 def _synthetic_ply(path: Path) -> None:
     points = [
-        (-2, -1, 0, 32, 191, 107), (-1, -1, 0.1, 32, 191, 107),
-        (0, -1, 0.2, 245, 158, 11), (1, -1, 0.1, 245, 158, 11),
-        (2, -1, 0, 239, 68, 68), (-2, 1, 0, 32, 191, 107),
-        (-1, 1, 0.2, 32, 191, 107), (0, 1, 0.4, 245, 158, 11),
-        (1, 1, 0.2, 239, 68, 68), (2, 1, 0, 239, 68, 68),
+        (-2, -1, 0, 32, 191, 107),
+        (-1, -1, 0.1, 32, 191, 107),
+        (0, -1, 0.2, 245, 158, 11),
+        (1, -1, 0.1, 245, 158, 11),
+        (2, -1, 0, 239, 68, 68),
+        (-2, 1, 0, 32, 191, 107),
+        (-1, 1, 0.2, 32, 191, 107),
+        (0, 1, 0.4, 245, 158, 11),
+        (1, 1, 0.2, 239, 68, 68),
+        (2, 1, 0, 239, 68, 68),
     ]
     header = (
         "ply\nformat ascii 1.0\ncomment SYNTHETIC_DEMO - not reconstruction evidence\n"
         f"element vertex {len(points)}\nproperty float x\nproperty float y\nproperty float z\n"
         "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
     )
-    path.write_text(header + "\n".join(" ".join(map(str, row)) for row in points) + "\n", encoding="utf-8")
+    path.write_text(
+        header + "\n".join(" ".join(map(str, row)) for row in points) + "\n", encoding="utf-8"
+    )
 
 
 class PipelineRunner:
@@ -81,7 +94,12 @@ class PipelineRunner:
         self.executor.submit(self.run, run_id)
 
     def _transition(
-        self, record: RunRecord, stage: RunStatus, progress: int, message: str, event_status: str = "STARTED"
+        self,
+        record: RunRecord,
+        stage: RunStatus,
+        progress: int,
+        message: str,
+        event_status: str = "STARTED",
     ) -> None:
         record.stage = stage
         record.status = stage
@@ -109,7 +127,16 @@ class PipelineRunner:
             )
         elif ffprobe:
             result = subprocess.run(
-                [ffprobe, "-v", "error", "-show_format", "-show_streams", "-of", "json", str(video)],
+                [
+                    ffprobe,
+                    "-v",
+                    "error",
+                    "-show_format",
+                    "-show_streams",
+                    "-of",
+                    "json",
+                    str(video),
+                ],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -148,7 +175,12 @@ class PipelineRunner:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
         if _is_synthetic_demo(record):
             keyframes = [
-                {"frame_index": i, "timestamp_s": i * 0.5, "selected": True, "source": "SYNTHETIC_DEMO"}
+                {
+                    "frame_index": i,
+                    "timestamp_s": i * 0.5,
+                    "selected": True,
+                    "source": "SYNTHETIC_DEMO",
+                }
                 for i in range(10)
             ]
             keyframes_path = run_dir / "keyframes.json"
@@ -156,7 +188,9 @@ class PipelineRunner:
             scores_path = run_dir / "frame_scores.csv"
             with scores_path.open("w", newline="", encoding="utf-8") as stream:
                 writer = csv.writer(stream)
-                writer.writerow(["frame_index", "timestamp_s", "blur_score", "exposure_score", "selected"])
+                writer.writerow(
+                    ["frame_index", "timestamp_s", "blur_score", "exposure_score", "selected"]
+                )
                 for item in keyframes:
                     writer.writerow([item["frame_index"], item["timestamp_s"], 0.8, 0.9, True])
             telemetry_path = run_dir / "normalized_telemetry.csv"
@@ -253,9 +287,7 @@ class PipelineRunner:
                     shutil.copyfile(source_image, destination)
                     copied_frames.append(destination)
                     item["image_name"] = safe_name
-                    item["image_url"] = (
-                        f"/api/runs/{record.run_id}/artifacts/frames/{safe_name}"
-                    )
+                    item["image_url"] = f"/api/runs/{record.run_id}/artifacts/frames/{safe_name}"
                     item.pop("path", None)
                     item.pop("frame_path", None)
                 if missing:
@@ -328,6 +360,11 @@ class PipelineRunner:
                 weights=SelectionWeights(),
                 force_include=set(record.config.force_include_frame_indices),
                 force_exclude=set(record.config.force_exclude_frame_indices),
+                quality_thresholds=FrameQualityThresholds(
+                    min_laplacian_variance=record.config.frame_min_laplacian_variance,
+                    min_exposure_score=record.config.frame_min_exposure_score,
+                    relative_sharpness_floor=record.config.frame_relative_sharpness_floor,
+                ),
             )
         except ValueError as exc:
             raise PipelineError(f"Automatic frame selection failed: {exc}") from exc
@@ -366,7 +403,16 @@ class PipelineRunner:
             keyframes_path,
             {
                 "schema_version": "1.0",
-                "selection_method": "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY",
+                "selection_method": "QUALITY_GATED_BLUR_EXPOSURE_REDUNDANCY",
+                "frame_quality_gate": {
+                    "minimum_laplacian_variance": (record.config.frame_min_laplacian_variance),
+                    "minimum_exposure_score": record.config.frame_min_exposure_score,
+                    "relative_sharpness_floor": (record.config.frame_relative_sharpness_floor),
+                    "candidate_count": len(keyframes),
+                    "eligible_count": sum(bool(item["quality_eligible"]) for item in keyframes),
+                    "rejected_count": sum(not bool(item["quality_eligible"]) for item in keyframes),
+                    "selected_count": sum(bool(item["selected"]) for item in keyframes),
+                },
                 "override_actions": {
                     "force_include": record.config.force_include_frame_indices,
                     "force_exclude": record.config.force_exclude_frame_indices,
@@ -385,7 +431,9 @@ class PipelineRunner:
 
         suffix = telemetry.suffix.lower()
         parsed = parse_srt(telemetry) if suffix == ".srt" else parse_csv(telemetry)
-        usable = [record for record in parsed.records if record.has_fix and record.alt_m is not None]
+        usable = [
+            record for record in parsed.records if record.has_fix and record.alt_m is not None
+        ]
         if len(usable) < 3:
             raise PipelineError(
                 "Uploaded telemetry could not produce at least three usable latitude, longitude, "
@@ -399,6 +447,7 @@ class PipelineRunner:
             else max((frame.timestamp_s for frame in candidates), default=0.0)
         )
         selected_rows = [row for row in rows if row["selected"]]
+        quality_eligible_rows = [row for row in rows if row["quality_eligible"]]
         if len(candidates) < 60:
             parsed.warnings.add(
                 "TOO_FEW_FRAME_CANDIDATES",
@@ -408,6 +457,13 @@ class PipelineRunner:
             parsed.warnings.add(
                 "TOO_FEW_SELECTED_FRAMES",
                 f"Only {len(selected_rows)} frames were selected; the target range is 60-120.",
+            )
+        rejected_count = len(rows) - len(quality_eligible_rows)
+        if rejected_count:
+            parsed.warnings.add(
+                "FRAME_QUALITY_REJECTIONS",
+                f"{rejected_count} candidate frame(s) were excluded by absolute/adaptive "
+                "sharpness or exposure gates.",
             )
         if duration_s < 20:
             parsed.warnings.add(
@@ -437,11 +493,21 @@ class PipelineRunner:
         telemetry_meta_path = run_dir / "normalized_telemetry.meta.json"
         metadata = parsed.meta(telemetry_sha256_file(telemetry))
         metadata["preprocessing_source"] = "AUTO_FROM_IMMUTABLE_RUN_INPUTS"
-        metadata["frame_selection_method"] = "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY"
+        metadata["frame_selection_method"] = "QUALITY_GATED_BLUR_EXPOSURE_REDUNDANCY"
         metadata["candidate_frame_count"] = len(candidates)
         metadata["selected_frame_count"] = len(selected_rows)
         metadata["video_duration_s"] = duration_s
         metadata["quality_score_means"] = averages
+        metadata["frame_quality_gate"] = {
+            "candidate_count": len(rows),
+            "eligible_count": len(quality_eligible_rows),
+            "rejected_count": rejected_count,
+            "selected_count": len(selected_rows),
+            "minimum_laplacian_variance": record.config.frame_min_laplacian_variance,
+            "minimum_exposure_score": record.config.frame_min_exposure_score,
+            "relative_sharpness_floor": record.config.frame_relative_sharpness_floor,
+            "operator_override_count": sum(str(row["override"]) != "NONE" for row in rows),
+        }
         atomic_json(telemetry_meta_path, metadata)
         self._transition(
             record,
@@ -459,9 +525,7 @@ class PipelineRunner:
             *selected_paths,
         ]
 
-    def _merge_telemetry_metadata(
-        self, record: RunRecord, warnings: list[dict[str, str]]
-    ) -> Path:
+    def _merge_telemetry_metadata(self, record: RunRecord, warnings: list[dict[str, str]]) -> Path:
         run_dir = self.store.run_dir(record.project_id, record.run_id)
         meta_path = run_dir / "normalized_telemetry.meta.json"
         try:
@@ -550,7 +614,9 @@ class PipelineRunner:
             else keyframe_payload
         )
         if not isinstance(keyframes, list):
-            raise PipelineError("keyframes.json must be a list or an object containing a frames list.")
+            raise PipelineError(
+                "keyframes.json must be a list or an object containing a frames list."
+            )
         timestamps: dict[str, float] = {}
         for item in keyframes:
             if not isinstance(item, dict) or not item.get("selected", True):
@@ -655,9 +721,7 @@ class PipelineRunner:
             for index, row in enumerate(matched_rows):
                 row.update(
                     {
-                        "telemetry_timestamp_s": (
-                            float(row["timestamp_s"]) + selected.offset_s
-                        ),
+                        "telemetry_timestamp_s": (float(row["timestamp_s"]) + selected.offset_s),
                         "x_m": aligned[index, 0],
                         "y_m": aligned[index, 1],
                         "z_m": aligned[index, 2],
@@ -780,12 +844,25 @@ class PipelineRunner:
             selection = json.loads(selection_path.read_text(encoding="utf-8"))
             selected_model = str(selection.get("selected_model", ""))
         sparse_model_dir = run_dir / "sparse" / "model" / selected_model
+        scene_analysis_path = run_dir / "scene_analysis.json"
+        scene_analysis = (
+            json.loads(scene_analysis_path.read_text(encoding="utf-8"))
+            if scene_analysis_path.is_file()
+            else {}
+        )
+        mask_dir = run_dir / "masks" / "reconstruction"
+        if scene_analysis.get("masking_decision") != "APPLIED":
+            mask_dir = None
         context = DenseContext(
             run_dir=run_dir,
             frames_dir=run_dir / "frames",
             sparse_model_dir=sparse_model_dir,
             registered_images=result.metrics.registered_frames,
             transform=transform,
+            mask_dir=mask_dir,
+            reconstruction_target=record.config.reconstruction_target,
+            scene_analysis=scene_analysis,
+            profile=record.config.profile,
         )
         gate_reasons: list[str] = []
         if record.synthetic_fixture:
@@ -796,10 +873,20 @@ class PipelineRunner:
             gate_reasons.append("local metric alignment gate did not produce three valid inliers")
         if not sparse_model_dir.is_dir() and not record.synthetic_fixture:
             gate_reasons.append("selected sparse COLMAP model directory is unavailable")
+        if scene_analysis.get("dense_suitability") == "BLOCKED_WITHOUT_MASK" and mask_dir is None:
+            gate_reasons.append(
+                "scene diagnostics found extreme unstable/featureless content and no mask was applied"
+            )
+        if record.config.reconstruction_target == "PRIMARY_SUBJECT" and mask_dir is None:
+            gate_reasons.append(
+                "PRIMARY_SUBJECT reconstruction requires a complete applied mask set"
+            )
         provider = (
             UnavailableProvider("; ".join(gate_reasons))
             if gate_reasons
-            else select_dense_provider(record.config.dense_provider)
+            else select_dense_provider(
+                record.config.dense_provider, require_masks=mask_dir is not None
+            )
         )
         dense_result = run_dense_stage(context, provider)
         warnings.extend(dense_result.warnings)
@@ -820,20 +907,50 @@ class PipelineRunner:
             )
             handoff = self._preprocess_contract(record)
             self.store.register_artifacts(record, handoff)
+            run_dir = self.store.run_dir(record.project_id, record.run_id)
+            keyframes_path = run_dir / "keyframes.json"
+            keyframe_payload = json.loads(keyframes_path.read_text(encoding="utf-8"))
+            frame_rows = keyframe_payload.get("frames", [])
+            scene_path, _, scene_warnings = analyze_scene(
+                run_dir,
+                frame_rows,
+                reconstruction_target=record.config.reconstruction_target,
+                masking_mode=record.config.masking_mode,
+            )
+            warnings.extend(scene_warnings)
+            self.store.register_artifacts(record, [scene_path])
             if record.config.enable_segmentation:
-                keyframes_path = self.store.run_dir(record.project_id, record.run_id) / "keyframes.json"
-                keyframe_payload = json.loads(keyframes_path.read_text(encoding="utf-8"))
-                frame_rows = keyframe_payload.get("frames", [])
                 segmentation_artifacts, segmentation_warnings = run_optional_segmentation(
-                    self.store.run_dir(record.project_id, record.run_id),
+                    run_dir,
                     record.run_id,
                     frame_rows,
                     record.config.segmentation_model_path,
+                    reconstruction_target=record.config.reconstruction_target,
+                    masking_mode=record.config.masking_mode,
                 )
                 warnings.extend(segmentation_warnings)
                 atomic_json(keyframes_path, keyframe_payload)
                 self.store.register_artifacts(
-                    record, [keyframes_path, *segmentation_artifacts]
+                    record, [keyframes_path, scene_path, *segmentation_artifacts]
+                )
+                blocking = [
+                    warning["message"]
+                    for warning in segmentation_warnings
+                    if warning["code"].startswith("REQUIRED_SEGMENTATION")
+                ]
+                if blocking:
+                    raise PipelineError(
+                        "Required reconstruction masking is unavailable: " + blocking[0]
+                    )
+            elif scene_warnings:
+                warnings.append(
+                    {
+                        "code": "SCENE_MASK_RECOMMENDATION_NOT_APPLIED",
+                        "message": (
+                            "Scene analysis recommended masking, but optional segmentation was "
+                            "not enabled; reconstruction will remain unmasked and dense gates may block."
+                        ),
+                    }
                 )
             updated_ingest = self._merge_telemetry_metadata(record, warnings)
             self.store.register_artifacts(record, [updated_ingest])
@@ -842,19 +959,25 @@ class PipelineRunner:
             self.store.register_artifacts(record, result.artifacts)
             alignment = self._align_to_local_metric(record, warnings)
             self.store.register_artifacts(record, alignment)
-            metrics_path = self.store.run_dir(record.project_id, record.run_id) / "sparse_metrics.json"
+            metrics_path = (
+                self.store.run_dir(record.project_id, record.run_id) / "sparse_metrics.json"
+            )
             atomic_json(
                 metrics_path,
                 result.metrics.model_dump(mode="json")
-                | {"registration_rate": result.metrics.registration_rate, "synthetic_fixture": record.synthetic_fixture},
+                | {
+                    "registration_rate": result.metrics.registration_rate,
+                    "synthetic_fixture": record.synthetic_fixture,
+                },
             )
-            benchmark_path = self.store.run_dir(record.project_id, record.run_id) / "matcher_benchmark.json"
+            benchmark_path = (
+                self.store.run_dir(record.project_id, record.run_id) / "matcher_benchmark.json"
+            )
             write_matcher_benchmark(benchmark_path, result.metrics, None)
             self.store.register_artifacts(record, [metrics_path, benchmark_path])
             alignment_report = json.loads(
                 (
-                    self.store.run_dir(record.project_id, record.run_id)
-                    / "local_transform.json"
+                    self.store.run_dir(record.project_id, record.run_id) / "local_transform.json"
                 ).read_text(encoding="utf-8")
             )
             if record.config.enable_dense_reconstruction:
@@ -868,12 +991,15 @@ class PipelineRunner:
                     record, result, alignment_report, warnings
                 )
                 self.store.register_artifacts(record, dense_artifacts)
-            self._transition(record, RunStatus.REPORTING, 85, "Generating trust and known-distance report.")
-            quality_path = self.store.run_dir(record.project_id, record.run_id) / "quality_report.json"
+            self._transition(
+                record, RunStatus.REPORTING, 85, "Generating trust and known-distance report."
+            )
+            quality_path = (
+                self.store.run_dir(record.project_id, record.run_id) / "quality_report.json"
+            )
             confidence_available = False
             if any(
-                artifact.relative_path == "point_confidence.json"
-                for artifact in record.artifacts
+                artifact.relative_path == "point_confidence.json" for artifact in record.artifacts
             ):
                 try:
                     validate_point_confidence_for_ply(
@@ -885,15 +1011,25 @@ class PipelineRunner:
                     )
                     confidence_available = True
                 except ValueError as exc:
-                    warnings.append(
-                        {"code": "INVALID_CONFIDENCE_ARTIFACT", "message": str(exc)}
-                    )
+                    warnings.append({"code": "INVALID_CONFIDENCE_ARTIFACT", "message": str(exc)})
             report = build_quality_report(
                 record,
                 result.metrics,
                 warnings,
                 alignment=alignment_report,
                 confidence_available=confidence_available,
+                scene_analysis=(
+                    json.loads(scene_path.read_text(encoding="utf-8"))
+                    if scene_path.is_file()
+                    else None
+                ),
+                frame_quality=(
+                    json.loads(
+                        (
+                            self.store.run_dir(record.project_id, record.run_id) / "keyframes.json"
+                        ).read_text(encoding="utf-8")
+                    ).get("frame_quality_gate", {})
+                ),
             )
             write_quality_report(quality_path, report)
             self.store.register_artifacts(record, [quality_path])
@@ -904,7 +1040,12 @@ class PipelineRunner:
             record.stage = RunStatus.FAILED
             record.status = RunStatus.FAILED
             record.events.append(
-                StageEvent(stage=RunStatus.FAILED, status="FAILED", progress=record.progress, message=str(exc))
+                StageEvent(
+                    stage=RunStatus.FAILED,
+                    status="FAILED",
+                    progress=record.progress,
+                    message=str(exc),
+                )
             )
             self.store.save_run(record)
             return record

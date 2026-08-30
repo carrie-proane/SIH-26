@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 
-def _normalize(values: Sequence[float], constant_value: float = 1.0) -> list[float]:
+def normalize_scores(values: Sequence[float], constant_value: float = 1.0) -> list[float]:
     if not values:
         return []
     low, high = min(values), max(values)
@@ -19,11 +19,19 @@ def _normalize(values: Sequence[float], constant_value: float = 1.0) -> list[flo
     return [(value - low) / (high - low) for value in values]
 
 
+def laplacian_variances(images: Sequence[np.ndarray]) -> list[float]:
+    """Return absolute Laplacian variance for reproducible sharpness gates."""
+
+    return [
+        float(cv2.Laplacian(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
+        for image in images
+    ]
+
+
 def blur_scores(images: Sequence[np.ndarray]) -> list[float]:
     """Return min-max normalized Laplacian variance (higher means sharper)."""
 
-    raw = [float(cv2.Laplacian(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()) for image in images]
-    return _normalize(raw)
+    return normalize_scores(laplacian_variances(images))
 
 
 def exposure_score(image: np.ndarray) -> float:
@@ -39,8 +47,12 @@ def exposure_score(image: np.ndarray) -> float:
     spread_score = min(1.0, variance**0.5 / 64.0)
     shadow_fraction = float(histogram[:5].sum())
     highlight_fraction = float(histogram[251:].sum())
-    clipping_penalty = min(1.0, max(0.0, shadow_fraction - 0.05) * 4 + max(0.0, highlight_fraction - 0.05) * 4)
-    return float(np.clip((0.65 * mean_score + 0.35 * spread_score) * (1.0 - clipping_penalty), 0.0, 1.0))
+    clipping_penalty = min(
+        1.0, max(0.0, shadow_fraction - 0.05) * 4 + max(0.0, highlight_fraction - 0.05) * 4
+    )
+    return float(
+        np.clip((0.65 * mean_score + 0.35 * spread_score) * (1.0 - clipping_penalty), 0.0, 1.0)
+    )
 
 
 def exposure_scores(images: Sequence[np.ndarray]) -> list[float]:
@@ -81,7 +93,7 @@ def redundancy_scores(images: Sequence[np.ndarray]) -> list[float]:
         if index < len(adjacent_similarity):
             neighbours.append(adjacent_similarity[index])
         raw.append(1.0 - sum(neighbours) / len(neighbours))
-    return _normalize(raw, constant_value=0.0)
+    return normalize_scores(raw, constant_value=0.0)
 
 
 def load_images(paths: Sequence[str | Path]) -> list[np.ndarray]:

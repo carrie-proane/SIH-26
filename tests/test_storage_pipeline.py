@@ -57,9 +57,7 @@ def test_missing_handoff_is_generated_from_matching_uploaded_inputs(
     store = ProjectStore(tmp_path / "projects")
     video = tmp_path / "new-flight.avi"
     telemetry = tmp_path / "new-flight.csv"
-    writer = cv2.VideoWriter(
-        str(video), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (160, 96)
-    )
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (160, 96))
     assert writer.isOpened()
     for index in range(20):
         image = np.full((96, 160, 3), 30 + index * 5, np.uint8)
@@ -102,11 +100,16 @@ def test_missing_handoff_is_generated_from_matching_uploaded_inputs(
     } <= {path.name for path in artifacts}
     metadata = json.loads((run_dir / "normalized_telemetry.meta.json").read_text())
     assert metadata["preprocessing_source"] == "AUTO_FROM_IMMUTABLE_RUN_INPUTS"
-    assert metadata["frame_selection_method"] == "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY"
+    assert metadata["frame_selection_method"] == "QUALITY_GATED_BLUR_EXPOSURE_REDUNDANCY"
+    assert metadata["frame_quality_gate"]["candidate_count"] >= 3
+    assert metadata["frame_quality_gate"]["selected_count"] >= 3
     keyframes = json.loads((run_dir / "keyframes.json").read_text())["frames"]
     selected = [frame for frame in keyframes if frame["selected"]]
     assert selected
-    assert all(frame["image_url"].startswith(f"/api/runs/{record.run_id}/artifacts/frames/") for frame in selected)
+    assert all(
+        frame["image_url"].startswith(f"/api/runs/{record.run_id}/artifacts/frames/")
+        for frame in selected
+    )
     with (run_dir / "frame_scores.csv").open(newline="", encoding="utf-8") as stream:
         score_rows = list(csv.DictReader(stream))
     assert score_rows
@@ -140,7 +143,9 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     ]
     declared = {artifact.relative_path for artifact in result.artifacts}
     assert "quality_report.json" in declared
-    quality = json.loads((store.run_dir(project.project_id, result.run_id) / "quality_report.json").read_text())
+    quality = json.loads(
+        (store.run_dir(project.project_id, result.run_id) / "quality_report.json").read_text()
+    )
     assert quality["synthetic_fixture"] is True
     assert quality["metrics"]["known_distance"]["passes_10_percent_gate"] is True
     assert quality["metrics"]["metric_alignment"]["scale"] == 1.0
@@ -186,9 +191,7 @@ def test_synthetic_telemetry_metadata_downgrades_a_colmap_run(tmp_path: Path) ->
         json.dumps(
             {
                 "schema_version": "1.0",
-                "warnings": [
-                    {"code": "SYNTHETIC_TELEMETRY", "detail": "Generated fixture"}
-                ],
+                "warnings": [{"code": "SYNTHETIC_TELEMETRY", "detail": "Generated fixture"}],
             }
         ),
         encoding="utf-8",
@@ -227,15 +230,9 @@ def test_calibrated_telemetry_offset_is_persisted_per_run(tmp_path: Path) -> Non
             up = 0.2 * math.sin(telemetry_time)
             name = f"frame_{index:04d}.jpg"
             writer.writerow([index, name, east, north, up])
-            keyframes.append(
-                {"image_name": name, "timestamp_s": timestamp, "selected": True}
-            )
-    (run_dir / "keyframes.json").write_text(
-        json.dumps({"frames": keyframes}), encoding="utf-8"
-    )
-    with (run_dir / "normalized_telemetry.csv").open(
-        "w", newline="", encoding="utf-8"
-    ) as stream:
+            keyframes.append({"image_name": name, "timestamp_s": timestamp, "selected": True})
+    (run_dir / "keyframes.json").write_text(json.dumps({"frames": keyframes}), encoding="utf-8")
+    with (run_dir / "normalized_telemetry.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(
             ["timestamp_s", "lat", "lon", "alt_m", "alt_source", "fix_quality", "source_row"]
@@ -335,3 +332,11 @@ def test_real_run_retains_ingest_artifact_when_automatic_preprocessing_fails(
     assert result.status == RunStatus.FAILED
     assert "Automatic frame extraction failed" in (result.failure_reason or "")
     assert "ingest_report.json" in {item.relative_path for item in result.artifacts}
+
+
+def test_primary_subject_configuration_enables_masking_and_rejects_off() -> None:
+    configured = RunConfig(reconstruction_target="PRIMARY_SUBJECT", masking_mode="AUTO")
+    assert configured.enable_segmentation is True
+
+    with pytest.raises(ValueError, match="PRIMARY_SUBJECT reconstruction requires"):
+        RunConfig(reconstruction_target="PRIMARY_SUBJECT", masking_mode="OFF")

@@ -11,9 +11,15 @@ import cv2
 import numpy as np
 
 from frames.contact_sheet import create_contact_sheet
-from frames.extractor import detect_rotation, extract_frames
+from frames.extractor import ExtractedFrame, detect_rotation, extract_frames
 from frames.scoring import blur_scores, exposure_score, redundancy_scores
-from frames.selector import FRAME_SCORE_COLUMNS, SelectionWeights, select_indices, select_keyframes
+from frames.selector import (
+    FRAME_SCORE_COLUMNS,
+    FrameQualityThresholds,
+    SelectionWeights,
+    select_indices,
+    select_keyframes,
+)
 
 
 def make_video(path: Path, frame_count: int = 30, fps: float = 10.0) -> None:
@@ -48,7 +54,9 @@ def test_negative_90_display_matrix_is_applied_once(tmp_path: Path, monkeypatch)
 
 
 def test_rotation_detector_reads_negative_display_matrix(monkeypatch) -> None:
-    completed = subprocess.CompletedProcess([], 0, '{"streams":[{"side_data_list":[{"rotation":-90}]}]}', "")
+    completed = subprocess.CompletedProcess(
+        [], 0, '{"streams":[{"side_data_list":[{"rotation":-90}]}]}', ""
+    )
     monkeypatch.setattr("frames.extractor.subprocess.run", lambda *args, **kwargs: completed)
     assert detect_rotation("portrait.mp4") == 270
 
@@ -80,7 +88,9 @@ def test_redundancy_marks_duplicate_as_low_value() -> None:
 def test_selector_respects_minimum_temporal_spacing() -> None:
     chosen = select_indices([0.9, 1.0, 0.8, 0.7], [0.0, 0.2, 1.0, 2.0], 3, 0.75)
     times = [[0.0, 0.2, 1.0, 2.0][index] for index in chosen]
-    assert all(abs(a - b) >= 0.75 for position, a in enumerate(times) for b in times[position + 1:])
+    assert all(
+        abs(a - b) >= 0.75 for position, a in enumerate(times) for b in times[position + 1 :]
+    )
 
 
 def test_pipeline_artifacts_match_contract_and_contact_sheet_is_valid(tmp_path: Path) -> None:
@@ -88,14 +98,19 @@ def test_pipeline_artifacts_match_contract_and_contact_sheet_is_valid(tmp_path: 
     run = tmp_path / "run"
     make_video(video, frame_count=20)
     extraction = extract_frames(video, run, every_nth=2)
-    rows = select_keyframes(extraction.frames, run, target_frames=4, weights=SelectionWeights(), min_spacing_s=0.3)
+    rows = select_keyframes(
+        extraction.frames, run, target_frames=4, weights=SelectionWeights(), min_spacing_s=0.3
+    )
     create_contact_sheet(rows, run / "contact_sheet.png", columns=3, thumbnail_width=120)
     with (run / "frame_scores.csv").open(newline="") as handle:
         assert next(csv.reader(handle)) == FRAME_SCORE_COLUMNS
     payload = json.loads((run / "keyframes.json").read_text())
     assert payload["schema_version"] == "1.0"
     assert sum(frame["selected"] for frame in payload["frames"]) == 4
-    assert all(set(FRAME_SCORE_COLUMNS + ["image_name", "path"]) <= set(frame) for frame in payload["frames"])
+    assert all(
+        set(FRAME_SCORE_COLUMNS + ["image_name", "path"]) <= set(frame)
+        for frame in payload["frames"]
+    )
     assert cv2.imread(str(run / "contact_sheet.png")) is not None
 
 
@@ -126,3 +141,32 @@ def test_overrides_are_recorded_and_preserve_minimum_selection(tmp_path: Path) -
     assert decisions[0]["override"] == "FORCE_EXCLUDE"
     assert decisions[0]["selected"] is False
     assert sum(bool(row["selected"]) for row in rows) >= 3
+
+
+def test_selector_does_not_choose_blurred_frame_to_reach_target(tmp_path: Path) -> None:
+    frames: list[ExtractedFrame] = []
+    for index in range(4):
+        image = np.zeros((120, 160, 3), np.uint8)
+        if index < 3:
+            image[::3, :] = 255
+            image[:, ::5] = 180
+        destination = tmp_path / f"frame_{index:06d}.jpg"
+        assert cv2.imwrite(str(destination), image)
+        frames.append(ExtractedFrame(index, float(index), "capture.mp4", str(destination)))
+
+    rows = select_keyframes(
+        frames,
+        tmp_path / "selection",
+        target_frames=4,
+        min_spacing_s=0,
+        quality_thresholds=FrameQualityThresholds(
+            min_laplacian_variance=40,
+            min_exposure_score=0,
+            relative_sharpness_floor=0.6,
+        ),
+    )
+
+    assert sum(bool(row["selected"]) for row in rows) == 3
+    assert rows[-1]["quality_eligible"] is False
+    assert rows[-1]["selected"] is False
+    assert "BELOW_SHARPNESS_GATE" in str(rows[-1]["quality_rejection_reasons"])

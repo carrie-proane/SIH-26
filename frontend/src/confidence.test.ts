@@ -32,6 +32,9 @@ describe("explicit point-confidence contract", () => {
   it("never maps photographic PLY RGB values to confidence classes", () => {
     expect(viewerSource).not.toContain("nearestConfidence");
     expect(viewerSource).not.toContain("hexToRgb");
+    expect(viewerSource).not.toContain("color: item.color");
+    expect(viewerSource).toContain("group.colors.push(");
+    expect(viewerSource).toContain('vertexColors: Boolean(labelColor)');
     expect(viewerSource).toContain("photographic-rgb-point-cloud");
     expect(viewerSource).toContain("Visual estimate - verification confidence unavailable");
   });

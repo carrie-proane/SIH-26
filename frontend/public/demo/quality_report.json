@@ -29,7 +29,15 @@
       "percent_error": 6.0,
       "passes_10_percent_gate": true
     },
-    "coverage": { "status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied." }
+    "coverage": { "status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied." },
+    "reconstruction_policy": {
+      "target": "FULL_SCENE",
+      "masking_mode": "AUTO",
+      "masking_decision": "UNMASKED_FALLBACK",
+      "scene_recommendation": "UNMASKED_ACCEPTABLE",
+      "dense_suitability": "PROCEED_WITH_GATES",
+      "operational_masks_declared": false
+    }
   },
   "confidence_artifact": {
     "available": false,

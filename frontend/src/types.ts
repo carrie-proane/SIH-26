@@ -109,7 +109,10 @@ export interface ViewerManifest {
   visual_models?: {
     evidence_cloud: VisualModel;
     dense_cloud: VisualModel;
-    textured_mesh: VisualModel & { texture_urls?: string[] };
+    textured_mesh: VisualModel & {
+      texture_urls?: string[];
+      texture_validity?: TextureValidityContract | null;
+    };
     gaussian_splat: VisualModel;
     dense_report_url?: string | null;
   };
@@ -144,6 +147,12 @@ export interface ViewerManifest {
   };
   quality_report_url: string;
   ingest_report_url?: string;
+  scene_policy?: {
+    target: "FULL_SCENE" | "PRIMARY_SUBJECT";
+    masking_mode: "OFF" | "AUTO" | "REQUIRED";
+    analysis_url?: string | null;
+    segmentation_report_url?: string | null;
+  };
   ai_overlay?: {
     available: boolean;
     label: "AI_ASSISTED_NOT_MEASURABLE";
@@ -164,6 +173,13 @@ export interface VisualModel {
   statement?: string;
 }
 
+export interface TextureValidityContract {
+  strategy: "ATLAS_EMPTY_COLOR";
+  empty_rgb: [number, number, number];
+  empty_tolerance: number;
+  minimum_supported_samples: number;
+}
+
 export type VisualMode = "EVIDENCE" | "TEXTURED" | "PHOTOREAL";
 
 export interface Keyframe {
@@ -177,9 +193,13 @@ export interface Keyframe {
   depth_overlay_url?: string;
   source?: string;
   blur_score?: number;
+  laplacian_variance?: number;
+  quality_eligible?: boolean;
+  quality_rejection_reasons?: string;
   exposure_score?: number;
   redundancy_score?: number;
   dynamic_mask_fraction?: number;
+  mask_semantics?: "NONZERO_IS_EXCLUDED";
   selected_automatically?: boolean;
   override?: "NONE" | "FORCE_INCLUDE" | "FORCE_EXCLUDE";
   confidence?: ConfidenceLabel;
@@ -217,6 +237,8 @@ export interface QualityReport {
     telemetry_sync?: Record<string, unknown>;
     known_distance?: Record<string, unknown>;
     coverage?: Record<string, unknown>;
+    frame_quality_gate?: Record<string, unknown>;
+    reconstruction_policy?: Record<string, unknown>;
   };
   warnings: Array<{ code: string; message: string }>;
   limitations: string[];

@@ -11,6 +11,9 @@ interface UploadInput {
   knownDistanceM?: number;
   useGpu: boolean;
   enableDenseReconstruction: boolean;
+  reconstructionTarget: "FULL_SCENE" | "PRIMARY_SUBJECT";
+  maskingMode: "OFF" | "AUTO" | "REQUIRED";
+  segmentationModelPath: string;
 }
 
 interface SetupScreenProps {
@@ -46,6 +49,11 @@ export function SetupScreen({
   const [knownDistance, setKnownDistance] = useState("");
   const [useGpu, setUseGpu] = useState(false);
   const [enableDenseReconstruction, setEnableDenseReconstruction] = useState(false);
+  const [reconstructionTarget, setReconstructionTarget] = useState<
+    "FULL_SCENE" | "PRIMARY_SUBJECT"
+  >("FULL_SCENE");
+  const [maskingMode, setMaskingMode] = useState<"OFF" | "AUTO" | "REQUIRED">("AUTO");
+  const [segmentationModelPath, setSegmentationModelPath] = useState("");
   const [localError, setLocalError] = useState("");
 
   const submit = (event: FormEvent) => {
@@ -77,6 +85,9 @@ export function SetupScreen({
       knownDistanceM: knownDistance ? Number(knownDistance) : undefined,
       useGpu,
       enableDenseReconstruction,
+      reconstructionTarget,
+      maskingMode,
+      segmentationModelPath: segmentationModelPath.trim(),
     });
   };
 
@@ -154,6 +165,19 @@ export function SetupScreen({
             </label>
           </div>
 
+          <details className="capture-guidance">
+            <summary>Capture quality requirements</summary>
+            <ul>
+              <li>Keep the subject large in frame and complete a slow orbit at multiple heights.</li>
+              <li>Maintain strong overlap, locked focus/exposure and minimal motion blur.</li>
+              <li>Avoid scene cuts, digital zoom and large moving or reflective regions.</li>
+            </ul>
+            <p>
+              Automatic preprocessing rejects frames below recorded sharpness and exposure gates;
+              it will not add poor frames merely to reach a target count.
+            </p>
+          </details>
+
           <details className="advanced-settings">
             <summary>Advanced preprocessing options</summary>
             <label className="field">
@@ -212,6 +236,50 @@ export function SetupScreen({
             />
             <span>Attempt optional dense visual model</span>
           </label>
+          <div className="compact-fields reconstruction-policy-fields">
+            <label className="field">
+              <span>Reconstruction target</span>
+              <select
+                value={reconstructionTarget}
+                onChange={(event) => {
+                  const target = event.target.value as "FULL_SCENE" | "PRIMARY_SUBJECT";
+                  setReconstructionTarget(target);
+                  if (target === "PRIMARY_SUBJECT" && maskingMode === "OFF") {
+                    setMaskingMode("AUTO");
+                  }
+                }}
+              >
+                <option value="FULL_SCENE">Full static scene</option>
+                <option value="PRIMARY_SUBJECT">Primary subject</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Scene-aware masking</span>
+              <select
+                value={maskingMode}
+                onChange={(event) =>
+                  setMaskingMode(event.target.value as "OFF" | "AUTO" | "REQUIRED")
+                }
+                disabled={reconstructionTarget === "PRIMARY_SUBJECT"}
+              >
+                <option value="AUTO">Auto, with honest fallback</option>
+                <option value="REQUIRED">Required; stop if unavailable</option>
+                <option value="OFF">Off</option>
+              </select>
+            </label>
+          </div>
+          <label className="field segmentation-model-field">
+            <span>Local segmentation weights <small>optional for Auto</small></span>
+            <input
+              value={segmentationModelPath}
+              onChange={(event) => setSegmentationModelPath(event.target.value)}
+              placeholder="Local .pt weights path; nothing is downloaded automatically"
+            />
+          </label>
+          <p className="policy-caveat">
+            Masks exclude unstable/background pixels from sparse features, dense matching and
+            texturing. Primary-subject mode always requires a valid mask.
+          </p>
 
           {(localError || error) && <div className="form-error" role="alert">{localError || error}</div>}
           <button className="primary-action" type="submit" disabled={busy}>

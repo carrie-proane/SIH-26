@@ -23,6 +23,13 @@ const manifest = {
 describe("visual reconstruction protections", () => {
   it("keeps measurement bound to evidence geometry", () => {
     expect(visualModeMeasurementEligible("EVIDENCE", manifest)).toBe(true);
+    expect(
+      visualModeMeasurementEligible("EVIDENCE", {
+        visual_models: {
+          evidence_cloud: { available: true, measurement_eligible: false },
+        },
+      } as ViewerManifest),
+    ).toBe(false);
     expect(visualModeMeasurementEligible("TEXTURED", manifest)).toBe(false);
     expect(visualModeMeasurementEligible("PHOTOREAL", manifest)).toBe(false);
   });
