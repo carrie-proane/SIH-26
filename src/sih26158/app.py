@@ -14,7 +14,9 @@ from .pipeline import PipelineRunner
 from .storage import ProjectStore
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+# The local `.env` is the developer runtime contract for this app. Override stale inherited values
+# so a previously exported OPENMVS_BIN cannot silently select another install.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 
 
 def create_app(data_root: str | Path | None = None) -> FastAPI:

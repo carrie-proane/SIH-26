@@ -178,6 +178,45 @@ def test_openmvs_uses_openmvs_bin_environment_directory(tmp_path: Path, monkeypa
     assert calls == [[str(bin_dir / "TextureMesh"), "-h"]]
 
 
+def test_openmvs_passes_installed_metal_library_to_subprocesses(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    install_dir = tmp_path / "openmvs-install"
+    bin_dir = install_dir / "bin" / "OpenMVS"
+    metal_dir = install_dir / "share" / "OpenMVS" / "Metal"
+    bin_dir.mkdir(parents=True)
+    metal_dir.mkdir(parents=True)
+    (metal_dir / "OpenMVSMetal.metallib").write_bytes(b"metal")
+    monkeypatch.setenv("OPENMVS_BIN", str(bin_dir))
+    monkeypatch.delenv("OPENMVS_METAL_LIBRARY_PATH", raising=False)
+
+    provider = OpenMVSProvider()
+
+    environment = provider._runtime_env()
+
+    assert environment["OPENMVS_METAL_LIBRARY_PATH"] == str(
+        metal_dir / "OpenMVSMetal.metallib"
+    )
+
+
+def test_openmvs_metal_capability_probe_reports_self_test() -> None:
+    provider = OpenMVSProvider(
+        runner=lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            [],
+            0,
+            "Metal backend: available\nMetal GPU: Apple M4\nMetal compute self-test: PASS\n",
+            "",
+        )
+    )
+
+    provider._tool_available = lambda _name: True  # type: ignore[method-assign]
+
+    status, reason = provider.metal_capability()
+
+    assert status == "AVAILABLE"
+    assert "Apple M4" in reason
+
+
 class _FailingProvider(DenseReconstructionProvider):
     name = "MOCK_DENSE"
 

@@ -30,6 +30,7 @@ OPENMVS_EMPTY_TEXTURE_COLORS = (
 MIN_TEXTURE_COVERAGE = 0.15
 MAX_PRIMARY_CLIP_FRACTION = 0.02
 OPENMVS_BIN_ENV = "OPENMVS_BIN"
+OPENMVS_METAL_LIBRARY_ENV = "OPENMVS_METAL_LIBRARY_PATH"
 
 
 class DenseProviderError(RuntimeError):
@@ -602,7 +603,12 @@ class OpenMVSProvider(DenseReconstructionProvider):
         configured_bin = (
             openmvs_bin if openmvs_bin is not None else os.environ.get(OPENMVS_BIN_ENV)
         )
-        self.openmvs_bin = Path(configured_bin).expanduser() if configured_bin else None
+        configured_path = Path(configured_bin).expanduser() if configured_bin else None
+        self.openmvs_bin = (
+            configured_path.parent
+            if configured_path is not None and configured_path.is_file()
+            else configured_path
+        )
 
     def _tool(self, name: str) -> str:
         """Resolve an OpenMVS executable from OPENMVS_BIN or the process PATH."""
@@ -616,6 +622,54 @@ class OpenMVSProvider(DenseReconstructionProvider):
             candidate = self.openmvs_bin / name
             return candidate.is_file() and os.access(candidate, os.X_OK)
         return shutil.which(name) is not None
+
+    def _metal_library_path(self) -> Path | None:
+        """Return the installed Metal shader library next to the configured binaries."""
+
+        if self.openmvs_bin is None:
+            return None
+        candidate = (
+            self.openmvs_bin.parent.parent
+            / "share"
+            / "OpenMVS"
+            / "Metal"
+            / "OpenMVSMetal.metallib"
+        )
+        return candidate if candidate.is_file() else None
+
+    def _runtime_env(self) -> dict[str, str]:
+        """Pass the bundled Metal shader library to every OpenMVS subprocess."""
+
+        environment = os.environ.copy()
+        library = self._metal_library_path()
+        if library is not None and not environment.get(OPENMVS_METAL_LIBRARY_ENV):
+            environment[OPENMVS_METAL_LIBRARY_ENV] = str(library)
+        return environment
+
+    def metal_capability(self) -> tuple[str, str]:
+        """Probe the configured DensifyPointCloud binary without blocking CPU fallback."""
+
+        if not self._tool_available("DensifyPointCloud"):
+            return "UNAVAILABLE", "DensifyPointCloud is unavailable"
+        try:
+            output = self._help("DensifyPointCloud")
+        except (OSError, subprocess.SubprocessError) as exc:
+            return "UNKNOWN", f"Metal capability probe failed: {exc}"
+        if "Metal backend: available" in output and "Metal compute self-test: PASS" in output:
+            device = next(
+                (
+                    line.split(":", 1)[1].strip()
+                    for line in output.splitlines()
+                    if "Metal GPU:" in line
+                ),
+                "unknown device",
+            )
+            return "AVAILABLE", f"Metal compute self-test passed ({device})"
+        if "Metal backend: unavailable" in output:
+            return "UNAVAILABLE", "DensifyPointCloud reports Metal backend unavailable"
+        if "Metal compute self-test: FAIL" in output:
+            return "FAILED", "DensifyPointCloud reports a failed Metal compute self-test"
+        return "UNKNOWN", "DensifyPointCloud did not report a Metal capability status"
 
     def availability(self) -> tuple[bool, str]:
         missing = [tool for tool in self.tools if not self._tool_available(tool)]
@@ -634,7 +688,8 @@ class OpenMVSProvider(DenseReconstructionProvider):
         return True, f"OpenMVS external command suite is installed ({location})"
 
     def _execute(self, command: list[str], log_path: Path) -> None:
-        resolved_command = [self._tool(command[0]), *command[1:]]
+        executable = self._tool(command[0]) if command[0] in self.tools else command[0]
+        resolved_command = [executable, *command[1:]]
         with log_path.open("a", encoding="utf-8") as stream:
             stream.write("$ " + " ".join(resolved_command) + "\n")
             completed = self.runner(
@@ -643,6 +698,7 @@ class OpenMVSProvider(DenseReconstructionProvider):
                 stderr=subprocess.STDOUT,
                 text=True,
                 check=False,
+                env=self._runtime_env(),
             )
         if completed.returncode:
             raise DenseProviderError(
@@ -651,7 +707,11 @@ class OpenMVSProvider(DenseReconstructionProvider):
 
     def _help(self, command: str) -> str:
         completed = self.runner(
-            [self._tool(command), "-h"], capture_output=True, text=True, check=False
+            [self._tool(command), "-h"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=self._runtime_env(),
         )
         return (completed.stdout or "") + (completed.stderr or "")
 
@@ -728,6 +788,7 @@ class OpenMVSProvider(DenseReconstructionProvider):
         available, reason = self.availability()
         if not available:
             raise DenseProviderError(reason)
+        metal_status, metal_reason = self.metal_capability()
         started = time.monotonic()
         dense_dir = context.run_dir / "dense"
         raw_dir = dense_dir / "openmvs_sfm"
@@ -886,6 +947,15 @@ class OpenMVSProvider(DenseReconstructionProvider):
             self._execute(command, log_path)
 
         warnings: list[dict[str, str]] = []
+        if metal_status in {"UNAVAILABLE", "FAILED"}:
+            warnings.append(
+                {
+                    "code": "OPENMVS_METAL_UNAVAILABLE",
+                    "message": (
+                        f"{metal_reason}; continuing with the configured OpenMVS CPU path."
+                    ),
+                }
+            )
         texture_assessment = TextureAtlasAssessment(
             status="NOT_PRODUCED",
             accepted=False,
@@ -999,6 +1069,9 @@ class OpenMVSProvider(DenseReconstructionProvider):
             quality_profile={
                 "requested": context.profile,
                 "provider": self.name,
+                "openmvs_bin": str(self.openmvs_bin) if self.openmvs_bin is not None else None,
+                "metal_backend": metal_status,
+                "metal_backend_reason": metal_reason,
                 "resolution_level": profile_settings.resolution_level,
                 "minimum_fusion_support": profile_settings.number_views_fuse,
                 "visibility_filter": profile_settings.filter_point_cloud,

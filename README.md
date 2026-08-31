@@ -16,7 +16,7 @@ Requirements: Python 3.11+, FFmpeg/ffprobe, and COLMAP for genuine runs.
 The backend loads a local `.env` file when it starts. For the local OpenMVS fallback, set
 `OPENMVS_BIN` to the directory containing `InterfaceCOLMAP`, `DensifyPointCloud`, `ReconstructMesh`,
 `RefineMesh`, and `TextureMesh`. `.env` is intentionally git-ignored because this path is machine-
-specific.
+specific, and its value takes precedence over a stale inherited `OPENMVS_BIN` export.
 
 ```bash
 OPENMVS_BIN=/Users/arnavpatidar/Developer/openmvs_workspace/openMVS_metal_install/bin/OpenMVS
@@ -79,6 +79,11 @@ is preferred; an installed OpenMVS command suite is the external fallback. If ne
 or if dense processing fails, `dense_report.json`, `dense_commands.json`, and `logs/dense.log`
 record the blocker while the valid sparse run remains completed. Dense and textured artifacts are
 visual-only and are never promoted to verified measurement geometry.
+
+When `OPENMVS_BIN` points to an install directory, the backend invokes every OpenMVS executable by
+absolute path and automatically passes the sibling `share/OpenMVS/Metal/OpenMVSMetal.metallib` to
+the subprocess environment when present. The dense report records the Metal capability probe. A
+failed or unavailable Metal self-test is reported honestly and leaves the CPU OpenMVS path available.
 
 Every run now writes `scene_analysis.json`. Scene-aware masking is optional and configurable:
 

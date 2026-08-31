@@ -14,7 +14,9 @@ from .models import MatcherMetrics, ProvenanceOrigin, RunConfig
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+# Keep CLI runs aligned with the backend's local OpenMVS installation, even when the shell has an
+# older OPENMVS_BIN export.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 
 
 def _demo(args: argparse.Namespace) -> int:
