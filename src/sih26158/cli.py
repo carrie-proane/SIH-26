@@ -7,10 +7,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from .colmap import write_matcher_benchmark
 from .models import MatcherMetrics, ProvenanceOrigin, RunConfig
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 def _demo(args: argparse.Namespace) -> int:

@@ -154,6 +154,30 @@ def test_dense_unavailable_records_blocker(tmp_path: Path) -> None:
     assert not (context.run_dir / "dense/fused.ply").exists()
 
 
+def test_openmvs_uses_openmvs_bin_environment_directory(tmp_path: Path, monkeypatch: object) -> None:
+    bin_dir = tmp_path / "openmvs-bin"
+    bin_dir.mkdir()
+    for tool in OpenMVSProvider.tools:
+        executable = bin_dir / tool
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        executable.chmod(0o755)
+    monkeypatch.setenv("OPENMVS_BIN", str(bin_dir))
+    calls: list[list[str]] = []
+
+    def runner(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "--resolution-level", "")
+
+    provider = OpenMVSProvider(runner=runner)
+
+    available, reason = provider.availability()
+
+    assert available is True
+    assert f"OPENMVS_BIN={bin_dir}" in reason
+    provider._help("TextureMesh")
+    assert calls == [[str(bin_dir / "TextureMesh"), "-h"]]
+
+
 class _FailingProvider(DenseReconstructionProvider):
     name = "MOCK_DENSE"
 

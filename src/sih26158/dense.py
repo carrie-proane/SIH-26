@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -28,6 +29,7 @@ OPENMVS_EMPTY_TEXTURE_COLORS = (
 )
 MIN_TEXTURE_COVERAGE = 0.15
 MAX_PRIMARY_CLIP_FRACTION = 0.02
+OPENMVS_BIN_ENV = "OPENMVS_BIN"
 
 
 class DenseProviderError(RuntimeError):
@@ -593,21 +595,50 @@ class OpenMVSProvider(DenseReconstructionProvider):
         self,
         runner: CommandRunner = subprocess.run,
         colmap_binary: str = "colmap",
+        openmvs_bin: str | Path | None = None,
     ) -> None:
         self.runner = runner
         self.colmap_binary = colmap_binary
+        configured_bin = (
+            openmvs_bin if openmvs_bin is not None else os.environ.get(OPENMVS_BIN_ENV)
+        )
+        self.openmvs_bin = Path(configured_bin).expanduser() if configured_bin else None
+
+    def _tool(self, name: str) -> str:
+        """Resolve an OpenMVS executable from OPENMVS_BIN or the process PATH."""
+
+        if self.openmvs_bin is not None:
+            return str(self.openmvs_bin / name)
+        return name
+
+    def _tool_available(self, name: str) -> bool:
+        if self.openmvs_bin is not None:
+            candidate = self.openmvs_bin / name
+            return candidate.is_file() and os.access(candidate, os.X_OK)
+        return shutil.which(name) is not None
 
     def availability(self) -> tuple[bool, str]:
-        missing = [tool for tool in self.tools if shutil.which(tool) is None]
+        missing = [tool for tool in self.tools if not self._tool_available(tool)]
         if missing:
-            return False, "OpenMVS tools unavailable: " + ", ".join(missing)
-        return True, "OpenMVS external command suite is installed"
+            location = (
+                f"OPENMVS_BIN={self.openmvs_bin}"
+                if self.openmvs_bin is not None
+                else "PATH"
+            )
+            return False, f"OpenMVS tools unavailable in {location}: " + ", ".join(missing)
+        location = (
+            f"OPENMVS_BIN={self.openmvs_bin}"
+            if self.openmvs_bin is not None
+            else "PATH"
+        )
+        return True, f"OpenMVS external command suite is installed ({location})"
 
     def _execute(self, command: list[str], log_path: Path) -> None:
+        resolved_command = [self._tool(command[0]), *command[1:]]
         with log_path.open("a", encoding="utf-8") as stream:
-            stream.write("$ " + " ".join(command) + "\n")
+            stream.write("$ " + " ".join(resolved_command) + "\n")
             completed = self.runner(
-                command,
+                resolved_command,
                 stdout=stream,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -619,7 +650,9 @@ class OpenMVSProvider(DenseReconstructionProvider):
             )
 
     def _help(self, command: str) -> str:
-        completed = self.runner([command, "-h"], capture_output=True, text=True, check=False)
+        completed = self.runner(
+            [self._tool(command), "-h"], capture_output=True, text=True, check=False
+        )
         return (completed.stdout or "") + (completed.stderr or "")
 
     def _require_flags(self, command: str, flags: tuple[str, ...]) -> None:

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Annotated
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -12,6 +13,8 @@ from .models import ProjectManifest, ProvenanceOrigin, RunConfig, RunRecord
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 def create_app(data_root: str | Path | None = None) -> FastAPI:

@@ -13,6 +13,15 @@ run manifest, metrics, and quality report.
 
 Requirements: Python 3.11+, FFmpeg/ffprobe, and COLMAP for genuine runs.
 
+The backend loads a local `.env` file when it starts. For the local OpenMVS fallback, set
+`OPENMVS_BIN` to the directory containing `InterfaceCOLMAP`, `DensifyPointCloud`, `ReconstructMesh`,
+`RefineMesh`, and `TextureMesh`. `.env` is intentionally git-ignored because this path is machine-
+specific.
+
+```bash
+OPENMVS_BIN=/Users/arnavpatidar/Developer/openmvs_workspace/openMVS_metal_install/bin/OpenMVS
+```
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
