@@ -10,10 +10,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from frames.contact_sheet import create_contact_sheet
-from frames.extractor import ExtractedFrame, detect_rotation, extract_frames
-from frames.scoring import blur_scores, exposure_score, redundancy_scores
-from frames.selector import (
+from sih26158.preprocessing.frames.contact_sheet import create_contact_sheet
+from sih26158.preprocessing.frames.extractor import ExtractedFrame, detect_rotation, extract_frames
+from sih26158.preprocessing.frames.scoring import blur_scores, exposure_score, redundancy_scores
+from sih26158.preprocessing.frames.selector import (
     FRAME_SCORE_COLUMNS,
     FrameQualityThresholds,
     SelectionWeights,
@@ -47,7 +47,9 @@ def test_extraction_produces_expected_count_and_index(tmp_path: Path) -> None:
 def test_negative_90_display_matrix_is_applied_once(tmp_path: Path, monkeypatch) -> None:
     video = tmp_path / "rotated.avi"
     make_video(video, frame_count=1)
-    monkeypatch.setattr("frames.extractor.detect_rotation", lambda _: 270)
+    monkeypatch.setattr(
+        "sih26158.preprocessing.frames.extractor.detect_rotation", lambda _: 270
+    )
     result = extract_frames(video, tmp_path / "run", every_nth=1)
     image = cv2.imread(result.frames[0].frame_path)
     assert image.shape[:2] == (160, 96)
@@ -57,7 +59,10 @@ def test_rotation_detector_reads_negative_display_matrix(monkeypatch) -> None:
     completed = subprocess.CompletedProcess(
         [], 0, '{"streams":[{"side_data_list":[{"rotation":-90}]}]}', ""
     )
-    monkeypatch.setattr("frames.extractor.subprocess.run", lambda *args, **kwargs: completed)
+    monkeypatch.setattr(
+        "sih26158.preprocessing.frames.extractor.subprocess.run",
+        lambda *args, **kwargs: completed,
+    )
     assert detect_rotation("portrait.mp4") == 270
 
 

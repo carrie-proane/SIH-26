@@ -1,6 +1,6 @@
-from sih26158.colmap import choose_matcher
 from sih26158.models import MatcherMetrics
-from sih26158.report import known_distance_metrics
+from sih26158.reconstruction.colmap import choose_matcher
+from sih26158.reporting.report import known_distance_metrics
 
 
 def metric(name: str, registered: int, reprojection: float) -> MatcherMetrics:
@@ -25,4 +25,3 @@ def test_learned_matcher_must_improve_evidence() -> None:
     assert choose_matcher(metric("SIFT", 80, 1.2), metric("SUPERPOINT_LIGHTGLUE", 84, 1.3))[0] == "SUPERPOINT_LIGHTGLUE"
     assert choose_matcher(metric("SIFT", 80, 1.2), metric("SUPERPOINT_LIGHTGLUE", 79, 0.8))[0] == "SIFT"
     assert choose_matcher(metric("SIFT", 80, 1.2), metric("SUPERPOINT_LIGHTGLUE", 80, 1.0))[0] == "SUPERPOINT_LIGHTGLUE"
-

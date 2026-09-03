@@ -153,7 +153,7 @@ def write_srt(rows: list[dict], path: Path, rate_hz: float) -> None:
             h = int(v // 3600)
             m = int((v % 3600) // 60)
             s = int(v % 60)
-            ms = int(round((v - int(v)) * 1000))
+            ms = round((v - int(v)) * 1000)
             if ms == 1000:
                 s, ms = s + 1, 0
             return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
@@ -180,11 +180,13 @@ def write_csv(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("timestamp_s,latitude,longitude,altitude(m),heading_deg\n")
-        for r in rows:
-            fh.write(
+        fh.writelines(
+            (
                 f"{r['t']:.3f},{r['lat']:.7f},{r['lon']:.7f},"
                 f"{r['alt']:.3f},{r['heading']:.1f}\n"
             )
+            for r in rows
+        )
 
 
 def write_truth(rows: list[dict], path: Path, args) -> None:

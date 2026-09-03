@@ -10,11 +10,11 @@ import {
   pollRun,
   startRun,
   uploadProject,
-} from "./api";
-import { ProgressScreen } from "./components/ProgressScreen";
-import { SetupScreen, type UploadInput } from "./components/SetupScreen";
-import { Workspace } from "./components/Workspace";
-import type { ProjectManifest, RunRecord, ViewerBundle } from "./types";
+} from "./services/api";
+import type { ProjectManifest, RunRecord, ViewerBundle } from "./domain/contracts";
+import { ProgressScreen } from "./features/pipeline/ProgressScreen";
+import { SetupScreen, type UploadInput } from "./features/setup/SetupScreen";
+import { Workspace } from "./features/viewer/Workspace";
 
 type Screen = "SETUP" | "PROCESSING" | "WORKSPACE";
 
@@ -83,12 +83,17 @@ export default function App() {
         matcher: "SIFT",
         use_gpu: input.useGpu,
         enable_dense_reconstruction: input.enableDenseReconstruction,
+        enable_surface_completion: input.enableSurfaceCompletion,
+        surface_completion_samples: 3,
         reconstruction_target: input.reconstructionTarget,
         masking_mode: input.maskingMode,
         enable_segmentation: input.maskingMode !== "OFF",
       };
       if (input.segmentationModelPath) {
         config.segmentation_model_path = input.segmentationModelPath;
+      }
+      if (input.surfaceCompletionModelPath) {
+        config.surface_completion_model_path = input.surfaceCompletionModelPath;
       }
       if (input.preprocessingRun) config.preprocessing_run = input.preprocessingRun;
       if (input.forceIncludeFrameIndices.length) {

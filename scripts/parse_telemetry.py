@@ -11,8 +11,8 @@ Usage
 Format is auto-detected from the file extension unless --format is given.
 Exit codes: 0 = parsed, 2 = parsed but unusable (no records), 1 = hard error.
 
-This is Yosha's Day-1 spike entrypoint. Jay's pipeline calls the library
-functions in src/telemetry directly rather than shelling out to this.
+The production pipeline calls the library functions in
+``sih26158.preprocessing.telemetry`` directly rather than shelling out to this utility.
 """
 
 from __future__ import annotations
@@ -21,11 +21,9 @@ import argparse
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from src.telemetry.csv_parser import parse_csv
-from src.telemetry.models import sha256_file, write_csv, write_meta
-from src.telemetry.srt_parser import parse_srt
+from sih26158.preprocessing.telemetry.csv_parser import parse_csv
+from sih26158.preprocessing.telemetry.models import sha256_file, write_csv, write_meta
+from sih26158.preprocessing.telemetry.srt_parser import parse_srt
 
 
 def detect_format(path: Path) -> str:

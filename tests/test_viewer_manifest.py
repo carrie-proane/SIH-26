@@ -4,8 +4,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from sih26158.app import create_app
+from sih26158.infrastructure.storage import atomic_json
 from sih26158.models import RunConfig
-from sih26158.storage import atomic_json
 
 
 def _create_project(client: TestClient) -> str:
@@ -66,6 +66,8 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
         assert payload["visual_models"]["textured_mesh"]["available"] is False
         assert payload["visual_models"]["gaussian_splat"]["available"] is False
         assert payload["visual_models"]["gaussian_splat"]["measurement_eligible"] is False
+        assert payload["visual_models"]["ai_completed_mesh"]["available"] is False
+        assert payload["visual_models"]["ai_completed_mesh"]["measurement_eligible"] is False
         assert payload["confidence"]["available"] is False
         assert payload["confidence"]["reason"] == "Confidence unavailable for this run"
         assert {item["label"] for item in payload["confidence_legend"]} == {
@@ -137,6 +139,31 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
             "empty_tolerance": 2,
             "minimum_supported_samples": 1,
         }
+
+        completed_mesh = (
+            app.state.store.run_dir(project_id, run_id) / "completion/completed_mesh.ply"
+        )
+        completion_report = app.state.store.run_dir(project_id, run_id) / "completion_report.json"
+        completed_mesh.parent.mkdir(parents=True, exist_ok=True)
+        completed_mesh.write_text("ply\nformat ascii 1.0\nend_header\n", encoding="utf-8")
+        atomic_json(
+            completion_report,
+            {
+                "schema_version": "1.0",
+                "status": "COMPLETED",
+                "measurement_eligible": False,
+            },
+        )
+        app.state.store.register_artifacts(record, [completed_mesh, completion_report])
+        with_completion = client.get(f"/api/runs/{run_id}/viewer-manifest").json()
+        assert with_completion["visual_models"]["ai_completed_mesh"]["available"] is True
+        assert (
+            with_completion["visual_models"]["ai_completed_mesh"]["measurement_eligible"]
+            is False
+        )
+        assert with_completion["visual_models"]["completion_report_url"].endswith(
+            "/completion_report.json"
+        )
 
 
 def test_viewer_manifest_is_not_fabricated_for_queued_run(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from sih26158.dense import (
+from sih26158.reconstruction.dense import (
     ColmapDenseProvider,
     DenseContext,
     DenseProviderError,
@@ -20,7 +20,7 @@ from sih26158.dense import (
     run_dense_stage,
     select_dense_provider,
 )
-from sih26158.geo import SimilarityTransform
+from sih26158.reconstruction.geo import SimilarityTransform
 
 PLY = """ply
 format ascii 1.0
@@ -107,7 +107,9 @@ def _successful_runner(command: list[str], **_: object) -> subprocess.CompletedP
 
 
 def test_dense_colmap_success_and_metric_transform(tmp_path: Path, monkeypatch: object) -> None:
-    monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/colmap")
+    monkeypatch.setattr(
+        "sih26158.reconstruction.dense.shutil.which", lambda _: "/usr/bin/colmap"
+    )
     context = _context(tmp_path)
     result = run_dense_stage(context, ColmapDenseProvider(runner=_successful_runner))
 
@@ -314,7 +316,9 @@ def test_texture_atlas_validation_measures_openmvs_empty_coverage(tmp_path: Path
 def test_non_cuda_colmap_is_honestly_unavailable(
     monkeypatch: object,
 ) -> None:
-    monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/colmap")
+    monkeypatch.setattr(
+        "sih26158.reconstruction.dense.shutil.which", lambda _: "/usr/bin/colmap"
+    )
 
     def runner(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 0, "COLMAP 4.1.1 without CUDA", "")
@@ -340,7 +344,9 @@ def test_openmvs_retries_rejected_atlas_with_conservative_settings(
 ) -> None:
     context = _context(tmp_path)
     provider = OpenMVSProvider()
-    monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/tool")
+    monkeypatch.setattr(
+        "sih26158.reconstruction.dense.shutil.which", lambda _: "/usr/bin/tool"
+    )
     monkeypatch.setattr(
         provider,
         "_help",
@@ -395,7 +401,9 @@ def test_openmvs_rejects_bad_retry_but_preserves_dense_model(
 ) -> None:
     context = _context(tmp_path)
     provider = OpenMVSProvider()
-    monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/tool")
+    monkeypatch.setattr(
+        "sih26158.reconstruction.dense.shutil.which", lambda _: "/usr/bin/tool"
+    )
     monkeypatch.setattr(
         provider,
         "_help",
@@ -444,7 +452,9 @@ def test_openmvs_applies_masks_and_adaptive_primary_subject_filtering(
         profile="accurate",
     )
     provider = OpenMVSProvider()
-    monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/tool")
+    monkeypatch.setattr(
+        "sih26158.reconstruction.dense.shutil.which", lambda _: "/usr/bin/tool"
+    )
     monkeypatch.setattr(provider, "_require_flags", lambda *_: None)
 
     def execute(command: list[str], _: Path) -> None:

@@ -9,28 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from frames.contact_sheet import create_contact_sheet
-from frames.extractor import extract_frames
-from frames.selector import (
-    FRAME_SCORE_COLUMNS,
-    FrameQualityThresholds,
-    SelectionWeights,
-    select_keyframes,
-)
-from telemetry.csv_parser import parse_csv
-from telemetry.models import sha256_file as telemetry_sha256_file
-from telemetry.models import write_csv as write_telemetry_csv
-from telemetry.srt_parser import parse_srt
-
-from .colmap import ColmapRunner, ExternalToolError, ReconstructionResult, write_matcher_benchmark
-from .confidence import validate_point_confidence_for_ply
-from .dense import (
-    DenseContext,
-    UnavailableProvider,
-    run_dense_stage,
-    select_dense_provider,
-)
-from .geo import SimilarityTransform, geodetic_to_enu, transform_ply
+from .infrastructure.storage import ProjectStore, atomic_json
 from .models import (
     MatcherMetrics,
     OffsetSource,
@@ -39,11 +18,42 @@ from .models import (
     RunStatus,
     StageEvent,
 )
-from .report import build_quality_report, write_quality_report
-from .scene_policy import analyze_scene
-from .segmentation import run_optional_segmentation
-from .storage import ProjectStore, atomic_json
-from .sync import calibrate_telemetry_offset
+from .preprocessing.frames.contact_sheet import create_contact_sheet
+from .preprocessing.frames.extractor import extract_frames
+from .preprocessing.frames.selector import (
+    FRAME_SCORE_COLUMNS,
+    FrameQualityThresholds,
+    SelectionWeights,
+    select_keyframes,
+)
+from .preprocessing.scene_policy import analyze_scene
+from .preprocessing.segmentation import run_optional_segmentation
+from .preprocessing.telemetry.csv_parser import parse_csv
+from .preprocessing.telemetry.models import sha256_file as telemetry_sha256_file
+from .preprocessing.telemetry.models import write_csv as write_telemetry_csv
+from .preprocessing.telemetry.srt_parser import parse_srt
+from .reconstruction.colmap import (
+    ColmapRunner,
+    ExternalToolError,
+    ReconstructionResult,
+    write_matcher_benchmark,
+)
+from .reconstruction.confidence import validate_point_confidence_for_ply
+from .reconstruction.dense import (
+    DenseContext,
+    UnavailableProvider,
+    run_dense_stage,
+    select_dense_provider,
+)
+from .reconstruction.geo import SimilarityTransform, geodetic_to_enu, transform_ply
+from .reconstruction.surface_completion import (
+    ExternalSurfaceCompletionProvider,
+    SurfaceCompletionContext,
+    UnavailableSurfaceCompletionProvider,
+    run_surface_completion_stage,
+)
+from .reconstruction.sync import calibrate_telemetry_offset
+from .reporting.report import build_quality_report, write_quality_report
 
 
 class PipelineError(RuntimeError):
@@ -892,6 +902,55 @@ class PipelineRunner:
         warnings.extend(dense_result.warnings)
         return dense_result.artifacts
 
+    def _run_optional_surface_completion(
+        self,
+        record: RunRecord,
+        result: ReconstructionResult,
+        alignment_report: dict[str, object],
+        warnings: list[dict[str, str]],
+    ) -> list[Path]:
+        if not record.config.enable_surface_completion:
+            return []
+        run_dir = self.store.run_dir(record.project_id, record.run_id)
+        dense_geometry = run_dir / "dense" / "fused.ply"
+        sparse_geometry = run_dir / "sparse" / "sparse_local.ply"
+        if dense_geometry.is_file():
+            source_geometry = dense_geometry
+            source_kind = "DENSE_OBSERVED_MVS"
+        else:
+            source_geometry = sparse_geometry
+            source_kind = "SPARSE_OBSERVED_SFM"
+        gate_reasons: list[str] = []
+        if record.synthetic_fixture:
+            gate_reasons.append("synthetic fixtures cannot produce completion evidence")
+        if result.metrics.registration_rate < 0.8:
+            gate_reasons.append("sparse registration is below the 80% gate")
+        if int(alignment_report.get("inlier_count", 0)) < 3:
+            gate_reasons.append("local metric alignment has fewer than three inliers")
+        if not source_geometry.is_file():
+            gate_reasons.append("no local-metric observed geometry is available")
+        context = SurfaceCompletionContext(
+            run_dir=run_dir,
+            source_geometry=source_geometry,
+            source_geometry_kind=source_kind,
+            camera_poses=run_dir / "camera_poses.csv",
+            selected_frames=run_dir / "keyframes.json",
+            model_path=(
+                Path(record.config.surface_completion_model_path).expanduser().resolve()
+                if record.config.surface_completion_model_path
+                else None
+            ),
+            sample_count=record.config.surface_completion_samples,
+        )
+        provider = (
+            UnavailableSurfaceCompletionProvider("; ".join(gate_reasons))
+            if gate_reasons
+            else ExternalSurfaceCompletionProvider()
+        )
+        completion = run_surface_completion_stage(context, provider)
+        warnings.extend(completion.warnings)
+        return completion.artifacts
+
     def run(self, run_id: str) -> RunRecord:
         record = self.store.get_run(run_id)
         warnings: list[dict[str, str]] = []
@@ -991,6 +1050,17 @@ class PipelineRunner:
                     record, result, alignment_report, warnings
                 )
                 self.store.register_artifacts(record, dense_artifacts)
+            if record.config.enable_surface_completion:
+                self._transition(
+                    record,
+                    RunStatus.RECONSTRUCTING,
+                    80,
+                    "Running optional AI surface completion as non-measurable visual output.",
+                )
+                completion_artifacts = self._run_optional_surface_completion(
+                    record, result, alignment_report, warnings
+                )
+                self.store.register_artifacts(record, completion_artifacts)
             self._transition(
                 record, RunStatus.REPORTING, 85, "Generating trust and known-distance report."
             )
@@ -1029,6 +1099,11 @@ class PipelineRunner:
                             self.store.run_dir(record.project_id, record.run_id) / "keyframes.json"
                         ).read_text(encoding="utf-8")
                     ).get("frame_quality_gate", {})
+                ),
+                surface_completion=(
+                    json.loads((run_dir / "completion_report.json").read_text(encoding="utf-8"))
+                    if (run_dir / "completion_report.json").is_file()
+                    else None
                 ),
             )
             write_quality_report(quality_path, report)

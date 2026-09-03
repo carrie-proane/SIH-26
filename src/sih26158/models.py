@@ -101,6 +101,10 @@ class RunConfig(BaseModel):
     masking_mode: Literal["OFF", "AUTO", "REQUIRED"] = "OFF"
     enable_dense_reconstruction: bool = False
     dense_provider: Literal["auto", "colmap", "openmvs"] = "auto"
+    enable_surface_completion: bool = False
+    surface_completion_provider: Literal["external"] = "external"
+    surface_completion_model_path: str | None = None
+    surface_completion_samples: int = Field(default=3, ge=1, le=8)
 
     @field_validator("measured_distance_m")
     @classmethod

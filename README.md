@@ -1,9 +1,11 @@
-# SIH26158 - Jay backend deliverable
+# SIH26158 Trace3D - evidence-first drone reconstruction
 
-This repository implements Jay's seven-day contract scope for the trustworthy single-pass drone
-video reconstruction prototype: immutable ingest, FastAPI orchestration, exact run states, COLMAP
-execution, local-metric alignment utilities, SIFT-vs-learned matcher selection, declared artifact
-serving, and quality/known-distance reporting.
+This repository implements a trustworthy single-pass drone-video reconstruction prototype:
+immutable ingest, FastAPI orchestration, exact run states, scored keyframes, telemetry
+normalization, COLMAP/OpenMVS reconstruction, local-metric alignment, declared artifact serving,
+quality/confidence reporting, and a React/Three.js operator workspace. An optional external AI
+surface-completion boundary is present for visual hidden-surface hypotheses; predicted geometry is
+always separated from measurement evidence.
 
 It does not claim that a reconstruction has been produced without real synchronized drone data and
 COLMAP. `SYNTHETIC_DEMO` is only a deterministic orchestration fixture and is labeled in its PLY,
@@ -32,7 +34,8 @@ make doctor
 make api
 ```
 
-In another terminal, upload a video/telemetry pair using the example in `docs/api.md`.
+In another terminal, upload a video/telemetry pair using the example in
+`docs/contracts/api.md`.
 
 ## Reproducible orchestration smoke test
 
@@ -102,11 +105,16 @@ Run the complete backend, lint, frontend build and browser verification gate wit
 
 ## Important files
 
-- `docs/jay-seven-day-evidence.md` - contract-to-evidence ledger.
-- `docs/source-review.md` - full-document decisions and resolved scope differences.
-- `docs/architecture.md` - ownership boundary and invariants.
-- `docs/api.md` - endpoint and preprocessing handoff contract.
-- `docs/matcher-benchmark.md` - SIFT/SuperPoint+LightGlue promotion rule.
+- `docs/architecture/project-overview.md` - end-to-end workflow, file map, and technology inventory.
+- `docs/ai/surface-completion-blueprint.md` - detailed hidden/occluded-surface model plan.
+- `docs/viva/technical-question-bank.md` - technical viva questions and defensible answers.
+- `docs/contracts/surface-completion-runtime.md` - trained-model runtime integration protocol.
+- `docs/README.md` - organized documentation index.
+- `docs/evidence/backend-delivery.md` - contract-to-evidence ledger.
+- `docs/reviews/source-material.md` - full-document decisions and resolved scope differences.
+- `docs/architecture/current-system.md` - ownership boundary and invariants.
+- `docs/contracts/api.md` - endpoint and preprocessing handoff contract.
+- `docs/benchmarks/matcher-promotion.md` - SIFT/SuperPoint+LightGlue promotion rule.
 - `examples/viewer-manifest.json` - exact frontend payload sample for Arnav.
 
 ## Arnav operator frontend
@@ -123,8 +131,9 @@ make ui
 For deterministic browser QA without the API, open `http://127.0.0.1:5173/?fixture=1`. It is
 prominently labelled as a synthetic UI fixture and does not count as reconstruction evidence.
 
-Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evidence.md` and
-`docs/arnav-integration-review.md`.
+The operator delivery ledger and cross-team review are in
+`docs/evidence/operator-ui-delivery.md` and
+`docs/reviews/frontend-backend-integration.md`.
 
 ## Honest limitations
 

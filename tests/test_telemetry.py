@@ -14,9 +14,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.telemetry.csv_parser import parse_csv
-from src.telemetry.models import COLUMNS, TelemetryRecord, write_csv
-from src.telemetry.srt_parser import detect_dialect, parse_srt
+from sih26158.preprocessing.telemetry.csv_parser import parse_csv
+from sih26158.preprocessing.telemetry.models import COLUMNS, TelemetryRecord, write_csv
+from sih26158.preprocessing.telemetry.srt_parser import detect_dialect, parse_srt
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -234,7 +234,7 @@ def test_synthetic_orbit_is_metrically_correct():
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     import importlib
     gen = importlib.import_module("make_synthetic_telemetry")
-    from src.telemetry.checks import haversine_m
+    from sih26158.preprocessing.telemetry.checks import haversine_m
 
     rows = gen.generate("orbit", 18.5204, 73.8567, 25.0, 30.0, 45.0, 10.0,
                         140.0, 0.4, 0.15, seed=26158)
@@ -252,7 +252,7 @@ def test_synthetic_noise_is_temporally_correlated():
     import math
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     gen = importlib.import_module("make_synthetic_telemetry")
-    from src.telemetry.checks import haversine_m
+    from sih26158.preprocessing.telemetry.checks import haversine_m
 
     rows = gen.generate("orbit", 18.5204, 73.8567, 25.0, 30.0, 45.0, 10.0,
                         140.0, 0.4, 0.15, seed=26158)

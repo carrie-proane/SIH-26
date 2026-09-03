@@ -1,6 +1,6 @@
 import numpy as np
 
-from sih26158.sync import calibrate_telemetry_offset
+from sih26158.reconstruction.sync import calibrate_telemetry_offset
 
 
 def _trajectory(times: np.ndarray) -> np.ndarray:

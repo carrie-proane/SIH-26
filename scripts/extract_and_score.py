@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 
-from frames.contact_sheet import create_contact_sheet
-from frames.extractor import extract_frames
-from frames.selector import SelectionWeights, select_keyframes
+from sih26158.preprocessing.frames.contact_sheet import create_contact_sheet
+from sih26158.preprocessing.frames.extractor import extract_frames
+from sih26158.preprocessing.frames.selector import SelectionWeights, select_keyframes
 
 
 def parse_weights(value: str) -> SelectionWeights:

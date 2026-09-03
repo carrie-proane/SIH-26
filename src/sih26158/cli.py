@@ -9,10 +9,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .colmap import write_matcher_benchmark
+from .infrastructure.storage import ProjectStore
 from .models import MatcherMetrics, ProvenanceOrigin, RunConfig
 from .pipeline import PipelineRunner
-from .storage import ProjectStore
+from .reconstruction.colmap import write_matcher_benchmark
 
 # Keep CLI runs aligned with the backend's local OpenMVS installation, even when the shell has an
 # older OPENMVS_BIN export.
@@ -84,6 +84,10 @@ def _run(args: argparse.Namespace) -> int:
         masking_mode=args.masking_mode,
         enable_dense_reconstruction=args.dense,
         dense_provider=args.dense_provider,
+        enable_surface_completion=args.surface_completion,
+        surface_completion_provider=args.surface_completion_provider,
+        surface_completion_model_path=args.surface_completion_model,
+        surface_completion_samples=args.surface_completion_samples,
     )
     record = store.create_run(project.project_id, config)
     result = PipelineRunner(store).run(record.run_id)
@@ -151,6 +155,21 @@ def parser() -> argparse.ArgumentParser:
         "--dense", action="store_true", help="Attempt optional visual-only dense reconstruction"
     )
     run.add_argument("--dense-provider", choices=["auto", "colmap", "openmvs"], default="auto")
+    run.add_argument(
+        "--surface-completion",
+        action="store_true",
+        help="Attempt optional AI completion after observed reconstruction gates pass",
+    )
+    run.add_argument(
+        "--surface-completion-provider",
+        choices=["external"],
+        default="external",
+    )
+    run.add_argument(
+        "--surface-completion-model",
+        help="Path to local completion model weights; nothing is downloaded automatically",
+    )
+    run.add_argument("--surface-completion-samples", type=int, default=3)
     run.set_defaults(func=_run)
     benchmark = sub.add_parser("benchmark-matchers")
     benchmark.add_argument("--sift", required=True)

@@ -7,9 +7,9 @@ import cv2
 import numpy as np
 import pytest
 
+from sih26158.infrastructure.storage import ProjectStore, sha256_file
 from sih26158.models import ProvenanceOrigin, RunConfig, RunStatus
 from sih26158.pipeline import PipelineRunner
-from sih26158.storage import ProjectStore, sha256_file
 
 
 def make_project(
@@ -85,7 +85,9 @@ def test_missing_handoff_is_generated_from_matching_uploaded_inputs(
         RunConfig(),
     )
 
-    monkeypatch.setattr("frames.extractor.detect_rotation", lambda _: 0)
+    monkeypatch.setattr(
+        "sih26158.preprocessing.frames.extractor.detect_rotation", lambda _: 0
+    )
     artifacts = PipelineRunner(store)._preprocess_contract(record)
     run_dir = store.run_dir(project.project_id, record.run_id)
 

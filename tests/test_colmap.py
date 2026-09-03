@@ -6,9 +6,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from sih26158.colmap import ColmapRunner
-from sih26158.confidence import classify_observed_point, validate_point_confidence_for_ply
 from sih26158.models import RunConfig
+from sih26158.reconstruction.colmap import ColmapRunner
+from sih26158.reconstruction.confidence import (
+    classify_observed_point,
+    validate_point_confidence_for_ply,
+)
 
 
 def _write_binary_model(path: Path, registered_images: int, errors: list[float]) -> None:

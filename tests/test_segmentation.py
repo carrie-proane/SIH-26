@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from sih26158.segmentation import run_optional_segmentation
+from sih26158.preprocessing.segmentation import run_optional_segmentation
 
 
 def test_mocked_segmentation_declares_masks_without_model_download(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
-vi.mock("./components/PointCloudViewer", () => ({
+vi.mock("./features/viewer/PointCloudViewer", () => ({
   PointCloudViewer: () => <div data-testid="point-cloud-viewer">WebGL viewer</div>,
 }));
 

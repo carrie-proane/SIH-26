@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from sih26158.scene_policy import analyze_scene
+from sih26158.preprocessing.scene_policy import analyze_scene
 
 
 def _frame(run_dir: Path, name: str, image: np.ndarray) -> dict[str, object]:

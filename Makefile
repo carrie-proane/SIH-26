@@ -15,7 +15,7 @@ test:
 	PYTHONPATH=src $(PYTHON) -m pytest -q
 
 lint:
-	PYTHONPATH=src $(PYTHON) -m ruff check src tests
+	PYTHONPATH=src $(PYTHON) -m ruff check src tests scripts
 
 verify: test lint ui-test ui-build ui-e2e
 
