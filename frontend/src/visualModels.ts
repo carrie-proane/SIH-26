@@ -19,7 +19,11 @@ export function visualModeAvailable(mode: VisualMode, manifest: ViewerManifest):
 }
 
 export function visualModeReason(mode: VisualMode, manifest: ViewerManifest): string {
-  if (mode === "EVIDENCE") return "Default verified evidence geometry";
+  if (mode === "EVIDENCE") {
+    return visualModeMeasurementEligible(mode, manifest)
+      ? "Default evidence geometry · measurement eligible"
+      : "Default evidence geometry · verified measurement unavailable";
+  }
   const model = modelForMode(mode, manifest);
   if (!model?.available || !model.url) {
     return model?.statement ?? `${mode === "TEXTURED" ? "Textured model" : "Photoreal view"} was not declared by this run.`;
@@ -41,6 +45,15 @@ export function visualModeMeasurementEligible(
 ): boolean {
   return (
     mode === "EVIDENCE" &&
-    manifest.visual_models?.evidence_cloud?.measurement_eligible !== false
+    manifest.visual_models?.evidence_cloud?.measurement_eligible === true
   );
+}
+
+export function visualArtifactMeasurementLabel(
+  mode: VisualMode,
+  manifest: ViewerManifest,
+): string {
+  return visualModeMeasurementEligible(mode, manifest)
+    ? "measurement eligible"
+    : "verified measurement unavailable";
 }

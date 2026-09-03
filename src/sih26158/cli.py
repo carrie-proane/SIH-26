@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
-import sys
 import tempfile
 from pathlib import Path
 
 from .colmap import write_matcher_benchmark
 from .models import MatcherMetrics, ProvenanceOrigin, RunConfig
 from .pipeline import PipelineRunner
-from .storage import ProjectStore
+from .preflight import collect_preflight
+from .storage import ProjectStore, atomic_json
 
 
 def _demo(args: argparse.Namespace) -> int:
@@ -72,12 +71,22 @@ def _run(args: argparse.Namespace) -> int:
         force_include_frame_indices=args.force_include,
         force_exclude_frame_indices=args.force_exclude,
         use_gpu=args.use_gpu,
+        camera_model=args.camera_model,
+        camera_model_policy=args.camera_model_policy,
+        camera_params=args.camera_params,
+        refine_intrinsics=not args.fix_intrinsics,
+        sequential_overlap=args.sequential_overlap,
+        matching_strategy=args.matching_strategy,
+        vocab_tree_path=args.vocab_tree,
         enable_segmentation=args.masking_mode != "OFF",
         segmentation_model_path=args.segmentation_model,
         reconstruction_target=args.reconstruction_target,
         masking_mode=args.masking_mode,
         enable_dense_reconstruction=args.dense,
         dense_provider=args.dense_provider,
+        sparse_timeout_s=args.sparse_timeout,
+        dense_timeout_s=args.dense_timeout,
+        command_heartbeat_s=args.command_heartbeat,
     )
     record = store.create_run(project.project_id, config)
     result = PipelineRunner(store).run(record.run_id)
@@ -95,12 +104,20 @@ def _benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
-def _doctor(_: argparse.Namespace) -> int:
-    tools = ["ffprobe", "ffmpeg", "colmap"]
-    result = {name: shutil.which(name) for name in tools}
-    result["python"] = sys.executable
+def _doctor(args: argparse.Namespace) -> int:
+    result = collect_preflight(
+        data_root=args.data_root,
+        video=args.video,
+        telemetry=args.telemetry,
+        dense_provider=args.dense_provider,
+        require_dense=args.require_dense,
+        require_gpu=args.require_gpu,
+        minimum_free_disk_gb=args.minimum_free_disk_gb,
+    )
+    if args.output:
+        atomic_json(Path(args.output), result)
     print(json.dumps(result, indent=2))
-    return 0 if all(result[name] for name in tools) else 1
+    return 0 if result["status"] != "BLOCKED" else 1
 
 
 def parser() -> argparse.ArgumentParser:
@@ -123,6 +140,15 @@ def parser() -> argparse.ArgumentParser:
         choices=["smoke", "preview", "balanced", "accurate", "diagnostic"],
         default="preview",
     )
+    run.add_argument(
+        "--camera-params",
+        help="COLMAP camera parameters from a trusted calibration, in model-specific order.",
+    )
+    run.add_argument(
+        "--fix-intrinsics",
+        action="store_true",
+        help="Keep supplied focal/distortion calibration fixed during mapping and final adjustment.",
+    )
     run.add_argument("--known-distance", type=float)
     run.add_argument("--measured-distance", type=float)
     run.add_argument(
@@ -135,6 +161,28 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--telemetry-offset-source", choices=["manual", "calibrated"])
     run.add_argument("--use-gpu", action="store_true")
     run.add_argument(
+        "--camera-model",
+        choices=["SIMPLE_RADIAL", "RADIAL", "OPENCV"],
+        default="SIMPLE_RADIAL",
+        help="Use OPENCV only for cameras whose distortion is sufficiently constrained.",
+    )
+    run.add_argument(
+        "--camera-model-policy",
+        choices=["AUTO", "FIXED"],
+        default="AUTO",
+        help="AUTO compares bounded camera models; FIXED runs only --camera-model.",
+    )
+    run.add_argument("--sequential-overlap", type=int, default=10)
+    run.add_argument(
+        "--matching-strategy",
+        choices=["AUTO", "SEQUENTIAL", "EXHAUSTIVE"],
+        default="AUTO",
+    )
+    run.add_argument(
+        "--vocab-tree",
+        help="Optional local COLMAP vocabulary tree enabling loop detection in sequential mode.",
+    )
+    run.add_argument(
         "--reconstruction-target",
         choices=["FULL_SCENE", "PRIMARY_SUBJECT"],
         default="FULL_SCENE",
@@ -145,13 +193,44 @@ def parser() -> argparse.ArgumentParser:
         "--dense", action="store_true", help="Attempt optional visual-only dense reconstruction"
     )
     run.add_argument("--dense-provider", choices=["auto", "colmap", "openmvs"], default="auto")
+    run.add_argument(
+        "--sparse-timeout",
+        type=float,
+        default=7200,
+        help="Maximum total seconds for managed COLMAP sparse commands.",
+    )
+    run.add_argument(
+        "--dense-timeout",
+        type=float,
+        default=21600,
+        help="Maximum total seconds for managed dense-provider commands.",
+    )
+    run.add_argument(
+        "--command-heartbeat",
+        type=float,
+        default=10,
+        help="Seconds between persisted heartbeats while an external command is active.",
+    )
     run.set_defaults(func=_run)
     benchmark = sub.add_parser("benchmark-matchers")
     benchmark.add_argument("--sift", required=True)
     benchmark.add_argument("--learned")
     benchmark.add_argument("--output", default="matcher_benchmark.json")
     benchmark.set_defaults(func=_benchmark)
-    doctor = sub.add_parser("doctor")
+    doctor = sub.add_parser(
+        "doctor",
+        help="Inspect exact sparse/dense capabilities, resources, and optional inputs",
+    )
+    doctor.add_argument("--data-root", default="data/projects")
+    doctor.add_argument("--video", help="Optional video to validate with ffprobe")
+    doctor.add_argument("--telemetry", help="Optional SRT/CSV telemetry to parse and validate")
+    doctor.add_argument(
+        "--dense-provider", choices=["auto", "colmap", "openmvs"], default="auto"
+    )
+    doctor.add_argument("--require-dense", action="store_true")
+    doctor.add_argument("--require-gpu", action="store_true")
+    doctor.add_argument("--minimum-free-disk-gb", type=float, default=10.0)
+    doctor.add_argument("--output", help="Write the immutable JSON preflight report to this path")
     doctor.set_defaults(func=_doctor)
     return root
 

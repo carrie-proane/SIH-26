@@ -13,9 +13,11 @@ import numpy as np
 from .extractor import ExtractedFrame
 from .scoring import (
     exposure_scores,
+    feature_support_scores,
     laplacian_variances,
     load_images,
     normalize_scores,
+    parallax_scores,
     redundancy_scores,
 )
 
@@ -29,6 +31,9 @@ FRAME_SCORE_COLUMNS = [
     "redundancy_score",
     "composite_score",
     "laplacian_variance",
+    "feature_count",
+    "feature_grid_coverage",
+    "parallax_fraction",
     "quality_eligible",
     "quality_rejection_reasons",
     "selected_automatically",
@@ -57,6 +62,9 @@ class FrameQualityThresholds:
     min_laplacian_variance: float = 40.0
     min_exposure_score: float = 0.18
     relative_sharpness_floor: float = 0.60
+    min_feature_count: int = 4
+    min_feature_grid_coverage: float = 0.05
+    max_parallax_fraction: float = 0.30
 
     def __post_init__(self) -> None:
         if self.min_laplacian_variance < 0:
@@ -65,6 +73,12 @@ class FrameQualityThresholds:
             raise ValueError("min_exposure_score must be between 0 and 1")
         if not 0 <= self.relative_sharpness_floor <= 1:
             raise ValueError("relative_sharpness_floor must be between 0 and 1")
+        if self.min_feature_count < 0:
+            raise ValueError("min_feature_count cannot be negative")
+        if not 0 <= self.min_feature_grid_coverage <= 1:
+            raise ValueError("min_feature_grid_coverage must be between 0 and 1")
+        if not 0 < self.max_parallax_fraction <= 1:
+            raise ValueError("max_parallax_fraction must be between 0 and 1")
 
 
 def select_indices(
@@ -115,9 +129,18 @@ def select_keyframes(
     blur = normalize_scores(sharpness)
     exposure = exposure_scores(images)
     redundancy = redundancy_scores(images)
+    feature_counts, feature_coverage = feature_support_scores(images)
+    parallax = parallax_scores(images)
+    parallax_value = [
+        min(1.0, value / 0.02) * max(0.0, 1.0 - max(0.0, value - 0.15) / 0.15) for value in parallax
+    ]
+    geometric_value = [
+        0.55 * uniqueness + 0.45 * movement
+        for uniqueness, movement in zip(redundancy, parallax_value, strict=True)
+    ]
     composite = [
-        weights.blur * b + weights.exposure * e + weights.redundancy * r
-        for b, e, r in zip(blur, exposure, redundancy)
+        weights.blur * b + weights.exposure * e + weights.redundancy * geometry
+        for b, e, geometry in zip(blur, exposure, geometric_value, strict=True)
     ]
     timestamps = [frame.timestamp_s for frame in frames]
     if min_spacing_s is None:
@@ -129,12 +152,20 @@ def select_keyframes(
         median_sharpness * quality_thresholds.relative_sharpness_floor,
     )
     rejection_reasons: list[list[str]] = []
-    for sharpness_value, exposure_value in zip(sharpness, exposure, strict=True):
+    for sharpness_value, exposure_value, count, coverage, movement in zip(
+        sharpness, exposure, feature_counts, feature_coverage, parallax, strict=True
+    ):
         reasons: list[str] = []
         if sharpness_value < effective_sharpness_floor:
             reasons.append("BELOW_SHARPNESS_GATE")
         if exposure_value < quality_thresholds.min_exposure_score:
             reasons.append("BELOW_EXPOSURE_GATE")
+        if count < quality_thresholds.min_feature_count:
+            reasons.append("INSUFFICIENT_FEATURE_SUPPORT")
+        if coverage < quality_thresholds.min_feature_grid_coverage:
+            reasons.append("POOR_FEATURE_DISTRIBUTION")
+        if movement > quality_thresholds.max_parallax_fraction:
+            reasons.append("INSUFFICIENT_ADJACENT_OVERLAP")
         rejection_reasons.append(reasons)
     eligible_positions = [index for index, reasons in enumerate(rejection_reasons) if not reasons]
     eligible_scores = [composite[index] for index in eligible_positions]
@@ -169,6 +200,9 @@ def select_keyframes(
                 "redundancy_score": round(redundancy[position], 6),
                 "composite_score": round(composite[position], 6),
                 "laplacian_variance": round(sharpness[position], 6),
+                "feature_count": feature_counts[position],
+                "feature_grid_coverage": round(feature_coverage[position], 6),
+                "parallax_fraction": round(parallax[position], 6),
                 "quality_eligible": not rejection_reasons[position],
                 "quality_rejection_reasons": ";".join(rejection_reasons[position]),
                 "selected_automatically": selected_automatically,
@@ -178,7 +212,7 @@ def select_keyframes(
         )
     if sum(bool(row["selected"]) for row in rows) < 3:
         raise ValueError(
-            "Fewer than three frames passed the sharpness/exposure gates; "
+            "Fewer than three frames passed the sharpness/exposure/feature gates; "
             "capture clearer footage or explicitly review frame overrides"
         )
     with (output_dir / "frame_scores.csv").open("w", newline="", encoding="utf-8") as handle:

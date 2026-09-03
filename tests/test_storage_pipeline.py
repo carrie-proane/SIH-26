@@ -1,15 +1,23 @@
 import csv
 import json
 import math
+import threading
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
 
-from sih26158.models import ProvenanceOrigin, RunConfig, RunStatus
+from sih26158.colmap import ReconstructionResult
+from sih26158.models import (
+    MatcherMetrics,
+    ProvenanceOrigin,
+    RunCheckpoint,
+    RunConfig,
+    RunStatus,
+)
 from sih26158.pipeline import PipelineRunner
-from sih26158.storage import ProjectStore, sha256_file
+from sih26158.storage import ProjectStore, atomic_json, sha256_file
 
 
 def make_project(
@@ -143,6 +151,7 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     ]
     declared = {artifact.relative_path for artifact in result.artifacts}
     assert "quality_report.json" in declared
+    assert "server_capabilities.json" in declared
     quality = json.loads(
         (store.run_dir(project.project_id, result.run_id) / "quality_report.json").read_text()
     )
@@ -157,6 +166,11 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     assert "sync_report.json" in declared
     assert quality["source_provenance"] == "SYNTHETIC"
     assert quality["confidence_artifact"]["available"] is False
+    capabilities = json.loads(
+        (store.run_dir(project.project_id, result.run_id) / "server_capabilities.json").read_text()
+    )
+    assert capabilities["sparse"]["selection"] == "NOT_APPLICABLE_SYNTHETIC_FIXTURE"
+    assert result.capability_profile_path == "server_capabilities.json"
 
 
 @pytest.mark.parametrize("execution_mode", ["COLMAP", "SYNTHETIC_DEMO"])
@@ -203,6 +217,36 @@ def test_synthetic_telemetry_metadata_downgrades_a_colmap_run(tmp_path: Path) ->
     assert persisted.telemetry_origin == ProvenanceOrigin.SYNTHETIC
     assert persisted.source_provenance == ProvenanceOrigin.SYNTHETIC
     assert persisted.synthetic_fixture is True
+
+
+def test_sparse_reconstruction_uses_capability_selected_cpu_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(use_gpu=True))
+    record.effective_sparse_gpu = False
+    store.save_run(record)
+    captured: list[RunConfig] = []
+    metrics = MatcherMetrics(
+        matcher="SIFT",
+        eligible_frames=3,
+        registered_frames=3,
+        median_reprojection_error_px=0.5,
+        p95_reprojection_error_px=0.8,
+        runtime_s=1,
+    )
+
+    def fake_run(_runner, _frames, _run_dir, config):
+        captured.append(config)
+        return ReconstructionResult(metrics, [], [])
+
+    monkeypatch.setattr("sih26158.pipeline.ColmapRunner.run", fake_run)
+
+    PipelineRunner(store)._reconstruct(record)
+
+    assert record.config.use_gpu is True
+    assert captured[0].use_gpu is False
 
 
 def test_calibrated_telemetry_offset_is_persisted_per_run(tmp_path: Path) -> None:
@@ -340,3 +384,216 @@ def test_primary_subject_configuration_enables_masking_and_rejects_off() -> None
 
     with pytest.raises(ValueError, match="PRIMARY_SUBJECT reconstruction requires"):
         RunConfig(reconstruction_target="PRIMARY_SUBJECT", masking_mode="OFF")
+
+
+def test_completed_stages_are_checkpointed_but_not_declared_as_evidence(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(
+        store,
+        tmp_path,
+        video_origin=ProvenanceOrigin.SYNTHETIC,
+        telemetry_origin=ProvenanceOrigin.SYNTHETIC,
+    )
+    record = store.create_run(
+        project.project_id,
+        RunConfig(execution_mode="SYNTHETIC_DEMO"),
+    )
+
+    result = PipelineRunner(store).run(record.run_id)
+    run_dir = store.run_dir(project.project_id, record.run_id)
+    checkpoint = RunCheckpoint.model_validate_json(
+        (run_dir / ".pipeline_checkpoint.json").read_text(encoding="utf-8")
+    )
+
+    assert result.status == RunStatus.COMPLETED
+    assert set(checkpoint.completed) == {"INGEST", "PREPROCESS", "SPARSE", "REPORT"}
+    assert checkpoint.active_stage is None
+    assert ".pipeline_checkpoint.json" not in {
+        artifact.relative_path for artifact in result.artifacts
+    }
+
+
+def test_resume_after_sparse_skips_valid_expensive_stages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(
+        store,
+        tmp_path,
+        video_origin=ProvenanceOrigin.SYNTHETIC,
+        telemetry_origin=ProvenanceOrigin.SYNTHETIC,
+    )
+    record = store.create_run(
+        project.project_id,
+        RunConfig(execution_mode="SYNTHETIC_DEMO"),
+    )
+    runner = PipelineRunner(store)
+    completed = runner.run(record.run_id)
+    run_dir = store.run_dir(project.project_id, record.run_id)
+    checkpoint_path = run_dir / ".pipeline_checkpoint.json"
+    checkpoint = RunCheckpoint.model_validate_json(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint.completed.pop("REPORT")
+    atomic_json(checkpoint_path, checkpoint.model_dump(mode="json"))
+    (run_dir / "quality_report.json").unlink()
+    completed.stage = RunStatus.REPORTING
+    completed.status = RunStatus.REPORTING
+    store.save_run(completed)
+    event_count = len(completed.events)
+
+    def should_not_run(*_: object, **__: object):
+        raise AssertionError("valid checkpointed stage was repeated")
+
+    monkeypatch.setattr(runner, "_probe", should_not_run)
+    monkeypatch.setattr(runner, "_preprocess_contract", should_not_run)
+    monkeypatch.setattr(runner, "_reconstruct", should_not_run)
+    monkeypatch.setattr(runner, "_align_to_local_metric", should_not_run)
+
+    resumed = runner.run(record.run_id)
+
+    assert resumed.status == RunStatus.COMPLETED
+    assert [event.stage for event in resumed.events[event_count:]] == [
+        RunStatus.REPORTING,
+        RunStatus.COMPLETED,
+    ]
+    assert (run_dir / "quality_report.json").is_file()
+
+
+def test_corrupt_checkpointed_artifact_reruns_that_stage_and_downstream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(
+        store,
+        tmp_path,
+        video_origin=ProvenanceOrigin.SYNTHETIC,
+        telemetry_origin=ProvenanceOrigin.SYNTHETIC,
+    )
+    record = store.create_run(
+        project.project_id,
+        RunConfig(execution_mode="SYNTHETIC_DEMO"),
+    )
+    runner = PipelineRunner(store)
+    completed = runner.run(record.run_id)
+    run_dir = store.run_dir(project.project_id, record.run_id)
+    (run_dir / "keyframes.json").write_text("corrupt", encoding="utf-8")
+    completed.stage = RunStatus.PREPROCESSING
+    completed.status = RunStatus.PREPROCESSING
+    store.save_run(completed)
+    original_preprocess = runner._preprocess_contract
+    calls = 0
+
+    def count_preprocess(current):
+        nonlocal calls
+        calls += 1
+        return original_preprocess(current)
+
+    monkeypatch.setattr(runner, "_preprocess_contract", count_preprocess)
+    monkeypatch.setattr(
+        runner,
+        "_probe",
+        lambda _: (_ for _ in ()).throw(AssertionError("valid ingest was repeated")),
+    )
+
+    resumed = runner.run(record.run_id)
+
+    assert resumed.status == RunStatus.COMPLETED
+    assert calls == 1
+    assert json.loads((run_dir / "keyframes.json").read_text())["frames"]
+
+
+def test_filesystem_lock_prevents_duplicate_run_execution(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    runner = PipelineRunner(store)
+
+    with store.execution_lock(record.run_id) as execution_lock:
+        assert execution_lock.acquired is True
+        duplicate = runner.run(record.run_id)
+
+    assert duplicate.status == RunStatus.QUEUED
+    assert duplicate.events == []
+
+
+def test_submit_deduplicates_a_run_within_one_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    runner = PipelineRunner(store, max_workers=1)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_run(run_id: str):
+        started.set()
+        assert release.wait(timeout=5)
+        return store.get_run(run_id)
+
+    monkeypatch.setattr(runner, "run", slow_run)
+    assert runner.submit(record.run_id) is True
+    assert started.wait(timeout=5)
+    assert runner.submit(record.run_id) is False
+    release.set()
+    runner.shutdown()
+
+
+def test_recovery_requeues_interrupted_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    record.stage = RunStatus.RECONSTRUCTING
+    record.status = RunStatus.RECONSTRUCTING
+    record.progress = 55
+    store.save_run(record)
+    runner = PipelineRunner(store)
+    submitted: list[str] = []
+    monkeypatch.setattr(runner, "submit", lambda run_id: not submitted.append(run_id))
+
+    recovered = runner.recover_interrupted_runs()
+    persisted = store.get_run(record.run_id)
+
+    assert recovered == [record.run_id]
+    assert submitted == [record.run_id]
+    assert persisted.status == RunStatus.QUEUED
+    assert persisted.progress == 55
+    assert persisted.recovery_count == 1
+    assert persisted.events[-1].message.startswith("Recovered interrupted run")
+
+
+def test_cancel_marker_stops_run_at_safe_boundary_and_is_not_declared(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    runner = PipelineRunner(store)
+
+    requested, accepted = runner.request_cancel(record.run_id)
+    result = runner.run(record.run_id)
+
+    assert accepted is True
+    assert requested.cancel_requested_at is not None
+    assert result.status == RunStatus.CANCELLED
+    assert result.failure_reason is None
+    assert result.cancelled_at is not None
+    assert result.events[-1].status == "CANCELLED"
+    assert ".cancel_requested" not in {item.relative_path for item in result.artifacts}
+
+
+def test_resume_clears_previous_cancellation_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    runner = PipelineRunner(store)
+    runner.request_cancel(record.run_id)
+    cancelled = runner.run(record.run_id)
+    monkeypatch.setattr(runner, "submit", lambda _: True)
+
+    resumed, accepted = runner.resume(cancelled.run_id)
+
+    assert accepted is True
+    assert resumed.status == RunStatus.QUEUED
+    assert resumed.cancel_requested_at is None
+    assert resumed.cancelled_at is None
+    assert not runner._cancel_path(resumed).exists()

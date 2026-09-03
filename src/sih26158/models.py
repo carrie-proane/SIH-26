@@ -19,6 +19,7 @@ class RunStatus(StrEnum):
     REPORTING = "REPORTING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 class ConfidenceLabel(StrEnum):
@@ -82,6 +83,10 @@ class RunConfig(BaseModel):
     matcher: Literal["SIFT", "SUPERPOINT_LIGHTGLUE"] = "SIFT"
     execution_mode: Literal["COLMAP", "SYNTHETIC_DEMO"] = "COLMAP"
     camera_model: str = "SIMPLE_RADIAL"
+    camera_model_policy: Literal["AUTO", "FIXED"] = "AUTO"
+    camera_params: str | None = None
+    refine_intrinsics: bool = True
+    max_reconstruction_retries: int = Field(default=1, ge=0, le=1)
     sequential_overlap: int = Field(default=10, ge=1, le=50)
     use_gpu: bool = False
     known_distance_m: float | None = Field(default=None, gt=0)
@@ -95,12 +100,20 @@ class RunConfig(BaseModel):
     frame_min_laplacian_variance: float = Field(default=40.0, ge=0)
     frame_min_exposure_score: float = Field(default=0.18, ge=0, le=1)
     frame_relative_sharpness_floor: float = Field(default=0.60, ge=0, le=1)
+    frame_min_feature_count: int = Field(default=4, ge=0, le=5000)
+    frame_min_feature_grid_coverage: float = Field(default=0.05, ge=0, le=1)
+    frame_max_parallax_fraction: float = Field(default=0.30, gt=0, le=1)
+    matching_strategy: Literal["AUTO", "SEQUENTIAL", "EXHAUSTIVE"] = "AUTO"
+    vocab_tree_path: str | None = None
     enable_segmentation: bool = False
     segmentation_model_path: str | None = None
     reconstruction_target: Literal["FULL_SCENE", "PRIMARY_SUBJECT"] = "FULL_SCENE"
     masking_mode: Literal["OFF", "AUTO", "REQUIRED"] = "OFF"
     enable_dense_reconstruction: bool = False
     dense_provider: Literal["auto", "colmap", "openmvs"] = "auto"
+    sparse_timeout_s: float = Field(default=7200, ge=30, le=86400)
+    dense_timeout_s: float = Field(default=21600, ge=30, le=172800)
+    command_heartbeat_s: float = Field(default=10, ge=1, le=300)
 
     @field_validator("measured_distance_m")
     @classmethod
@@ -111,6 +124,10 @@ class RunConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_manual_offset_source(self) -> RunConfig:
+        if self.camera_params is not None and not self.camera_params.strip():
+            raise ValueError("camera_params cannot be blank")
+        if self.camera_params is not None or not self.refine_intrinsics:
+            self.camera_model_policy = "FIXED"
         if self.telemetry_offset_source is not None and self.telemetry_offset_s is None:
             raise ValueError("telemetry_offset_s is required when telemetry_offset_source is set")
         if self.telemetry_offset_s is not None and self.telemetry_offset_source is None:
@@ -144,7 +161,7 @@ class ArtifactEntry(BaseModel):
 
 class StageEvent(BaseModel):
     stage: RunStatus
-    status: Literal["STARTED", "COMPLETED", "FAILED"]
+    status: Literal["STARTED", "COMPLETED", "FAILED", "CANCELLED"]
     timestamp: str = Field(default_factory=utc_now)
     progress: int = Field(ge=0, le=100)
     message: str
@@ -176,6 +193,34 @@ class RunRecord(BaseModel):
     rmse_after_m: float | None = Field(default=None, ge=0)
     matched_camera_count: int = Field(default=0, ge=0)
     inlier_count: int = Field(default=0, ge=0)
+    checkpoint_stage: str | None = None
+    last_heartbeat_at: str | None = None
+    recovery_count: int = Field(default=0, ge=0)
+    cancel_requested_at: str | None = None
+    cancelled_at: str | None = None
+    capability_profile_path: str | None = None
+    effective_sparse_gpu: bool = False
+    selected_dense_provider: Literal["colmap", "openmvs"] | None = None
+
+
+class StageCheckpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stage: Literal["INGEST", "PREPROCESS", "SPARSE", "DENSE", "REPORT"]
+    completed_at: str = Field(default_factory=utc_now)
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    warnings: list[dict[str, str]] = Field(default_factory=list)
+
+
+class RunCheckpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    run_id: str
+    active_stage: str | None = None
+    updated_at: str = Field(default_factory=utc_now)
+    completed: dict[str, StageCheckpoint] = Field(default_factory=dict)
+    warnings: list[dict[str, str]] = Field(default_factory=list)
 
 
 class PointConfidenceRecord(BaseModel):

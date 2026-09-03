@@ -59,6 +59,101 @@ def exposure_scores(images: Sequence[np.ndarray]) -> list[float]:
     return [exposure_score(image) for image in images]
 
 
+def feature_support(image: np.ndarray, grid_size: int = 4) -> tuple[int, float]:
+    """Return a conservative corner count and its image-grid coverage.
+
+    This is intentionally detector-independent.  It is a cheap pre-COLMAP diagnostic used to
+    reject blank/featureless frames before they can dominate an otherwise sharp selection.
+    """
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape
+    scale = min(1.0, 640.0 / max(height, width))
+    if scale < 1:
+        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    corners = cv2.goodFeaturesToTrack(
+        gray, maxCorners=1200, qualityLevel=0.01, minDistance=6, blockSize=3
+    )
+    if corners is None:
+        return 0, 0.0
+    occupied: set[tuple[int, int]] = set()
+    resized_height, resized_width = gray.shape
+    for x, y in corners.reshape(-1, 2):
+        column = min(grid_size - 1, int(x * grid_size / max(1, resized_width)))
+        row = min(grid_size - 1, int(y * grid_size / max(1, resized_height)))
+        occupied.add((row, column))
+    return len(corners), len(occupied) / float(grid_size * grid_size)
+
+
+def feature_support_scores(images: Sequence[np.ndarray]) -> tuple[list[int], list[float]]:
+    support = [feature_support(image) for image in images]
+    return [item[0] for item in support], [item[1] for item in support]
+
+
+def parallax_scores(images: Sequence[np.ndarray]) -> list[float]:
+    """Estimate adjacent visual displacement as a fraction of the image diagonal.
+
+    Median pyramidal optical flow is robust to a few moving objects.  The result is diagnostic,
+    not a metric camera baseline: near-zero values flag duplicate/mostly stationary imagery and
+    very large values warn that consecutive frames may no longer overlap sufficiently.
+    """
+
+    if not images:
+        return []
+    if len(images) == 1:
+        return [0.0]
+    adjacent: list[float] = []
+    for first, second in pairwise(images):
+        first_gray = cv2.cvtColor(first, cv2.COLOR_BGR2GRAY)
+        second_gray = cv2.cvtColor(second, cv2.COLOR_BGR2GRAY)
+        height, width = first_gray.shape
+        scale = min(1.0, 640.0 / max(height, width))
+        if scale < 1:
+            size = (round(width * scale), round(height * scale))
+            first_gray = cv2.resize(first_gray, size, interpolation=cv2.INTER_AREA)
+            second_gray = cv2.resize(second_gray, size, interpolation=cv2.INTER_AREA)
+        if second_gray.shape != first_gray.shape:
+            second_gray = cv2.resize(
+                second_gray,
+                (first_gray.shape[1], first_gray.shape[0]),
+                interpolation=cv2.INTER_AREA,
+            )
+        points = cv2.goodFeaturesToTrack(
+            first_gray, maxCorners=500, qualityLevel=0.01, minDistance=8, blockSize=3
+        )
+        if points is None or len(points) < 4:
+            adjacent.append(0.0)
+            continue
+        tracked, status, _ = cv2.calcOpticalFlowPyrLK(
+            first_gray,
+            second_gray,
+            points,
+            None,
+            winSize=(21, 21),
+            maxLevel=3,
+            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01),
+        )
+        if tracked is None or status is None:
+            adjacent.append(0.0)
+            continue
+        valid = status.reshape(-1).astype(bool)
+        if int(valid.sum()) < 4:
+            adjacent.append(0.0)
+            continue
+        displacement = np.linalg.norm(tracked[valid] - points[valid], axis=2).reshape(-1)
+        diagonal = float(np.hypot(*first_gray.shape))
+        adjacent.append(float(np.median(displacement) / max(diagonal, 1.0)))
+    frame_scores: list[float] = []
+    for index in range(len(images)):
+        neighbours: list[float] = []
+        if index:
+            neighbours.append(adjacent[index - 1])
+        if index < len(adjacent):
+            neighbours.append(adjacent[index])
+        frame_scores.append(max(neighbours, default=0.0))
+    return frame_scores
+
+
 def _ssim(first: np.ndarray, second: np.ndarray) -> float:
     """Compute mean structural similarity using the standard local-window formula."""
 

@@ -12,7 +12,13 @@ import numpy as np
 
 from frames.contact_sheet import create_contact_sheet
 from frames.extractor import ExtractedFrame, detect_rotation, extract_frames
-from frames.scoring import blur_scores, exposure_score, redundancy_scores
+from frames.scoring import (
+    blur_scores,
+    exposure_score,
+    feature_support,
+    parallax_scores,
+    redundancy_scores,
+)
 from frames.selector import (
     FRAME_SCORE_COLUMNS,
     FrameQualityThresholds,
@@ -83,6 +89,35 @@ def test_redundancy_marks_duplicate_as_low_value() -> None:
     different[:, :40] = 255
     scores = redundancy_scores([first, duplicate, different])
     assert scores[1] < scores[2]
+
+
+def test_feature_support_rejects_blank_wall_and_reports_spatial_coverage() -> None:
+    blank = np.full((120, 160, 3), 127, np.uint8)
+    textured = blank.copy()
+    for y in range(10, 120, 20):
+        for x in range(10, 160, 20):
+            cv2.rectangle(textured, (x, y), (x + 5, y + 5), (255, 255, 255), -1)
+
+    blank_count, blank_coverage = feature_support(blank)
+    textured_count, textured_coverage = feature_support(textured)
+
+    assert blank_count == 0
+    assert blank_coverage == 0
+    assert textured_count > blank_count
+    assert textured_coverage > blank_coverage
+
+
+def test_parallax_diagnostic_distinguishes_duplicate_and_translated_frames() -> None:
+    first = np.zeros((120, 160, 3), np.uint8)
+    cv2.rectangle(first, (30, 30), (80, 90), (255, 255, 255), 3)
+    duplicate = first.copy()
+    transform = np.float32([[1, 0, 10], [0, 1, 0]])
+    translated = cv2.warpAffine(first, transform, (160, 120))
+
+    duplicate_score = parallax_scores([first, duplicate])[0]
+    translated_score = parallax_scores([first, translated])[0]
+
+    assert duplicate_score < translated_score
 
 
 def test_selector_respects_minimum_temporal_spacing() -> None:

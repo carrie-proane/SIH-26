@@ -80,6 +80,10 @@ export function getRun(runId: string): Promise<RunRecord> {
   return request<RunRecord>(`/api/runs/${runId}`);
 }
 
+export function cancelRun(runId: string): Promise<RunRecord> {
+  return request<RunRecord>(`/api/runs/${runId}/cancel`, { method: "POST" });
+}
+
 export function getViewerManifest(runId: string): Promise<ViewerManifest> {
   return request<ViewerManifest>(`/api/runs/${runId}/viewer-manifest`);
 }
@@ -93,7 +97,7 @@ export async function pollRun(
     if (signal?.aborted) throw new DOMException("Run polling cancelled", "AbortError");
     const record = await getRun(runId);
     onUpdate(record);
-    if (record.status === "COMPLETED" || record.status === "FAILED") return record;
+    if (["COMPLETED", "FAILED", "CANCELLED"].includes(record.status)) return record;
     await new Promise((resolve) => window.setTimeout(resolve, 500));
   }
 }

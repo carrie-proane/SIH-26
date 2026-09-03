@@ -40,11 +40,15 @@ def build_quality_report(
     confidence_available: bool = False,
     scene_analysis: dict[str, Any] | None = None,
     frame_quality: dict[str, Any] | None = None,
+    geometry_diagnostics: dict[str, Any] | None = None,
+    camera_model_selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     registration_rate = metrics.registration_rate
     alignment = alignment or {}
     scene_analysis = scene_analysis or {}
     frame_quality = frame_quality or {}
+    geometry_diagnostics = geometry_diagnostics or {}
+    camera_model_selection = camera_model_selection or {}
     residuals = [float(value) for value in alignment.get("residuals_m", [])]
     inlier_count = int(alignment.get("inlier_count", 0))
     sorted_residuals = sorted(residuals)
@@ -65,6 +69,7 @@ def build_quality_report(
                 ),
             }
         )
+    report_warnings.extend(geometry_diagnostics.get("warnings", []))
     genuine_real_evidence = record.source_provenance == ProvenanceOrigin.REAL
     return {
         "schema_version": "1.0",
@@ -114,6 +119,8 @@ def build_quality_report(
                 "reason": "Reference visible-region mask not supplied.",
             },
             "frame_quality_gate": frame_quality,
+            "geometry_diagnostics": geometry_diagnostics,
+            "camera_model_selection": camera_model_selection,
             "reconstruction_policy": {
                 "target": record.config.reconstruction_target,
                 "masking_mode": record.config.masking_mode,

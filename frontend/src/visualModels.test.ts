@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { ViewerManifest } from "./types";
-import { visualModeAvailable, visualModeMeasurementEligible, visualModeReason } from "./visualModels";
+import {
+  visualArtifactMeasurementLabel,
+  visualModeAvailable,
+  visualModeMeasurementEligible,
+  visualModeReason,
+} from "./visualModels";
 
 const manifest = {
   visual_models: {
@@ -30,8 +35,15 @@ describe("visual reconstruction protections", () => {
         },
       } as ViewerManifest),
     ).toBe(false);
+    expect(visualModeMeasurementEligible("EVIDENCE", {} as ViewerManifest)).toBe(false);
     expect(visualModeMeasurementEligible("TEXTURED", manifest)).toBe(false);
     expect(visualModeMeasurementEligible("PHOTOREAL", manifest)).toBe(false);
+    expect(visualArtifactMeasurementLabel("EVIDENCE", manifest)).toBe(
+      "measurement eligible",
+    );
+    expect(visualArtifactMeasurementLabel("EVIDENCE", {} as ViewerManifest)).toBe(
+      "verified measurement unavailable",
+    );
   });
 
   it("uses declared visual artifacts and falls back to evidence", () => {
@@ -41,5 +53,8 @@ describe("visual reconstruction protections", () => {
     expect(visualModeAvailable("PHOTOREAL", manifest)).toBe(false);
     expect(visualModeReason("PHOTOREAL", manifest)).toMatch(/Photoreal View unavailable/);
     expect(visualModeReason("TEXTURED", {} as ViewerManifest)).toMatch(/not declared/);
+    expect(visualModeReason("EVIDENCE", {} as ViewerManifest)).toMatch(
+      /verified measurement unavailable/i,
+    );
   });
 });

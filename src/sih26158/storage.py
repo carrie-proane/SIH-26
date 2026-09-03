@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Self
 
 from .models import (
     ArtifactEntry,
@@ -27,6 +27,63 @@ from .models import (
 )
 
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
+
+
+class RunExecutionLock:
+    """Cross-process advisory lock whose OS handle is released after a crash."""
+
+    def __init__(self, path: Path, *, blocking: bool = False) -> None:
+        self.path = path
+        self.blocking = blocking
+        self._stream: BinaryIO | None = None
+        self.acquired = False
+
+    def __enter__(self) -> Self:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._stream = self.path.open("a+b")
+        self._stream.seek(0, os.SEEK_END)
+        if self._stream.tell() == 0:
+            self._stream.write(b"0")
+            self._stream.flush()
+        try:
+            if os.name == "nt":  # pragma: no cover - exercised on Windows CI/hosts
+                import msvcrt
+
+                self._stream.seek(0)
+                mode = msvcrt.LK_LOCK if self.blocking else msvcrt.LK_NBLCK
+                msvcrt.locking(self._stream.fileno(), mode, 1)
+            else:
+                import fcntl
+
+                operation = fcntl.LOCK_EX
+                if not self.blocking:
+                    operation |= fcntl.LOCK_NB
+                fcntl.flock(self._stream.fileno(), operation)
+        except (BlockingIOError, OSError):
+            self._stream.close()
+            self._stream = None
+            return self
+        self.acquired = True
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        if self._stream is None:
+            return
+        try:
+            if self.acquired:
+                if os.name == "nt":  # pragma: no cover - exercised on Windows CI/hosts
+                    import msvcrt
+
+                    self._stream.seek(0)
+                    msvcrt.locking(self._stream.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(self._stream.fileno(), fcntl.LOCK_UN)
+        finally:
+            self._stream.close()
+            self._stream = None
+            self.acquired = False
 
 
 def combine_provenance(
@@ -227,6 +284,22 @@ class ProjectStore:
         if len(matches) != 1:
             raise FileNotFoundError(run_id)
         return RunRecord.model_validate_json(matches[0].read_text(encoding="utf-8"))
+
+    def list_runs(self) -> list[RunRecord]:
+        records: list[RunRecord] = []
+        for path in sorted(self.root.glob("*/runs/*/run_manifest.json")):
+            try:
+                records.append(RunRecord.model_validate_json(path.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                continue
+        return records
+
+    def execution_lock(self, run_id: str, *, blocking: bool = False) -> RunExecutionLock:
+        record = self.get_run(run_id)
+        return RunExecutionLock(
+            self.run_dir(record.project_id, record.run_id) / ".execution.lock",
+            blocking=blocking,
+        )
 
     def save_run(self, record: RunRecord) -> None:
         record.updated_at = utc_now()

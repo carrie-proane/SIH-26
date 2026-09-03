@@ -11,10 +11,12 @@ const STAGES: Array<{ status: RunStatus; label: string; detail: string }> = [
 interface ProgressScreenProps {
   run: RunRecord;
   onReset: () => void;
+  onCancel: () => void;
 }
 
-export function ProgressScreen({ run, onReset }: ProgressScreenProps) {
-  const activeIndex = run.status === "FAILED"
+export function ProgressScreen({ run, onReset, onCancel }: ProgressScreenProps) {
+  const stopped = run.status === "FAILED" || run.status === "CANCELLED";
+  const activeIndex = stopped
     ? Math.max(STAGES.findIndex((item) => item.status === run.stage), 0)
     : STAGES.findIndex((item) => item.status === run.stage);
 
@@ -24,14 +26,14 @@ export function ProgressScreen({ run, onReset }: ProgressScreenProps) {
         <div className="eyebrow">Run {run.run_id}</div>
         <div className="progress-title-row">
           <div>
-            <h1>{run.status === "FAILED" ? "Run stopped honestly" : "Building reconstruction evidence"}</h1>
+            <h1>{stopped ? "Run stopped honestly" : "Building reconstruction evidence"}</h1>
             <p>
-              {run.status === "FAILED"
+              {stopped
                 ? "Completed artifacts and the exact failure reason are retained below."
                 : "This page reports backend state directly; progress is never faked by the browser."}
             </p>
           </div>
-          <div className={`progress-orb ${run.status === "FAILED" ? "is-failed" : ""}`}>
+          <div className={`progress-orb ${stopped ? "is-failed" : ""}`}>
             <strong>{run.progress}%</strong>
             <span>{run.stage}</span>
           </div>
@@ -39,7 +41,7 @@ export function ProgressScreen({ run, onReset }: ProgressScreenProps) {
 
         <div className="progress-track" aria-label="Processing stages">
           {STAGES.map((stage, index) => {
-            const failedHere = run.status === "FAILED" && index === activeIndex;
+            const failedHere = stopped && index === activeIndex;
             const state = failedHere ? "failed" : index < activeIndex ? "complete" : index === activeIndex ? "active" : "pending";
             return (
               <div className={`progress-stage is-${state}`} key={stage.status}>
@@ -75,8 +77,17 @@ export function ProgressScreen({ run, onReset }: ProgressScreenProps) {
           )) : <div className="event-empty">Queued. Waiting for the pipeline worker…</div>}
         </div>
 
-        {run.status === "FAILED" && (
+        {stopped ? (
           <button type="button" className="secondary-action" onClick={onReset}>Start another run</button>
+        ) : (
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={Boolean(run.cancel_requested_at)}
+            onClick={onCancel}
+          >
+            {run.cancel_requested_at ? "Cancellation requested…" : "Cancel run safely"}
+          </button>
         )}
       </section>
     </main>

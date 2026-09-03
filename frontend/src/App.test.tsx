@@ -163,7 +163,7 @@ describe("operator application", () => {
     expect(texturedButton).toHaveAttribute("title", expect.stringMatching(/not declared/i));
     expect(photorealButton).toBeDisabled();
     expect(photorealButton).toHaveAttribute("title", expect.stringMatching(/not declared/i));
-    expect(screen.getByRole("button", { name: /measure/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /measure/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /ai depth/i })).toBeDisabled();
     expect(screen.getByText(/measurement: disabled/i)).toBeVisible();
   });

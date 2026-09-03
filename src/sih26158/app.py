@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -8,7 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .models import ProjectManifest, ProvenanceOrigin, RunConfig, RunRecord
+from .models import ProjectManifest, ProvenanceOrigin, RunConfig, RunRecord, RunStatus
 from .pipeline import PipelineRunner
 from .storage import ProjectStore
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
@@ -17,7 +18,14 @@ from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
 def create_app(data_root: str | Path | None = None) -> FastAPI:
     store = ProjectStore(data_root or os.getenv("SIH_DATA_ROOT", "data/projects"))
     runner = PipelineRunner(store)
-    app = FastAPI(title="SIH26158 Reconstruction API", version="0.1.0")
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        application.state.recovered_run_ids = runner.recover_interrupted_runs()
+        yield
+        runner.shutdown(wait=False)
+
+    app = FastAPI(title="SIH26158 Reconstruction API", version="0.1.0", lifespan=lifespan)
     app.state.store = store
     app.state.runner = runner
     app.add_middleware(
@@ -78,6 +86,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return store.get_run(run_id)
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(status_code=404, detail="Run not found") from exc
+
+    @app.post("/api/runs/{run_id}/resume", response_model=RunRecord, status_code=202)
+    def resume_run(run_id: str) -> RunRecord:
+        try:
+            current = store.get_run(run_id)
+            if current.status == RunStatus.COMPLETED:
+                raise HTTPException(status_code=409, detail="Completed runs cannot be resumed")
+            record, submitted = runner.resume(run_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Run not found") from exc
+        if not submitted:
+            raise HTTPException(status_code=409, detail="Run is already active")
+        return record
+
+    @app.post("/api/runs/{run_id}/cancel", response_model=RunRecord, status_code=202)
+    def cancel_run(run_id: str) -> RunRecord:
+        try:
+            record, accepted = runner.request_cancel(run_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Run not found") from exc
+        if not accepted:
+            raise HTTPException(status_code=409, detail="Run is not active")
+        return record
 
     @app.get("/api/runs/{run_id}/viewer-manifest")
     def get_viewer_manifest(run_id: str) -> dict[str, object]:

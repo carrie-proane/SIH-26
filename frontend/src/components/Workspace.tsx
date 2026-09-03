@@ -15,6 +15,7 @@ import {
   visualModeMeasurementEligible,
   visualModeReason,
 } from "../visualModels";
+import { coordinateFramePresentation } from "../coordinateFrame";
 import { PointCloudViewer } from "./PointCloudViewer";
 
 interface WorkspaceProps {
@@ -152,6 +153,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
   const provenance = manifest.source_provenance ?? quality.source_provenance ?? "UNKNOWN";
   const synthetic = provenance === "SYNTHETIC";
   const measurementGeometryEligible = visualModeMeasurementEligible(visualMode, manifest);
+  const framePresentation = coordinateFramePresentation(manifest.cloud.coordinate_frame);
   const inputAssets = project?.assets ?? bundle.ingest?.input_assets ?? [];
   const liveReferenceError =
     measurement.distanceM !== null && measurementReference.reference_m
@@ -206,6 +208,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
         <div className="rail-footer">
           <span>Coordinate frame</span>
           <strong>{manifest.cloud.coordinate_frame}</strong>
+          <small>{framePresentation.description}</small>
           <button type="button" onClick={onReset}>← New project</button>
         </div>
       </aside>
@@ -286,7 +289,9 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
               title={
                 measurementGeometryEligible
                   ? "Measure on evidence geometry"
-                  : "Measurements are available only on the Evidence Cloud"
+                  : visualMode === "EVIDENCE"
+                    ? "Verified measurement is unavailable for this evidence geometry"
+                    : "Measurements are available only on eligible Evidence Cloud geometry"
               }
               onClick={() => {
                 if (!measurementGeometryEligible) return;

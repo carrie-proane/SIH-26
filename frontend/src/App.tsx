@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  cancelRun,
   createSyntheticDemo,
   getProject,
   getRun,
@@ -46,7 +47,7 @@ export default function App() {
     window.history.replaceState(null, "", `?run=${encodeURIComponent(initial.run_id)}`);
     setScreen("PROCESSING");
     const completed = await pollRun(initial.run_id, setRun, controller.signal);
-    if (completed.status === "FAILED") return;
+    if (completed.status === "FAILED" || completed.status === "CANCELLED") return;
     const manifest = await getViewerManifest(completed.run_id);
     const loaded = await loadViewerBundle(manifest);
     setRun(completed);
@@ -79,8 +80,11 @@ export default function App() {
       setProject(createdProject);
       const config: Record<string, unknown> = {
         execution_mode: "COLMAP",
-        profile: "preview",
+        profile: "accurate",
         matcher: "SIFT",
+        matching_strategy: "AUTO",
+        camera_model: "SIMPLE_RADIAL",
+        camera_model_policy: "AUTO",
         use_gpu: input.useGpu,
         enable_dense_reconstruction: input.enableDenseReconstruction,
         reconstruction_target: input.reconstructionTarget,
@@ -143,6 +147,15 @@ export default function App() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!run) return;
+    try {
+      setRun(await cancelRun(run.run_id));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Cancellation could not be requested.");
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("fixture") === "1") {
@@ -182,7 +195,9 @@ export default function App() {
           onOfflineFixture={() => void handleOfflineFixture()}
         />
       )}
-      {screen === "PROCESSING" && run && <ProgressScreen run={run} onReset={reset} />}
+      {screen === "PROCESSING" && run && (
+        <ProgressScreen run={run} onReset={reset} onCancel={() => void handleCancel()} />
+      )}
       {screen === "WORKSPACE" && bundle && (
         <Workspace bundle={bundle} project={project} run={run} onReset={reset} />
       )}

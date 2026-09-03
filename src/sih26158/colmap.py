@@ -16,6 +16,7 @@ import numpy as np
 
 from .confidence import classify_observed_point
 from .models import MatcherMetrics, RunConfig
+from .process_control import ManagedProcessExecutor
 
 
 class ExternalToolError(RuntimeError):
@@ -43,6 +44,31 @@ class SparseModelCandidate:
             else float("inf")
         )
         return (-self.registered_images, error, str(self.path))
+
+
+@dataclass
+class CameraModelAttempt:
+    attempt_id: str
+    camera_model: str
+    workspace: Path
+    recovery: bool
+    status: str
+    commands: list[list[str]]
+    sparse_model: SparseModelCandidate | None = None
+    intrinsics: dict[str, object] | None = None
+    failure_reason: str | None = None
+
+    def valid(self) -> bool:
+        return (
+            self.status == "COMPLETED"
+            and self.sparse_model is not None
+            and bool((self.intrinsics or {}).get("plausible", False))
+        )
+
+    def sort_key(self) -> tuple[int, float, str]:
+        if self.sparse_model is None:
+            return (0, float("inf"), self.attempt_id)
+        return self.sparse_model.sort_key()
 
 
 def choose_matcher(sift: MatcherMetrics, learned: MatcherMetrics | None) -> tuple[str, str]:
@@ -88,8 +114,13 @@ def write_matcher_benchmark(
 
 
 class ColmapRunner:
-    def __init__(self, binary: str = "colmap") -> None:
+    def __init__(
+        self,
+        binary: str = "colmap",
+        executor: ManagedProcessExecutor | None = None,
+    ) -> None:
         self.binary = binary
+        self.executor = executor
 
     def doctor(self) -> str:
         location = shutil.which(self.binary)
@@ -100,9 +131,18 @@ class ColmapRunner:
             )
         return location
 
-    def build_commands(self, frames: Path, run_dir: Path, config: RunConfig) -> list[list[str]]:
-        database = run_dir / "sparse" / "database.db"
-        model = run_dir / "sparse" / "model"
+    def build_commands(
+        self,
+        frames: Path,
+        run_dir: Path,
+        config: RunConfig,
+        *,
+        workspace: Path | None = None,
+        recovery: bool = False,
+    ) -> list[list[str]]:
+        workspace = workspace or run_dir
+        database = workspace / "sparse" / "database.db"
+        model = workspace / "sparse" / "model"
         model.mkdir(parents=True, exist_ok=True)
         gpu = "1" if config.use_gpu else "0"
         feature_command = [
@@ -118,7 +158,28 @@ class ColmapRunner:
             "1",
             "--FeatureExtraction.use_gpu",
             gpu,
+            "--SiftExtraction.max_num_features",
+            (
+                "32768"
+                if recovery
+                else "16384"
+                if config.profile in {"balanced", "accurate", "diagnostic"}
+                else "8192"
+            ),
         ]
+        if recovery:
+            feature_command.extend(["--SiftExtraction.peak_threshold", "0.003"])
+        if config.profile == "accurate":
+            feature_command.extend(
+                [
+                    "--SiftExtraction.estimate_affine_shape",
+                    "1",
+                    "--SiftExtraction.domain_size_pooling",
+                    "1",
+                ]
+            )
+        if config.camera_params:
+            feature_command.extend(["--ImageReader.camera_params", config.camera_params])
         mask_dir = run_dir / "masks" / "reconstruction"
         image_names = (
             [
@@ -131,40 +192,138 @@ class ColmapRunner:
         )
         if image_names and all((mask_dir / f"{name}.png").is_file() for name in image_names):
             feature_command.extend(["--ImageReader.mask_path", str(mask_dir)])
-        return [
-            feature_command,
+        exhaustive = (
+            recovery
+            or config.matching_strategy == "EXHAUSTIVE"
+            or (config.matching_strategy == "AUTO" and config.profile == "accurate")
+        )
+        matching_command = [
+            self.binary,
+            "exhaustive_matcher" if exhaustive else "sequential_matcher",
+            "--database_path",
+            str(database),
+            "--FeatureMatching.use_gpu",
+            gpu,
+            "--FeatureMatching.guided_matching",
+            "1",
+            "--TwoViewGeometry.max_error",
+            "3",
+        ]
+        if not exhaustive:
+            matching_command.extend(
+                [
+                    "--SequentialMatching.overlap",
+                    str(config.sequential_overlap),
+                    "--SequentialMatching.quadratic_overlap",
+                    "1",
+                ]
+            )
+            if config.vocab_tree_path and Path(config.vocab_tree_path).is_file():
+                matching_command.extend(
+                    [
+                        "--SequentialMatching.loop_detection",
+                        "1",
+                        "--SequentialMatching.vocab_tree_path",
+                        config.vocab_tree_path,
+                    ]
+                )
+        mapper_command = [
+            self.binary,
+            "mapper",
+            "--database_path",
+            str(database),
+            "--image_path",
+            str(frames),
+            "--output_path",
+            str(model),
+            "--Mapper.filter_max_reproj_error",
+            "3",
+            "--Mapper.filter_min_tri_angle",
+            "2",
+            "--Mapper.ba_refine_focal_length",
+            "1" if config.refine_intrinsics else "0",
+            "--Mapper.ba_refine_principal_point",
+            "0",
+            "--Mapper.ba_refine_extra_params",
+            "1" if config.refine_intrinsics else "0",
+            "--Mapper.ba_global_max_num_iterations",
+            "100" if config.profile == "accurate" else "75",
+        ]
+        if recovery:
+            mapper_command.extend(
+                [
+                    "--Mapper.init_min_num_inliers",
+                    "60",
+                    "--Mapper.max_reg_trials",
+                    "5",
+                ]
+            )
+        return [feature_command, matching_command, mapper_command]
+
+    def _refine_model(
+        self, model_dir: Path, run_dir: Path, config: RunConfig, log: Path
+    ) -> tuple[Path, list[list[str]]]:
+        """Run a final global adjustment and conservative geometric point filter."""
+
+        refined = run_dir / "sparse" / "refined_model"
+        filtered = run_dir / "sparse" / "filtered_model"
+        refined.mkdir(parents=True, exist_ok=True)
+        filtered.mkdir(parents=True, exist_ok=True)
+        commands = [
             [
                 self.binary,
-                "sequential_matcher",
-                "--database_path",
-                str(database),
-                "--SequentialMatching.overlap",
-                str(config.sequential_overlap),
-                "--FeatureMatching.use_gpu",
-                gpu,
+                "bundle_adjuster",
+                "--input_path",
+                str(model_dir),
+                "--output_path",
+                str(refined),
+                "--BundleAdjustment.refine_focal_length",
+                "1" if config.refine_intrinsics else "0",
+                "--BundleAdjustment.refine_principal_point",
+                "0",
+                "--BundleAdjustment.refine_extra_params",
+                "1" if config.refine_intrinsics else "0",
+                "--BundleAdjustment.refine_points3D",
+                "1",
+                "--BundleAdjustmentCeres.max_num_iterations",
+                "150" if config.profile == "accurate" else "100",
             ],
             [
                 self.binary,
-                "mapper",
-                "--database_path",
-                str(database),
-                "--image_path",
-                str(frames),
+                "point_filtering",
+                "--input_path",
+                str(refined),
                 "--output_path",
-                str(model),
+                str(filtered),
+                "--min_track_len",
+                "2",
+                "--max_reproj_error",
+                "3",
+                "--min_tri_angle",
+                "2",
             ],
         ]
+        for command in commands:
+            self._execute(command, log)
+        return filtered, commands
 
     def _execute(self, command: list[str], log: Path) -> None:
         with log.open("a", encoding="utf-8") as stream:
             stream.write("$ " + " ".join(command) + "\n")
-            result = subprocess.run(
-                command,
-                stdout=stream,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=False,
-            )
+            if self.executor is None:
+                result = subprocess.run(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=False,
+                )
+            else:
+                result = self.executor.run(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                )
         if result.returncode:
             raise ExternalToolError(
                 f"COLMAP command failed with exit code {result.returncode}. Inspect {log.name}; "
@@ -266,6 +425,189 @@ class ColmapRunner:
             report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return selected
 
+    @staticmethod
+    def _camera_model_candidates(config: RunConfig) -> list[str]:
+        if config.camera_model_policy == "FIXED":
+            return [config.camera_model]
+        candidates = [config.camera_model, "SIMPLE_RADIAL", "RADIAL", "OPENCV"]
+        return list(dict.fromkeys(candidates))
+
+    @staticmethod
+    def _inspect_intrinsics(cameras_txt: Path) -> dict[str, object]:
+        cameras: list[dict[str, object]] = []
+        reasons: list[str] = []
+        for raw in cameras_txt.read_text(encoding="utf-8").splitlines():
+            if not raw or raw.startswith("#"):
+                continue
+            values = raw.split()
+            if len(values) < 8:
+                reasons.append("MALFORMED_CAMERA_RECORD")
+                continue
+            model = values[1]
+            width, height = int(values[2]), int(values[3])
+            params = [float(value) for value in values[4:]]
+            if model in {"SIMPLE_RADIAL", "RADIAL"} and len(params) >= 4:
+                focal_x = focal_y = params[0]
+                principal_x, principal_y = params[1:3]
+                radial = params[3:]
+                tangential: list[float] = []
+            elif model == "OPENCV" and len(params) >= 8:
+                focal_x, focal_y, principal_x, principal_y = params[:4]
+                radial = params[4:6]
+                tangential = params[6:8]
+            else:
+                reasons.append(f"UNSUPPORTED_OR_MALFORMED_MODEL:{model}")
+                continue
+            scale = float(max(width, height, 1))
+            focal_ratio = min(focal_x, focal_y) / scale
+            focal_aspect_ratio = max(focal_x, focal_y) / max(min(focal_x, focal_y), 1e-12)
+            principal_offset = float(
+                np.hypot(principal_x - width / 2, principal_y - height / 2) / scale
+            )
+            max_radial = max((abs(value) for value in radial), default=0.0)
+            max_tangential = max((abs(value) for value in tangential), default=0.0)
+            if not 0.2 <= focal_ratio <= 5.0:
+                reasons.append(f"IMPLAUSIBLE_FOCAL_RATIO:{focal_ratio:.6f}")
+            if focal_aspect_ratio > 2.0:
+                reasons.append(f"IMPLAUSIBLE_FOCAL_ASPECT:{focal_aspect_ratio:.6f}")
+            if principal_offset > 0.25:
+                reasons.append(f"IMPLAUSIBLE_PRINCIPAL_POINT:{principal_offset:.6f}")
+            if max_radial > 2.0:
+                reasons.append(f"UNSTABLE_RADIAL_DISTORTION:{max_radial:.6f}")
+            if max_tangential > 0.5:
+                reasons.append(f"UNSTABLE_TANGENTIAL_DISTORTION:{max_tangential:.6f}")
+            cameras.append(
+                {
+                    "camera_id": int(values[0]),
+                    "model": model,
+                    "width": width,
+                    "height": height,
+                    "focal_ratio": focal_ratio,
+                    "focal_aspect_ratio": focal_aspect_ratio,
+                    "principal_offset_fraction": principal_offset,
+                    "max_abs_radial_distortion": max_radial,
+                    "max_abs_tangential_distortion": max_tangential,
+                }
+            )
+        if not cameras:
+            reasons.append("NO_VALID_CAMERA_RECORDS")
+        return {
+            "plausible": bool(cameras) and not reasons,
+            "camera_count": len(cameras),
+            "cameras": cameras,
+            "rejection_reasons": sorted(set(reasons)),
+            "bounds": {
+                "focal_ratio": [0.2, 5.0],
+                "max_focal_aspect_ratio": 2.0,
+                "max_principal_offset_fraction": 0.25,
+                "max_abs_radial_distortion": 2.0,
+                "max_abs_tangential_distortion": 0.5,
+            },
+        }
+
+    def _run_camera_attempt(
+        self,
+        frames: Path,
+        run_dir: Path,
+        config: RunConfig,
+        *,
+        attempt_id: str,
+        camera_model: str,
+        recovery: bool,
+        log: Path,
+    ) -> CameraModelAttempt:
+        workspace = run_dir / "sparse" / "attempts" / attempt_id
+        # Attempt workspaces are private scratch state, never declared evidence.
+        # COLMAP's feature extractor appends to an existing database, so reusing
+        # a workspace left by a killed process can mix two executions or fail on
+        # duplicate images. Restart the bounded attempt from a clean boundary;
+        # completed, declared sparse exports elsewhere in the run remain intact.
+        if workspace.exists():
+            shutil.rmtree(workspace)
+        workspace.mkdir(parents=True, exist_ok=True)
+        attempt_config = config.model_copy(update={"camera_model": camera_model})
+        commands = self.build_commands(
+            frames, run_dir, attempt_config, workspace=workspace, recovery=recovery
+        )
+        attempt = CameraModelAttempt(
+            attempt_id=attempt_id,
+            camera_model=camera_model,
+            workspace=workspace,
+            recovery=recovery,
+            status="STARTED",
+            commands=commands,
+        )
+        try:
+            with log.open("a", encoding="utf-8") as stream:
+                stream.write(
+                    f"\n# camera-model attempt {attempt_id}: {camera_model}; recovery={recovery}\n"
+                )
+            for command in commands:
+                self._execute(command, log)
+            selection_path = workspace / "sparse" / "model_selection.json"
+            attempt.sparse_model = self.select_best_model(
+                workspace / "sparse" / "model", selection_path
+            )
+            text_model = workspace / "sparse" / "text_model"
+            text_model.mkdir(exist_ok=True)
+            converter = [
+                self.binary,
+                "model_converter",
+                "--input_path",
+                str(attempt.sparse_model.path),
+                "--output_path",
+                str(text_model),
+                "--output_type",
+                "TXT",
+            ]
+            attempt.commands.append(converter)
+            self._execute(converter, log)
+            attempt.intrinsics = self._inspect_intrinsics(text_model / "cameras.txt")
+            attempt.status = "COMPLETED"
+        except (ExternalToolError, OSError, ValueError) as exc:
+            attempt.status = "FAILED"
+            attempt.failure_reason = str(exc)
+        return attempt
+
+    @staticmethod
+    def _attempt_payload(attempt: CameraModelAttempt, root: Path) -> dict[str, object]:
+        sparse = attempt.sparse_model
+        return {
+            "attempt_id": attempt.attempt_id,
+            "camera_model": attempt.camera_model,
+            "recovery": attempt.recovery,
+            "status": attempt.status,
+            "workspace": str(attempt.workspace.relative_to(root)),
+            "registered_images": sparse.registered_images if sparse else 0,
+            "median_reprojection_error_px": (
+                sparse.median_reprojection_error_px if sparse else None
+            ),
+            "p95_reprojection_error_px": sparse.p95_reprojection_error_px if sparse else None,
+            "selected_sparse_model": (
+                str(sparse.path.relative_to(root)) if sparse is not None else None
+            ),
+            "intrinsics": attempt.intrinsics,
+            "failure_reason": attempt.failure_reason,
+            "commands": attempt.commands,
+        }
+
+    @staticmethod
+    def _retry_required(
+        attempt: CameraModelAttempt, eligible_images: int
+    ) -> tuple[bool, list[str]]:
+        reasons: list[str] = []
+        sparse = attempt.sparse_model
+        if sparse is None:
+            return True, ["NO_SPARSE_MODEL"]
+        registration_rate = sparse.registered_images / eligible_images if eligible_images else 0.0
+        if registration_rate < 0.8:
+            reasons.append("REGISTRATION_BELOW_80_PERCENT")
+        if sparse.median_reprojection_error_px is None or sparse.median_reprojection_error_px > 1.5:
+            reasons.append("MEDIAN_REPROJECTION_ABOVE_1_5_PX")
+        if sparse.p95_reprojection_error_px is None or sparse.p95_reprojection_error_px > 4.0:
+            reasons.append("P95_REPROJECTION_ABOVE_4_PX")
+        return bool(reasons), reasons
+
     def run(self, frames: Path, run_dir: Path, config: RunConfig) -> ReconstructionResult:
         self.doctor()
         images = [p for p in frames.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
@@ -275,28 +617,140 @@ class ColmapRunner:
                 "and keyframes.json before reconstruction."
             )
         log = run_dir / "logs" / "colmap.log"
-        commands = self.build_commands(frames, run_dir, config)
         started = time.monotonic()
-        for command in commands:
-            self._execute(command, log)
+        attempts: list[CameraModelAttempt] = []
+        for index, camera_model in enumerate(self._camera_model_candidates(config)):
+            safe_model = re.sub(r"[^a-z0-9]+", "_", camera_model.lower()).strip("_")
+            attempts.append(
+                self._run_camera_attempt(
+                    frames,
+                    run_dir,
+                    config,
+                    attempt_id=f"{index:02d}_{safe_model}",
+                    camera_model=camera_model,
+                    recovery=False,
+                    log=log,
+                )
+            )
+        valid_attempts = [attempt for attempt in attempts if attempt.valid()]
+        initial_selected = (
+            min(valid_attempts, key=CameraModelAttempt.sort_key) if valid_attempts else None
+        )
+        retry_reasons: list[str] = []
+        if initial_selected is not None:
+            retry_required, retry_reasons = self._retry_required(initial_selected, len(images))
+            if retry_required and config.max_reconstruction_retries:
+                retry_model = re.sub(
+                    r"[^a-z0-9]+", "_", initial_selected.camera_model.lower()
+                ).strip("_")
+                attempts.append(
+                    self._run_camera_attempt(
+                        frames,
+                        run_dir,
+                        config,
+                        attempt_id=f"retry_01_{retry_model}",
+                        camera_model=initial_selected.camera_model,
+                        recovery=True,
+                        log=log,
+                    )
+                )
+        valid_attempts = [attempt for attempt in attempts if attempt.valid()]
+        selected_attempt = (
+            min(valid_attempts, key=CameraModelAttempt.sort_key) if valid_attempts else None
+        )
+        camera_selection_path = run_dir / "sparse" / "camera_model_selection.json"
+        camera_report = {
+            "schema_version": "1.0",
+            "policy": config.camera_model_policy,
+            "candidate_models": self._camera_model_candidates(config),
+            "maximum_recovery_retries": config.max_reconstruction_retries,
+            "retry_triggered": len(attempts) > len(self._camera_model_candidates(config)),
+            "retry_trigger_reasons": retry_reasons,
+            "selection_order": [
+                "reject malformed or physically implausible intrinsics",
+                "highest registered_images",
+                "lowest median_reprojection_error_px",
+                "lexical attempt path",
+            ],
+            "attempts": [self._attempt_payload(attempt, run_dir) for attempt in attempts],
+            "selected_attempt": selected_attempt.attempt_id if selected_attempt else None,
+            "selected_camera_model": selected_attempt.camera_model if selected_attempt else None,
+            "rationale": (
+                "Selected the valid attempt using registered-image count descending, median "
+                "reprojection error ascending, and lexical attempt path. One recovery attempt "
+                "is permitted only when the initial winner misses registration or reprojection gates."
+            ),
+        }
+        camera_selection_path.write_text(
+            json.dumps(camera_report, indent=2) + "\n", encoding="utf-8"
+        )
+        if selected_attempt is None or selected_attempt.sparse_model is None:
+            raise ExternalToolError(
+                "Every bounded camera-model attempt failed or produced implausible intrinsics. "
+                "Inspect sparse/camera_model_selection.json and logs/colmap.log; no model was "
+                "silently accepted."
+            )
         selection_path = run_dir / "sparse" / "model_selection.json"
-        selected = self.select_best_model(run_dir / "sparse" / "model", selection_path)
-        model_dir = selected.path
+        selection_report = {
+            "schema_version": "1.0",
+            "selection_order": [
+                "valid camera intrinsics",
+                "highest registered_images",
+                "lowest median_reprojection_error_px",
+                "lexical path",
+            ],
+            "candidates": [
+                {
+                    "path": (
+                        str(attempt.sparse_model.path.relative_to(run_dir / "sparse"))
+                        if attempt.sparse_model
+                        else None
+                    ),
+                    "camera_model": attempt.camera_model,
+                    "registered_images": (
+                        attempt.sparse_model.registered_images if attempt.sparse_model else 0
+                    ),
+                    "median_reprojection_error_px": (
+                        attempt.sparse_model.median_reprojection_error_px
+                        if attempt.sparse_model
+                        else None
+                    ),
+                    "p95_reprojection_error_px": (
+                        attempt.sparse_model.p95_reprojection_error_px
+                        if attempt.sparse_model
+                        else None
+                    ),
+                    "valid_intrinsics": bool((attempt.intrinsics or {}).get("plausible", False)),
+                    "status": attempt.status,
+                }
+                for attempt in attempts
+            ],
+            "selected_model": str(
+                selected_attempt.sparse_model.path.relative_to(run_dir / "sparse")
+            ),
+            "selected_camera_model": selected_attempt.camera_model,
+            "rationale": camera_report["rationale"],
+        }
+        selection_path.write_text(json.dumps(selection_report, indent=2) + "\n", encoding="utf-8")
+        commands = [command for attempt in attempts for command in attempt.commands]
+        model_dir, refinement_commands = self._refine_model(
+            selected_attempt.sparse_model.path, run_dir, config, log
+        )
+        commands.extend(refinement_commands)
         text_model = run_dir / "sparse" / "text_model"
         text_model.mkdir(exist_ok=True)
-        self._execute(
-            [
-                self.binary,
-                "model_converter",
-                "--input_path",
-                str(model_dir),
-                "--output_path",
-                str(text_model),
-                "--output_type",
-                "TXT",
-            ],
-            log,
-        )
+        final_converter = [
+            self.binary,
+            "model_converter",
+            "--input_path",
+            str(model_dir),
+            "--output_path",
+            str(text_model),
+            "--output_type",
+            "TXT",
+        ]
+        commands.append(final_converter)
+        self._execute(final_converter, log)
         ply = run_dir / "sparse" / "sparse.ply"
         confidence_path = run_dir / "point_confidence.json"
         self._export_points_and_confidence(
@@ -307,23 +761,48 @@ class ColmapRunner:
         )
         poses = run_dir / "camera_poses.csv"
         self._export_camera_poses(text_model / "images.txt", poses)
-        analysis = subprocess.run(
-            [self.binary, "model_analyzer", "--path", str(model_dir)],
-            capture_output=True,
-            text=True,
-            check=False,
+        geometry_report = run_dir / "sparse" / "geometry_diagnostics.json"
+        self._write_geometry_diagnostics(
+            text_model / "points3D.txt",
+            text_model / "images.txt",
+            geometry_report,
+            eligible_images=len(images),
+        )
+        selection_payload = json.loads(selection_path.read_text(encoding="utf-8"))
+        selection_payload["refined_export_model"] = str(model_dir.relative_to(run_dir / "sparse"))
+        selection_payload["refinement"] = (
+            "Global bundle adjustment followed by track/reprojection/triangulation filtering"
+        )
+        selection_path.write_text(json.dumps(selection_payload, indent=2) + "\n", encoding="utf-8")
+        analyzer_command = [self.binary, "model_analyzer", "--path", str(model_dir)]
+        commands.append(analyzer_command)
+        analysis = (
+            subprocess.run(
+                analyzer_command,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if self.executor is None
+            else self.executor.run(analyzer_command, capture_output=True)
         )
         (run_dir / "sparse" / "model_analysis.txt").write_text(
             analysis.stdout + analysis.stderr, encoding="utf-8"
+        )
+        commands_path = run_dir / "sparse" / "sparse_commands.json"
+        commands_path.write_text(
+            json.dumps({"schema_version": "1.0", "commands": commands}, indent=2) + "\n",
+            encoding="utf-8",
         )
         values = {
             k.lower().replace(" ", "_"): v
             for k, v in re.findall(r"^([^:]+):\s*(.+)$", analysis.stdout, re.MULTILINE)
         }
-        registered = selected.registered_images
+        registered = self._read_registered_image_count(model_dir / "images.bin")
         analyzer_error = float(str(values.get("mean_reprojection_error", "0")).split()[0])
-        median_error = selected.median_reprojection_error_px
-        p95_error = selected.p95_reprojection_error_px
+        refined_errors = self._read_point_errors(model_dir / "points3D.bin")
+        median_error = float(np.median(refined_errors)) if refined_errors else None
+        p95_error = float(np.percentile(refined_errors, 95)) if refined_errors else None
         metrics = MatcherMetrics(
             matcher=config.matcher,
             eligible_frames=len(images),
@@ -342,10 +821,126 @@ class ColmapRunner:
                 log,
                 run_dir / "sparse" / "model_analysis.txt",
                 selection_path,
+                camera_selection_path,
                 confidence_path,
+                geometry_report,
+                commands_path,
             ],
             commands,
         )
+
+    @classmethod
+    def _write_geometry_diagnostics(
+        cls,
+        points_txt: Path,
+        images_txt: Path,
+        output: Path,
+        *,
+        eligible_images: int,
+    ) -> dict[str, object]:
+        centres = cls._camera_centres(images_txt)
+        track_lengths: list[int] = []
+        errors: list[float] = []
+        angles: list[float] = []
+        positions: list[np.ndarray] = []
+        for raw in points_txt.read_text(encoding="utf-8").splitlines():
+            if not raw or raw.startswith("#"):
+                continue
+            values = raw.split()
+            if len(values) < 12:
+                continue
+            position = np.asarray([float(value) for value in values[1:4]], dtype=float)
+            image_ids = [int(values[index]) for index in range(8, len(values), 2)]
+            positions.append(position)
+            track_lengths.append(len(image_ids))
+            errors.append(float(values[7]))
+            angles.append(cls._triangulation_angle(position, image_ids, centres))
+        camera_values = np.asarray(list(centres.values()), dtype=float)
+        point_values = np.asarray(positions, dtype=float)
+        camera_span = (
+            float(np.linalg.norm(np.ptp(camera_values, axis=0))) if len(camera_values) else 0.0
+        )
+        scene_span = (
+            float(np.linalg.norm(np.ptp(point_values, axis=0))) if len(point_values) else 0.0
+        )
+        baseline_ratio = camera_span / scene_span if scene_span > 0 else 0.0
+        if len(camera_values) >= 3:
+            singular = np.linalg.svd(
+                camera_values - np.mean(camera_values, axis=0), compute_uv=False
+            )
+            camera_rank_ratio = float(singular[1] / singular[0]) if singular[0] > 0 else 0.0
+        else:
+            camera_rank_ratio = 0.0
+        registered = len(centres)
+        registration_rate = registered / eligible_images if eligible_images else 0.0
+        median_track = float(np.median(track_lengths)) if track_lengths else 0.0
+        median_angle = float(np.median(angles)) if angles else 0.0
+        median_error = float(np.median(errors)) if errors else float("inf")
+        p95_error = float(np.percentile(errors, 95)) if errors else float("inf")
+        warnings: list[dict[str, str]] = []
+        if registration_rate < 0.8:
+            warnings.append(
+                {
+                    "code": "LOW_REGISTRATION",
+                    "message": "Fewer than 80% of selected frames registered.",
+                }
+            )
+        if median_angle < 2:
+            warnings.append(
+                {
+                    "code": "LOW_TRIANGULATION_ANGLE",
+                    "message": "Median point triangulation angle is below 2 degrees; depth is weakly constrained.",
+                }
+            )
+        if median_track < 3:
+            warnings.append(
+                {
+                    "code": "SHORT_FEATURE_TRACKS",
+                    "message": "Median reconstructed point track has fewer than three supporting views.",
+                }
+            )
+        if baseline_ratio < 0.01:
+            warnings.append(
+                {
+                    "code": "MOSTLY_ROTATIONAL_CAPTURE",
+                    "message": "Camera-centre span is very small relative to the reconstructed scene.",
+                }
+            )
+        if camera_rank_ratio < 0.02:
+            warnings.append(
+                {
+                    "code": "DEGENERATE_CAMERA_PATH",
+                    "message": "Registered camera centres have very limited two-dimensional spread.",
+                }
+            )
+        gates = {
+            "registration_80_percent": registration_rate >= 0.8,
+            "median_reprojection_1_5_px": median_error <= 1.5,
+            "p95_reprojection_4_px": p95_error <= 4,
+            "median_track_length_3": median_track >= 3,
+            "median_triangulation_angle_2_deg": median_angle >= 2,
+            "camera_baseline_ratio_0_01": baseline_ratio >= 0.01,
+        }
+        payload: dict[str, object] = {
+            "schema_version": "1.0",
+            "status": "PASS" if all(gates.values()) else "LIMITED",
+            "measurement_geometry_gate_passed": all(gates.values()),
+            "eligible_images": eligible_images,
+            "registered_images": registered,
+            "registration_rate": registration_rate,
+            "point_count": len(positions),
+            "median_track_length": median_track,
+            "median_triangulation_angle_deg": median_angle,
+            "median_reprojection_error_px": median_error if errors else None,
+            "p95_reprojection_error_px": p95_error if errors else None,
+            "camera_span_scene_ratio": baseline_ratio,
+            "camera_secondary_spread_ratio": camera_rank_ratio,
+            "gates": gates,
+            "warnings": warnings,
+            "interpretation": "These diagnostics constrain geometric reliability; they do not independently verify metric scale.",
+        }
+        output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        return payload
 
     @staticmethod
     def _quaternion_rotation(qw: float, qx: float, qy: float, qz: float) -> np.ndarray:

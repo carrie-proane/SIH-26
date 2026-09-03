@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("offline fixture opens the WebGL operator workspace", async ({ page }) => {
+test("offline fixture opens the WebGL operator workspace", async ({ page }, testInfo) => {
   await page.goto("/?fixture=1");
   await expect(page.getByText("UI / orchestration fixture")).toBeVisible();
   await expect(page.getByLabel("Interactive reconstruction viewport")).toBeVisible();
@@ -16,12 +16,12 @@ test("offline fixture opens the WebGL operator workspace", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   const viewport = await page.getByLabel("Interactive reconstruction viewport").boundingBox();
   expect(viewport?.height).toBeLessThan(900);
-  await page.screenshot({ path: "../evidence/arnav/operator-ui-fixture.png", fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("operator-ui-fixture.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByLabel("Interactive reconstruction viewport")).toBeVisible();
 
-  await page.getByRole("button", { name: /Measure/i }).click();
-  await expect(page.getByText("Select two visible points", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Measure/i })).toBeDisabled();
+  await expect(page.getByText(/verified measurement unavailable/i).first()).toBeVisible();
 
   await page.getByRole("button", { name: /Source frame/i }).click();
   await expect(page.getByText("SOURCE PREVIEW NOT DECLARED")).toBeVisible();

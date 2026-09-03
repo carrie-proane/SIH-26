@@ -5,7 +5,8 @@ export type RunStatus =
   | "RECONSTRUCTING"
   | "REPORTING"
   | "COMPLETED"
-  | "FAILED";
+  | "FAILED"
+  | "CANCELLED";
 
 export type ConfidenceLabel =
   | "OBSERVED_HIGH"
@@ -52,7 +53,7 @@ export interface ArtifactEntry {
 
 export interface StageEvent {
   stage: RunStatus;
-  status: "STARTED" | "COMPLETED" | "FAILED";
+  status: "STARTED" | "COMPLETED" | "FAILED" | "CANCELLED";
   timestamp: string;
   progress: number;
   message: string;
@@ -80,6 +81,12 @@ export interface RunRecord {
   offset_source: "automatic" | "manual" | "calibrated" | "not_applicable";
   rmse_before_m: number | null;
   rmse_after_m: number | null;
+  last_heartbeat_at?: string | null;
+  cancel_requested_at?: string | null;
+  cancelled_at?: string | null;
+  capability_profile_path?: string | null;
+  effective_sparse_gpu?: boolean;
+  selected_dense_provider?: "colmap" | "openmvs" | null;
 }
 
 export interface ConfidenceLegendItem {

@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 
 from .geo import SimilarityTransform, transform_ply
+from .process_control import ManagedProcessExecutor, ProcessCancelledError
 from .storage import atomic_json, runtime_environment
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -320,9 +321,15 @@ class DenseReconstructionProvider(ABC):
 class ColmapDenseProvider(DenseReconstructionProvider):
     name = "COLMAP_DENSE"
 
-    def __init__(self, binary: str = "colmap", runner: CommandRunner = subprocess.run) -> None:
+    def __init__(
+        self,
+        binary: str = "colmap",
+        runner: CommandRunner = subprocess.run,
+        executor: ManagedProcessExecutor | None = None,
+    ) -> None:
         self.binary = binary
         self.runner = runner
+        self.executor = executor
 
     def _help(self, command: str) -> str:
         completed = self.runner(
@@ -359,12 +366,20 @@ class ColmapDenseProvider(DenseReconstructionProvider):
     def _execute(self, command: list[str], log_path: Path) -> None:
         with log_path.open("a", encoding="utf-8") as stream:
             stream.write("$ " + " ".join(command) + "\n")
-            completed = self.runner(
-                command,
-                stdout=stream,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=False,
+            completed = (
+                self.runner(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=False,
+                )
+                if self.executor is None
+                else self.executor.run(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                )
             )
         if completed.returncode:
             raise DenseProviderError(
@@ -593,9 +608,11 @@ class OpenMVSProvider(DenseReconstructionProvider):
         self,
         runner: CommandRunner = subprocess.run,
         colmap_binary: str = "colmap",
+        executor: ManagedProcessExecutor | None = None,
     ) -> None:
         self.runner = runner
         self.colmap_binary = colmap_binary
+        self.executor = executor
 
     def availability(self) -> tuple[bool, str]:
         missing = [tool for tool in self.tools if shutil.which(tool) is None]
@@ -606,12 +623,20 @@ class OpenMVSProvider(DenseReconstructionProvider):
     def _execute(self, command: list[str], log_path: Path) -> None:
         with log_path.open("a", encoding="utf-8") as stream:
             stream.write("$ " + " ".join(command) + "\n")
-            completed = self.runner(
-                command,
-                stdout=stream,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=False,
+            completed = (
+                self.runner(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=False,
+                )
+                if self.executor is None
+                else self.executor.run(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                )
             )
         if completed.returncode:
             raise DenseProviderError(
@@ -999,10 +1024,13 @@ class UnavailableProvider(DenseReconstructionProvider):
 
 
 def select_dense_provider(
-    preference: str = "auto", *, require_masks: bool = False
+    preference: str = "auto",
+    *,
+    require_masks: bool = False,
+    executor: ManagedProcessExecutor | None = None,
 ) -> DenseReconstructionProvider:
-    colmap = ColmapDenseProvider()
-    openmvs = OpenMVSProvider()
+    colmap = ColmapDenseProvider(executor=executor)
+    openmvs = OpenMVSProvider(executor=executor)
     if preference in {"auto", "colmap"}:
         available, reason = colmap.availability()
         if available and require_masks:
@@ -1041,6 +1069,8 @@ def run_dense_stage(
     started = time.monotonic()
     try:
         result = provider.run(context)
+    except ProcessCancelledError:
+        raise
     except Exception as exc:  # noqa: BLE001 - this boundary must preserve sparse success
         result = DenseResult(
             provider=provider.name,

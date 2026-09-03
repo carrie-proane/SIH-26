@@ -22,7 +22,11 @@ import {
   pointSizeForRadius,
   robustSceneBounds,
 } from "../viewerBounds";
-import { visualModeMeasurementEligible } from "../visualModels";
+import { coordinateFramePresentation } from "../coordinateFrame";
+import {
+  visualArtifactMeasurementLabel,
+  visualModeMeasurementEligible,
+} from "../visualModels";
 import type {
   CameraPose,
   ConfidenceLabel,
@@ -97,6 +101,11 @@ export function PointCloudViewer({
   const [loadNotice, setLoadNotice] = useState("");
   const [loadedModelMode, setLoadedModelMode] = useState<VisualMode>(visualMode);
   const [fallbackUsed, setFallbackUsed] = useState(false);
+  const framePresentation = coordinateFramePresentation(
+    loadedModelMode === "TEXTURED"
+      ? manifest.visual_models?.textured_mesh?.coordinate_frame
+      : manifest.cloud.coordinate_frame,
+  );
 
   measurementEnabledRef.current = measurementEnabled;
   onMeasurementChangeRef.current = onMeasurementChange;
@@ -289,7 +298,7 @@ export function PointCloudViewer({
           url: manifest.cloud.url,
           format: "PLY" as const,
           coordinate_frame: manifest.cloud.coordinate_frame,
-          measurement_eligible: true,
+          measurement_eligible: false,
         };
       }
       return mode === "TEXTURED"
@@ -634,10 +643,13 @@ export function PointCloudViewer({
         <span>{manifest.source_provenance} INPUT</span>
       </div>
       <div className="axis-readout" aria-hidden="true">
-        <span className="axis axis--x">E</span>
-        <span className="axis axis--y">U</span>
-        <span className="axis axis--z">N</span>
+        <span className="axis axis--x">{framePresentation.axes[0]}</span>
+        <span className="axis axis--y">{framePresentation.axes[1]}</span>
+        <span className="axis axis--z">{framePresentation.axes[2]}</span>
       </div>
+      {framePresentation.gridNotice && (
+        <div className="grid-truth-notice" role="note">{framePresentation.gridNotice}</div>
+      )}
       <div className="viewport-hint">
         {measurementEnabled
           ? pointConfidence
@@ -673,7 +685,9 @@ export function PointCloudViewer({
       {loadState === "READY" && loadedBytes !== null && (
         <div className="viewer-file-meta" aria-label="Loaded visual artifact details">
           <span>{fallbackUsed ? "FALLBACK · " : ""}{visualModelLabel(loadedModelMode)}</span>
-          <small>{formatByteSize(loadedBytes)} · {loadedModelMode === "EVIDENCE" ? "measurable" : "visual only"}</small>
+          <small>
+            {formatByteSize(loadedBytes)} · {visualArtifactMeasurementLabel(loadedModelMode, manifest)}
+          </small>
         </div>
       )}
     </div>

@@ -25,6 +25,35 @@ make api
 
 In another terminal, upload a video/telemetry pair using the example in `docs/api.md`.
 
+## Preflight before an expensive run
+
+`doctor` inspects the exact installed command contracts, resources and optional input files without
+starting reconstruction. It reports sparse readiness separately from optional dense readiness, so a
+missing CUDA/OpenMVS path never disguises an otherwise valid sparse environment.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m sih26158.cli doctor \
+  --video /path/capture.mp4 \
+  --telemetry /path/capture.srt \
+  --dense-provider auto \
+  --minimum-free-disk-gb 50 \
+  --output environment_report.json
+```
+
+Use `--require-gpu` or `--require-dense` on a server where those capabilities are mandatory. The
+command exits non-zero only for hard blockers and writes `READY`, `READY_WITH_WARNINGS`, or
+`BLOCKED`, plus the precise checks and installed versions, to the JSON report.
+
+Each real run persists the same decision evidence as the declared `server_capabilities.json`
+artifact. GPU requests fall back to CPU sparse execution when CUDA is unavailable, and that warning
+is retained. Optional dense execution uses detected CUDA COLMAP or OpenMVS capability; unavailable
+dense tooling does not fail valid sparse evidence.
+
+Long external stages are controlled by `sparse_timeout_s` (default 7,200 seconds),
+`dense_timeout_s` (default 21,600 seconds), and `command_heartbeat_s` (default 10 seconds). Cancel
+an active run with `POST /api/runs/{run_id}/cancel`; declared artifacts from completed stages are
+preserved and the run can later resume from its last checksum-valid checkpoint.
+
 ## Reproducible orchestration smoke test
 
 ```bash
@@ -45,11 +74,39 @@ PYTHONPATH=src python -m sih26158.cli run \
   --measured-distance 12.1
 ```
 
-The normal upload/CLI route extracts candidates with decoded timestamps, computes normalized blur,
-exposure and redundancy scores, selects a temporally distributed subset, and sends only selected
-images to COLMAP. `--preprocessing-run` remains an optional advanced override for debugging an
-existing handoff. Real runs never substitute synthetic geometry when a dependency or input is
-missing.
+The normal upload/CLI route extracts candidates with decoded timestamps and evaluates absolute and
+adaptive sharpness, exposure, structural redundancy, corner support, spatial feature coverage and
+adjacent optical-flow displacement. It selects a temporally distributed, overlapping subset and
+sends only selected images to COLMAP. COLMAP then performs guided matching, sparse mapping, final
+global bundle adjustment and conservative point filtering. Every real run writes
+`sparse/geometry_diagnostics.json` with track-length, triangulation, reprojection and camera-path
+gates. `--preprocessing-run` remains an optional advanced override for debugging an existing
+handoff. Real runs never substitute synthetic geometry when a dependency or input is missing.
+
+Use the accuracy profile for small/medium captures where all-pairs matching is affordable:
+
+```bash
+PYTHONPATH=src python -m sih26158.cli run \
+  --video /path/pass.mp4 \
+  --telemetry /path/pass.srt \
+  --profile accurate \
+  --matching-strategy AUTO \
+  --camera-model SIMPLE_RADIAL
+```
+
+`accurate` resolves `AUTO` to exhaustive guided matching, providing loop closure without a
+vocabulary-tree download. Sequential mode supports an explicitly supplied local tree through
+`--vocab-tree`. A separately calibrated camera can be supplied with `--camera-params` and held
+fixed with `--fix-intrinsics`; do not fix guessed values.
+
+Camera calibration is also bounded and auditable. With `--camera-model-policy AUTO`, the pipeline
+compares `SIMPLE_RADIAL`, `RADIAL` and `OPENCV` in isolated workspaces, rejects malformed or
+physically implausible focal/distortion solutions, and ranks valid attempts by registered images,
+median reprojection error and lexical path. If the initial winner misses the sparse gates, exactly
+one recovery attempt uses a lower SIFT peak threshold, more features and exhaustive matching.
+`sparse/camera_model_selection.json`, `sparse/model_selection.json` and
+`sparse/sparse_commands.json` retain every outcome and command. Trusted supplied calibration
+automatically switches the policy to `FIXED`.
 
 Optional Phase 2 dense visual reconstruction can be requested without changing the sparse evidence
 result:
@@ -85,6 +142,26 @@ COLMAP PatchMatch command has no documented mask option. OpenMVS also applies ta
 spurious-component removal; the exact settings and rationale are persisted in `dense_report.json`.
 
 Run the complete backend, lint, frontend build and browser verification gate with `make verify`.
+The gate also rejects tracked run directories, reconstruction inputs, generated frontend output and
+files larger than 25 MiB. GitHub Actions runs the same gate from a clean Python/Node installation.
+
+## Restart-safe execution
+
+Every run has an internal `.pipeline_checkpoint.json` and an advisory `.execution.lock`. A stage is
+checkpointed only after all of its artifacts have been declared and hashed. On resume, the pipeline
+validates those hashes in dependency order; the first missing or changed artifact causes that stage
+and every downstream stage to run again. Valid ingest, preprocessing and sparse stages are not
+repeated merely because the API process restarted.
+
+The API automatically requeues interrupted `QUEUED`, `INGESTING`, `PREPROCESSING`,
+`RECONSTRUCTING`, and `REPORTING` records on startup. An honestly failed run can be retried with:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/runs/RUN_ID/resume
+```
+
+Completed runs cannot be resumed or overwritten. The checkpoint and lock are internal control
+files and are never declared or served as reconstruction evidence.
 
 ## Important files
 

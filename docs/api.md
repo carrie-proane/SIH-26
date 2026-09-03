@@ -78,3 +78,33 @@ Frames must be the exact selected originals or matcher-resolution copies declare
 `alt_source`, `fix_quality`, and `source_row`, plus the metadata sidecar. The backend embeds the
 sidecar and warnings in `ingest_report.json`. Invalid overrides are explained and safely fall back
 to automatic processing of the immutable upload pair.
+
+## Resume an interrupted or failed run
+
+`POST /api/runs/{run_id}/resume` requeues a non-completed run. The runner validates its internal
+stage checkpoint and resumes from the last checksum-valid boundary. It returns `409` when the run
+is already active or completed, and `404` for an unknown run. Resuming never makes internal lock or
+checkpoint files downloadable artifacts.
+
+## Cancel an active run
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/runs/RUN_ID/cancel
+```
+
+Cancellation creates an internal cross-process marker. Managed COLMAP and OpenMVS process groups
+are terminated, while a Python-only stage stops at its next safe stage boundary. The terminal run
+status is `CANCELLED`; declared artifacts from completed stages remain available. The marker is
+never registered or downloadable. A cancelled run may later use the resume endpoint, which clears
+the marker and revalidates its stage checkpoints.
+
+## Capability snapshot and execution controls
+
+Every run declares `server_capabilities.json`. It contains the exact tool/resource preflight used
+for that run, requested and effective sparse GPU mode, available dense providers, selected dense
+provider, and CPU-fallback warnings. Effective choices are also exposed on the run record as
+`effective_sparse_gpu` and `selected_dense_provider`.
+
+Run configuration accepts `sparse_timeout_s`, `dense_timeout_s`, and `command_heartbeat_s`.
+Timeouts apply across the corresponding managed external-command stage rather than restarting for
+each command.

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from sih26158.colmap import ColmapRunner
+from sih26158.colmap import CameraModelAttempt, ColmapRunner, SparseModelCandidate
 from sih26158.confidence import classify_observed_point, validate_point_confidence_for_ply
 from sih26158.models import RunConfig
 
@@ -28,6 +28,163 @@ def test_colmap_uses_current_4_1_command_options(tmp_path: Path) -> None:
     assert "--FeatureMatching.use_gpu" in flattened
     assert "--SiftExtraction.use_gpu" not in flattened
     assert "--SiftMatching.use_gpu" not in flattened
+
+
+def test_accuracy_profile_uses_exhaustive_guided_matching_and_stricter_mapper(
+    tmp_path: Path,
+) -> None:
+    commands = ColmapRunner().build_commands(
+        tmp_path / "frames", tmp_path, RunConfig(profile="accurate")
+    )
+
+    assert commands[1][1] == "exhaustive_matcher"
+    assert "--FeatureMatching.guided_matching" in commands[1]
+    assert "--SiftExtraction.estimate_affine_shape" in commands[0]
+    assert commands[2][commands[2].index("--Mapper.filter_max_reproj_error") + 1] == "3"
+
+
+def test_sequential_loop_detection_requires_declared_local_vocabulary_tree(
+    tmp_path: Path,
+) -> None:
+    tree = tmp_path / "vocab.bin"
+    tree.write_bytes(b"fixture")
+    command = ColmapRunner().build_commands(
+        tmp_path / "frames",
+        tmp_path,
+        RunConfig(matching_strategy="SEQUENTIAL", vocab_tree_path=str(tree)),
+    )[1]
+
+    assert command[1] == "sequential_matcher"
+    assert command[command.index("--SequentialMatching.loop_detection") + 1] == "1"
+    assert command[command.index("--SequentialMatching.vocab_tree_path") + 1] == str(tree)
+
+
+def test_trusted_camera_calibration_can_be_fixed(tmp_path: Path) -> None:
+    commands = ColmapRunner().build_commands(
+        tmp_path / "frames",
+        tmp_path,
+        RunConfig(
+            camera_model="OPENCV",
+            camera_params="1200,1200,960,540,0,0,0,0",
+            refine_intrinsics=False,
+        ),
+    )
+
+    assert commands[0][commands[0].index("--ImageReader.camera_params") + 1].startswith("1200")
+    assert commands[2][commands[2].index("--Mapper.ba_refine_focal_length") + 1] == "0"
+    assert commands[2][commands[2].index("--Mapper.ba_refine_extra_params") + 1] == "0"
+
+
+def test_trusted_camera_parameters_force_fixed_model_policy() -> None:
+    config = RunConfig(camera_params="1200,1200,960,540,0,0,0,0")
+
+    assert config.camera_model_policy == "FIXED"
+    assert ColmapRunner._camera_model_candidates(config) == ["SIMPLE_RADIAL"]
+
+
+def test_auto_camera_policy_is_bounded_and_deterministic() -> None:
+    assert ColmapRunner._camera_model_candidates(RunConfig(camera_model="RADIAL")) == [
+        "RADIAL",
+        "SIMPLE_RADIAL",
+        "OPENCV",
+    ]
+
+
+def test_camera_intrinsic_diagnostics_reject_unstable_distortion(tmp_path: Path) -> None:
+    plausible = tmp_path / "plausible.txt"
+    plausible.write_text("1 SIMPLE_RADIAL 1920 1080 1400 960 540 0.05\n", encoding="utf-8")
+    unstable = tmp_path / "unstable.txt"
+    unstable.write_text("1 SIMPLE_RADIAL 1920 1080 1400 960 540 9.0\n", encoding="utf-8")
+
+    assert ColmapRunner._inspect_intrinsics(plausible)["plausible"] is True
+    rejected = ColmapRunner._inspect_intrinsics(unstable)
+    assert rejected["plausible"] is False
+    assert any(
+        str(reason).startswith("UNSTABLE_RADIAL_DISTORTION")
+        for reason in rejected["rejection_reasons"]
+    )
+
+
+def test_bounded_recovery_uses_dense_sift_and_exhaustive_matching(tmp_path: Path) -> None:
+    commands = ColmapRunner().build_commands(
+        tmp_path / "frames",
+        tmp_path,
+        RunConfig(matching_strategy="SEQUENTIAL"),
+        workspace=tmp_path / "attempt",
+        recovery=True,
+    )
+
+    assert commands[0][commands[0].index("--SiftExtraction.max_num_features") + 1] == "32768"
+    assert commands[0][commands[0].index("--SiftExtraction.peak_threshold") + 1] == "0.003"
+    assert commands[1][1] == "exhaustive_matcher"
+    assert commands[2][commands[2].index("--Mapper.max_reg_trials") + 1] == "5"
+
+
+def test_camera_attempt_discards_private_workspace_left_by_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    for index in range(3):
+        (frames / f"frame_{index:04d}.jpg").write_bytes(b"image")
+    workspace = tmp_path / "sparse" / "attempts" / "00_simple_radial"
+    workspace.mkdir(parents=True)
+    stale_database = workspace / "sparse" / "database.db"
+    stale_database.parent.mkdir()
+    stale_database.write_bytes(b"partial database")
+
+    runner = ColmapRunner()
+    monkeypatch.setattr(runner, "build_commands", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        runner,
+        "select_best_model",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("stop after reset")),
+    )
+
+    attempt = runner._run_camera_attempt(
+        frames,
+        tmp_path,
+        RunConfig(),
+        attempt_id="00_simple_radial",
+        camera_model="SIMPLE_RADIAL",
+        recovery=False,
+        log=tmp_path / "logs" / "colmap.log",
+    )
+
+    assert attempt.status == "FAILED"
+    assert workspace.is_dir()
+    assert not stale_database.exists()
+
+
+def test_recovery_triggers_only_when_initial_sparse_gates_are_weak(tmp_path: Path) -> None:
+    good_sparse = SparseModelCandidate(tmp_path / "good", 90, 0.7, 1.8)
+    weak_sparse = SparseModelCandidate(tmp_path / "weak", 50, 2.0, 5.0)
+    good = CameraModelAttempt(
+        "good",
+        "SIMPLE_RADIAL",
+        tmp_path,
+        False,
+        "COMPLETED",
+        [],
+        sparse_model=good_sparse,
+        intrinsics={"plausible": True},
+    )
+    weak = CameraModelAttempt(
+        "weak",
+        "RADIAL",
+        tmp_path,
+        False,
+        "COMPLETED",
+        [],
+        sparse_model=weak_sparse,
+        intrinsics={"plausible": True},
+    )
+
+    assert ColmapRunner._retry_required(good, 100) == (False, [])
+    retry, reasons = ColmapRunner._retry_required(weak, 100)
+    assert retry is True
+    assert "REGISTRATION_BELOW_80_PERCENT" in reasons
+    assert "P95_REPROJECTION_ABOVE_4_PX" in reasons
 
 
 def test_colmap_sparse_feature_extraction_consumes_complete_masks(tmp_path: Path) -> None:
@@ -97,6 +254,28 @@ def test_colmap_text_camera_pose_export(tmp_path: Path) -> None:
         row = next(csv.DictReader(stream))
     assert row["image_name"] == "frame_0001.jpg"
     assert np.allclose([float(row["sfm_x"]), float(row["sfm_y"]), float(row["sfm_z"])], [2, 3, 4])
+
+
+def test_geometry_diagnostics_expose_weak_baseline_without_claiming_scale(tmp_path: Path) -> None:
+    images = tmp_path / "images.txt"
+    images.write_text(
+        "1 1 0 0 0 0 0 0 1 a.jpg\n0 0 -1\n"
+        "2 1 0 0 0 -0.001 0 0 1 b.jpg\n0 0 -1\n"
+        "3 1 0 0 0 -0.002 0 0 1 c.jpg\n0 0 -1\n",
+        encoding="utf-8",
+    )
+    points = tmp_path / "points3D.txt"
+    points.write_text(
+        "1 0 0 10 1 2 3 0.4 1 0 2 0 3 0\n2 10 0 10 4 5 6 0.5 1 0 2 0 3 0\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "geometry.json"
+
+    report = ColmapRunner._write_geometry_diagnostics(points, images, output, eligible_images=3)
+
+    assert report["measurement_geometry_gate_passed"] is False
+    assert report["gates"]["camera_baseline_ratio_0_01"] is False
+    assert "do not independently verify metric scale" in str(report["interpretation"])
 
 
 def test_deterministic_ply_and_confidence_share_point_order(tmp_path: Path) -> None:
