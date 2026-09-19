@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import uuid
 from collections.abc import Iterable
@@ -93,6 +94,14 @@ class ProjectStore:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+
+    def check_upload_space(self, size_bytes: int, reserve_bytes: int, *, include_spool: bool = False) -> None:
+        """Budget immutable copies plus multipart spooling before accepting bytes."""
+        required = size_bytes * (2 if include_spool else 1) + reserve_bytes
+        if shutil.disk_usage(self.root).free < required:
+            raise ValueError("Insufficient available disk space for upload and reserved working space")
+        if include_spool and shutil.disk_usage(tempfile.gettempdir()).free < size_bytes + reserve_bytes:
+            raise ValueError("Insufficient available temporary disk space for upload")
 
     def _validate_id(self, value: str) -> str:
         if not ID_PATTERN.fullmatch(value):

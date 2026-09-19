@@ -115,3 +115,17 @@ An exclusive store lock rejects a second worker before it can recover or change 
 At startup, queued or in-progress runs from a previous process become `FAILED` with
 `interrupted_by_restart`; partial files and declared artifacts are retained. Completed and
 already-failed runs are untouched. In-process reconstruction threads remain supported.
+
+### Upload resource limits
+
+`SIH_MAX_UPLOAD_BYTES` defaults to 4 GiB per upload request (video, telemetry, and multipart
+overhead). This accommodates several minutes of typical 4K drone video; operators can lower
+it. Content-Length is checked before parsing, and streamed/chunked bodies are counted before
+each chunk reaches multipart spooling. Oversized uploads return HTTP 413 without a project
+copy. Disk admission checks budget spooling and immutable copies, plus
+`SIH_MIN_FREE_DISK_BYTES` (default 1 GiB) on data and temporary storage; insufficient space
+returns HTTP 507. These are admission checks, not a quota for later reconstruction outputs.
+
+Keep the server on loopback. CLI `--host` and `UVICORN_HOST` non-loopback bindings log an
+access-control warning at startup. For programmatic Uvicorn startup, set `UVICORN_HOST` to
+the actual bind address too. Authentication remains out of scope.

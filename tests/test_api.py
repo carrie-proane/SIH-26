@@ -85,3 +85,37 @@ def test_startup_recovers_interrupted_runs_and_preserves_artifacts(tmp_path: Pat
     # Lock is released on shutdown; terminal records remain untouched on next startup.
     with TestClient(create_app(store.root)):
         assert store.get_run(completed.run_id).status == RunStatus.COMPLETED
+
+
+def test_upload_limit_rejects_before_project_write_including_chunked(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SIH_MAX_UPLOAD_BYTES", "1024")
+    with TestClient(create_app(tmp_path / "projects")) as client:
+        response = client.post("/api/projects", data={"name": "large"}, files={
+            "video": ("v.mp4", b"x" * 2048), "telemetry": ("t.csv", b"x")})
+        assert response.status_code == 413
+        boundary = "audit"
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"video\"; filename=\"v.mp4\"\r\n\r\n".encode()
+                + b"x" * 2048 + f"\r\n--{boundary}--\r\n".encode())
+        response = client.post("/api/projects", content=iter([body[:200], body[200:]]),
+                               headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        assert response.status_code == 413
+        assert "maximum size" in response.text
+    assert not list((tmp_path / "projects").glob("prj_*"))
+
+
+def test_upload_rejects_insufficient_disk(tmp_path: Path, monkeypatch) -> None:
+    from collections import namedtuple
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr("sih26158.storage.shutil.disk_usage", lambda _: usage(100, 99, 1))
+    with TestClient(create_app(tmp_path / "projects")) as client:
+        response = client.post("/api/projects", data={"name": "low disk"}, files={
+            "video": ("v.mp4", b"video"), "telemetry": ("t.csv", b"telemetry")})
+        assert response.status_code == 507
+        assert "Insufficient" in response.text
+    assert not list((tmp_path / "projects").glob("prj_*"))
+
+
+def test_nonlocal_bind_logs_access_control_warning(tmp_path: Path, monkeypatch, caplog) -> None:
+    monkeypatch.setattr("sys.argv", ["uvicorn", "sih26158.app:app", "--host", "0.0.0.0"])
+    with TestClient(create_app(tmp_path / "projects")):
+        assert "without access control" in caplog.text

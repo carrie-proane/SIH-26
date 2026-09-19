@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.formparsers import MultiPartException
 
 from .models import ProjectManifest, ProvenanceOrigin, RunConfig, RunRecord
 from .pipeline import PipelineRunner
@@ -15,12 +18,83 @@ from .storage import ProjectStore
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
 
 
+class UploadBudgetMiddleware:
+    """Check headers and every body chunk before multipart parsing can spool it."""
+
+    def __init__(self, app, store: ProjectStore, max_bytes: int, reserve_bytes: int):
+        self.app, self.store = app, store
+        self.max_bytes, self.reserve_bytes = max_bytes, reserve_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "POST" or scope["path"] != "/api/projects":
+            return await self.app(scope, receive, send)
+        headers = dict(scope.get("headers", []))
+        try:
+            declared = int(headers.get(b"content-length", b"0"))
+            if declared < 0:
+                raise ValueError
+        except ValueError:
+            return await JSONResponse({"detail": "Invalid Content-Length"}, status_code=400)(scope, receive, send)
+        if declared > self.max_bytes:
+            return await JSONResponse({"detail": "Upload exceeds configured maximum size"}, status_code=413)(scope, receive, send)
+        try:
+            self.store.check_upload_space(declared, self.reserve_bytes, include_spool=True)
+        except ValueError as exc:
+            return await JSONResponse({"detail": str(exc)}, status_code=507)(scope, receive, send)
+        received = 0
+        rejection_status = None
+
+        async def limited_receive():
+            nonlocal received, rejection_status
+            message = await receive()
+            if message["type"] == "http.request":
+                chunk_size = len(message.get("body", b""))
+                received += chunk_size
+                if received > self.max_bytes:
+                    rejection_status = 413
+                    # Multipart's exception path closes any partially spooled files.
+                    raise MultiPartException("Upload exceeds configured maximum size")
+                try:
+                    self.store.check_upload_space(chunk_size, self.reserve_bytes, include_spool=True)
+                except ValueError as exc:
+                    rejection_status = 507
+                    raise MultiPartException(str(exc)) from exc
+            return message
+
+        async def budget_send(message):
+            # Starlette translates MultipartException to 400. Preserve its detail and
+            # cleanup while returning the precise resource-limit status to the client.
+            if rejection_status is not None and message["type"] == "http.response.start":
+                message = dict(message, status=rejection_status)
+            await send(message)
+
+        return await self.app(scope, limited_receive, budget_send)
+
+
+def _configured_bind_host() -> str:
+    for index, arg in enumerate(sys.argv):
+        if arg.startswith("--host="):
+            return arg.split("=", 1)[1]
+        if arg == "--host" and index + 1 < len(sys.argv):
+            return sys.argv[index + 1]
+    return os.getenv("UVICORN_HOST", "127.0.0.1")
+
+
 def create_app(data_root: str | Path | None = None) -> FastAPI:
     store = ProjectStore(data_root or os.getenv("SIH_DATA_ROOT", "data/projects"))
     runner = PipelineRunner(store)
+    max_upload_bytes = int(os.getenv("SIH_MAX_UPLOAD_BYTES", str(4 * 1024**3)))
+    reserve_bytes = int(os.getenv("SIH_MIN_FREE_DISK_BYTES", str(1024**3)))
+    if max_upload_bytes <= 0 or reserve_bytes < 0:
+        raise ValueError("Upload size must be positive and free-disk reserve non-negative")
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         runner.startup()
+        host = _configured_bind_host()
+        if host not in {"127.0.0.1", "localhost", "::1"}:
+            logging.getLogger(__name__).warning(
+                "Server bound to %s without access control. Restrict network exposure; authentication is not implemented.", host
+            )
         try:
             yield
         finally:
@@ -29,6 +103,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     app = FastAPI(title="SIH26158 Reconstruction API", version="0.1.0", lifespan=lifespan)
     app.state.store = store
     app.state.runner = runner
+    app.add_middleware(UploadBudgetMiddleware, store=store, max_bytes=max_upload_bytes,
+                       reserve_bytes=reserve_bytes)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -50,6 +126,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         video_origin: Annotated[ProvenanceOrigin, Form()] = ProvenanceOrigin.UNKNOWN,
         telemetry_origin: Annotated[ProvenanceOrigin, Form()] = ProvenanceOrigin.UNKNOWN,
     ) -> ProjectManifest:
+        try:
+            store.check_upload_space((video.size or 0) + (telemetry.size or 0), reserve_bytes)
+        except ValueError as exc:
+            raise HTTPException(status_code=507, detail=str(exc)) from exc
         try:
             return store.create_project(
                 name=name,
