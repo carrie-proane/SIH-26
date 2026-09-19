@@ -25,7 +25,7 @@ class OffsetEvaluation:
 @dataclass(frozen=True)
 class OffsetCalibration:
     selected: OffsetEvaluation
-    before: OffsetEvaluation
+    before: OffsetEvaluation | None
     source: OffsetSource
     searched_offsets: tuple[tuple[float, float, int], ...]
 
@@ -34,7 +34,7 @@ class OffsetCalibration:
             "schema_version": "1.0",
             "telemetry_offset_s": self.selected.offset_s,
             "offset_source": self.source.value,
-            "rmse_before_m": self.before.rmse_m,
+            "rmse_before_m": self.before.rmse_m if self.before is not None else None,
             "rmse_after_m": self.selected.rmse_m,
             "matched_camera_count": len(self.selected.matched_indices),
             "inlier_count": self.selected.inlier_count,
@@ -105,9 +105,13 @@ def calibrate_telemetry_offset(
     if np.any(np.diff(telemetry_times) <= 0):
         raise ValueError("Telemetry timestamps must be strictly increasing")
 
-    before = _evaluate_offset(
-        sfm_points, frame_times, telemetry_times, telemetry_points, 0.0
-    )
+    try:
+        before = _evaluate_offset(
+            sfm_points, frame_times, telemetry_times, telemetry_points, 0.0
+        )
+    except ValueError:
+        # An unavailable baseline must not prevent a valid shifted fit.
+        before = None
     if manual_offset_s is not None:
         selected = _evaluate_offset(
             sfm_points,

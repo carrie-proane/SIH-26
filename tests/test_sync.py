@@ -28,3 +28,23 @@ def test_bounded_automatic_offset_search_finds_minimum_robust_residual() -> None
     assert result.source == "automatic"
     assert result.selected.offset_s == 0.30
     assert result.selected.rmse_m < result.before.rmse_m
+
+
+def test_offset_without_zero_overlap_can_be_selected_manually_or_automatically() -> None:
+    frame_times = np.arange(0, 1.01, 0.1)
+    telemetry_times = frame_times + 4
+    points = _trajectory(frame_times)
+    for options in ({"manual_offset_s": 4}, {"search_min_s": 3.5, "search_max_s": 4.5}):
+        result = calibrate_telemetry_offset(points, frame_times, telemetry_times, points, **options)
+        assert result.selected.offset_s == 4
+        assert result.selected.rmse_m < 1e-10
+        assert result.before is None
+        assert result.as_report()["rmse_before_m"] is None
+
+
+def test_zero_offset_baseline_remains_available() -> None:
+    times = np.arange(0, 2.01, 0.1)
+    result = calibrate_telemetry_offset(_trajectory(times), times, times, _trajectory(times), manual_offset_s=0)
+    assert result.before is not None
+    assert result.before.rmse_m == result.selected.rmse_m
+    assert result.as_report()["rmse_before_m"] < 1e-10

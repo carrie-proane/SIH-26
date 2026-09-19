@@ -716,13 +716,13 @@ class PipelineRunner:
                 ],
                 "telemetry_offset_s": selected.offset_s,
                 "offset_source": calibration.source,
-                "rmse_before_m": calibration.before.rmse_m,
+                "rmse_before_m": (calibration.before.rmse_m if calibration.before is not None else None),
                 "rmse_after_m": selected.rmse_m,
             },
         )
         record.telemetry_offset_s = selected.offset_s
         record.offset_source = calibration.source
-        record.rmse_before_m = calibration.before.rmse_m
+        record.rmse_before_m = (calibration.before.rmse_m if calibration.before is not None else None)
         record.rmse_after_m = selected.rmse_m
         record.matched_camera_count = len(selected.matched_indices)
         record.inlier_count = selected.inlier_count
