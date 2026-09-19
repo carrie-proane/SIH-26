@@ -306,7 +306,13 @@ class ColmapRunner:
             confidence_path,
         )
         poses = run_dir / "camera_poses.csv"
-        self._export_camera_poses(text_model / "images.txt", poses)
+        keyframe_payload = json.loads((run_dir / "keyframes.json").read_text(encoding="utf-8"))
+        keyframes = keyframe_payload.get("frames", []) if isinstance(keyframe_payload, dict) else keyframe_payload
+        timestamps = {
+            Path(item.get("image_name") or item["filename"]).name: float(item["timestamp_s"])
+            for item in keyframes if item.get("selected", True)
+        }
+        self._export_camera_poses(text_model / "images.txt", poses, timestamps)
         analysis = subprocess.run(
             [self.binary, "model_analyzer", "--path", str(model_dir)],
             capture_output=True,
@@ -363,7 +369,9 @@ class ColmapRunner:
         )
 
     @classmethod
-    def _export_camera_poses(cls, images_txt: Path, output: Path) -> None:
+    def _export_camera_poses(
+        cls, images_txt: Path, output: Path, timestamps: dict[str, float] | None = None
+    ) -> None:
         if not images_txt.is_file():
             raise ExternalToolError("COLMAP text export did not produce images.txt.")
         rows: list[list[object]] = []
@@ -383,9 +391,19 @@ class ColmapRunner:
             image_line = not image_line
         if not rows:
             raise ExternalToolError("COLMAP sparse model contains no registered camera poses.")
+        fields = ["image_id", "image_name", "sfm_x", "sfm_y", "sfm_z", "qw", "qx", "qy", "qz"]
+        if timestamps is not None:
+            for row in rows:
+                timestamp = timestamps.get(Path(str(row[1])).name)
+                if timestamp is None or not np.isfinite(timestamp):
+                    raise ExternalToolError(f"Missing source timestamp for registered image: {row[1]}")
+                row.append(timestamp)
+            # Filename and ID make equal-time ordering independent of COLMAP record order.
+            rows.sort(key=lambda row: (row[-1], row[1], int(row[0])))
+            fields.append("timestamp_s")
         with output.open("w", newline="", encoding="utf-8") as stream:
             writer = csv.writer(stream)
-            writer.writerow(["image_id", "image_name", "sfm_x", "sfm_y", "sfm_z", "qw", "qx", "qy", "qz"])
+            writer.writerow(fields)
             writer.writerows(rows)
 
     @classmethod

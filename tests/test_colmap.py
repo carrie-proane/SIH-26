@@ -144,3 +144,18 @@ def test_unsupported_matcher_is_rejected_and_sift_records_execution(tmp_path: Pa
     commands = ColmapRunner().build_commands(tmp_path / "frames", tmp_path, RunConfig())
     assert commands.matcher_actually_used == "sift"
     assert commands[1][1] == "sequential_matcher"
+
+
+def test_camera_pose_export_orders_source_timestamps_not_image_ids(tmp_path: Path) -> None:
+    images = tmp_path / "images.txt"
+    images.write_text("3 1 0 0 0 0 0 0 1 late.jpg\n0 0 -1\n"
+                      "90 1 0 0 0 0 0 0 1 early.jpg\n0 0 -1\n"
+                      "1 1 0 0 0 0 0 0 1 middle.jpg\n0 0 -1\n")
+    output = tmp_path / "camera_poses.csv"
+    ColmapRunner._export_camera_poses(images, output, {"late.jpg": 3, "early.jpg": 1, "middle.jpg": 2})
+    with output.open() as stream:
+        rows = list(csv.DictReader(stream))
+    assert [r["image_id"] for r in rows] == ["90", "1", "3"]
+    assert [float(r["timestamp_s"]) for r in rows] == [1, 2, 3]
+    with pytest.raises(Exception, match="Missing source timestamp"):
+        ColmapRunner._export_camera_poses(images, output, {})

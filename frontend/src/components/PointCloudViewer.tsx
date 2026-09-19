@@ -52,6 +52,11 @@ function scenePosition(x: number, y: number, z: number): THREE.Vector3 {
   return new THREE.Vector3(x, z, -y);
 }
 
+// Preserve the timestamp order established by the camera CSV exporter.
+export function cameraPathPositions(poses: CameraPose[]): THREE.Vector3[] {
+  return poses.map((pose) => scenePosition(pose.x, pose.y, pose.z));
+}
+
 function makeMarker(position: THREE.Vector3, color: string, radius = 0.075): THREE.Mesh {
   const marker = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 16, 12),
@@ -136,7 +141,7 @@ export function PointCloudViewer({
     scene.add(cameraMarkerGroup);
     cameraMarkerGroupRef.current = cameraMarkerGroup;
 
-    const cameraPathPoints = cameraPoses.map((pose) => scenePosition(pose.x, pose.y, pose.z));
+    const cameraPathPoints = cameraPathPositions(cameraPoses);
     if (cameraPathPoints.length > 1) {
       const path = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(cameraPathPoints),
