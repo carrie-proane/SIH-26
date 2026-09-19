@@ -33,6 +33,7 @@ ALT_SOURCES = {
     "abs_alt_minus_home",
     "barometer",
     "absolute_unadjusted",
+    "unknown",
     "synthetic",
     "none",
 }

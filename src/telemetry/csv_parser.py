@@ -23,7 +23,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .checks import run_post_checks
+from .checks import reject_mixed_altitude_ranges, run_post_checks
 from .models import ParseResult, TelemetryRecord, WarningCollector
 
 # Column aliases, lowercased and stripped of unit suffixes before lookup.
@@ -37,6 +37,7 @@ _LON_ALIASES = ("lon", "lng", "long", "longitude", "longtitude", "gps_lon", "gps
 _ALT_ALIASES = (
     "alt_m", "alt", "altitude", "height", "rel_alt",
     "height_above_takeoff", "altitude_above_sealevel", "ascent",
+    "absolute_msl", "absolute_ellipsoidal", "altitude_ellipsoidal",
 )
 _DATETIME_ALIASES = ("datetime(utc)", "datetime", "utc", "date_time", "iso_time")
 
@@ -115,6 +116,7 @@ def parse_csv(path: str | Path) -> ParseResult:
         source_format="generic_csv",
         source_dialect="unknown",
         time_origin="unknown",
+        altitude_reference="unknown",
         warnings=warnings,
     )
 
@@ -144,6 +146,19 @@ def parse_csv(path: str | Path) -> ParseResult:
         lon_col = _find_column(headers, _LON_ALIASES)
         alt_col = _find_column(headers, _ALT_ALIASES)
         dt_col = _find_column(headers, _DATETIME_ALIASES)
+        reference_col = headers.get("altitude_reference")
+        references: set[str] = set()
+        alt_header = _norm_header(header_row[alt_col[0]])[0] if alt_col else ""
+        inferred_reference = {
+            "rel_alt": "relative_to_launch", "height_above_takeoff": "relative_to_launch",
+            "altitude_above_sealevel": "absolute_msl", "absolute_msl": "absolute_msl",
+            "absolute_ellipsoidal": "absolute_ellipsoidal", "altitude_ellipsoidal": "absolute_ellipsoidal",
+        }.get(alt_header, "unknown")
+        result.altitude_reference = inferred_reference
+        result.extra["altitude_reference_source"] = (
+            "column:altitude_reference" if reference_col else
+            f"header:{alt_header}" if inferred_reference != "unknown" else "ambiguous_header"
+        )
 
         if lat_col is None or lon_col is None:
             warnings.add(
@@ -223,6 +238,8 @@ def parse_csv(path: str | Path) -> ParseResult:
             if alt is not None and alt_unit_is_feet:
                 alt *= _FEET_TO_M
 
+            if alt is not None and reference_col:
+                references.add((_cell(row, reference_col) or "unknown").strip().lower())
             raw_rows.append((ts, lat, lon, alt, row_idx))
 
     if not raw_rows:
@@ -231,6 +248,19 @@ def parse_csv(path: str | Path) -> ParseResult:
 
     # Elapsed columns are not guaranteed sorted; absolute-rebased ones are.
     raw_rows.sort(key=lambda r: r[0])
+
+    allowed_references = {"relative_to_launch", "absolute_msl", "absolute_ellipsoidal", "unknown"}
+    if references:
+        if not references <= allowed_references or len(references) > 1 or (
+            inferred_reference != "unknown" and references != {inferred_reference}
+        ):
+            warnings.add("MIXED_ALTITUDE_REFERENCE", "Conflicting or invalid altitude_reference declarations; file rejected.")
+            return result
+        result.altitude_reference = next(iter(references))
+    if result.altitude_reference == "unknown":
+        warnings.add("ALTITUDE_REFERENCE_UNKNOWN", "Altitude datum is ambiguous; vertical scale is not validated.")
+    if reject_mixed_altitude_ranges([(r[0], r[3]) for r in raw_rows], warnings):
+        return result
 
     records: list[TelemetryRecord] = []
     last_ts: float | None = None
@@ -255,7 +285,11 @@ def parse_csv(path: str | Path) -> ParseResult:
                 lat=lat,
                 lon=lon,
                 alt_m=alt,
-                alt_source="rel_alt" if alt is not None else "none",
+                alt_source=(
+                    "none" if alt is None else "rel_alt"
+                    if result.altitude_reference == "relative_to_launch" else "unknown"
+                    if result.altitude_reference == "unknown" else "absolute_unadjusted"
+                ),
                 fix_quality=fix,
                 source_row=row_idx,
             )

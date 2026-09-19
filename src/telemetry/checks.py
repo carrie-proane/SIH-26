@@ -7,6 +7,7 @@ of which format it arrived in.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from math import asin, cos, radians, sin, sqrt
 
 from .models import ParseResult, WarningCollector
@@ -105,3 +106,20 @@ def run_post_checks(result: ParseResult, w: WarningCollector) -> None:
     _check_rate(result, w)
     _check_gaps(result, w)
     _check_speed(result, w)
+
+
+def reject_mixed_altitude_ranges(samples, warnings: WarningCollector) -> bool:
+    """Conservative discontinuity guard, not an altitude-datum classifier.
+
+    Flag transitions from <=100 m to >=300 m (absolute magnitudes), with
+    >200 m change and >30 m/s vertical speed. Smooth climbs are not rejected.
+    Samples must be in timestamp order and use metres.
+    """
+    usable = [(t, a) for t, a in samples if a is not None]
+    for (t0, a0), (t1, a1) in pairwise(usable):
+        jump = abs(a1 - a0)
+        if (min(abs(a0), abs(a1)) <= 100 and max(abs(a0), abs(a1)) >= 300
+                and jump > 200 and jump / max(t1 - t0, 0.001) > 30):
+            warnings.add("MIXED_ALTITUDE_REFERENCE", f"Altitude jumps from {a0:g}m to {a1:g}m; reference discontinuity suspected. File rejected.")
+            return True
+    return False

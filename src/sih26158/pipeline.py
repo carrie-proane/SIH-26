@@ -12,7 +12,9 @@ import numpy as np
 from frames.contact_sheet import create_contact_sheet
 from frames.extractor import extract_frames
 from frames.selector import FRAME_SCORE_COLUMNS, SelectionWeights, select_keyframes
+from telemetry.checks import reject_mixed_altitude_ranges
 from telemetry.csv_parser import parse_csv
+from telemetry.models import WarningCollector
 from telemetry.models import sha256_file as telemetry_sha256_file
 from telemetry.models import write_csv as write_telemetry_csv
 from telemetry.srt_parser import parse_srt
@@ -597,6 +599,30 @@ class PipelineRunner:
         times = np.array([float(row["timestamp_s"]) for row in telemetry])
         if np.any(np.diff(times) <= 0):
             raise PipelineError("Normalized telemetry timestamps must be strictly increasing.")
+        altitude_warnings = WarningCollector()
+        if reject_mixed_altitude_ranges(
+            [(float(row["timestamp_s"]), float(row["alt_m"])) for row in telemetry], altitude_warnings
+        ):
+            raise PipelineError(altitude_warnings.as_list()[0]["detail"])
+        metadata_path = run_dir / "normalized_telemetry.meta.json"
+        metadata = json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+        if "altitude_reference" not in metadata and all(
+            row["alt_source"] in {"rel_alt", "relative", "abs_alt_minus_home", "barometer"} for row in telemetry
+        ):
+            metadata["altitude_reference"] = "relative_to_launch"
+            metadata["altitude_reference_source"] = "normalized_alt_source"
+        altitude_reference = metadata.get("altitude_reference", "unknown")
+        # Older sidecars may claim relative altitude by default despite absolute-only SRT rows.
+        if altitude_reference == "relative_to_launch" and any(
+            row["alt_source"] not in {"rel_alt", "relative", "abs_alt_minus_home", "barometer"} for row in telemetry
+        ):
+            altitude_reference = "unknown"
+        if altitude_reference not in {"relative_to_launch", "absolute_msl", "absolute_ellipsoidal"}:
+            altitude_reference = "unknown"
+        altitude_assumed = altitude_reference == "unknown"
+        if altitude_assumed:
+            altitude_warnings.add("ALTITUDE_REFERENCE_ASSUMED", "Unknown altitude datum: best-effort local height differences only; vertical scale NOT_VALIDATED.")
+        warnings.extend({"code": w["code"], "message": w["detail"]} for w in altitude_warnings.as_list())
         origin = record.config.local_origin or (
             float(telemetry[0]["lat"]),
             float(telemetry[0]["lon"]),
@@ -605,6 +631,9 @@ class PipelineRunner:
         enu = np.array(
             [
                 geodetic_to_enu(float(row["lat"]), float(row["lon"]), float(row["alt_m"]), origin)
+                if altitude_reference == "absolute_ellipsoidal" else
+                [*geodetic_to_enu(float(row["lat"]), float(row["lon"]), 0.0, (origin[0], origin[1], 0.0))[:2],
+                 float(row["alt_m"]) - origin[2]]
                 for row in telemetry
             ]
         )
@@ -708,6 +737,11 @@ class PipelineRunner:
             transform.as_dict()
             | {
                 "coordinate_frame": "LOCAL_ENU_METRES",
+                "altitude_reference": altitude_reference,
+                "altitude_reference_source": metadata.get("altitude_reference_source", "sidecar_or_unknown"),
+                "altitude_reference_assumed": altitude_assumed,
+                "vertical_alignment_verdict": "NOT_VALIDATED" if altitude_assumed else "PASSED",
+                "altitude_conversion_note": "Ellipsoidal ENU" if altitude_reference == "absolute_ellipsoidal" else "Local tangent horizontal coordinates with datum-relative height differences; no ellipsoidal height claimed.",
                 "origin_wgs84": {"lat": origin[0], "lon": origin[1], "alt_m": origin[2]},
                 "outlier_image_names": [
                     matched_rows[index]["image_name"]

@@ -1,0 +1,19 @@
+# Measurement reliability
+
+Processing completion and evidence acceptance are separate. A failed evaluated gate takes
+precedence over missing validation; otherwise missing validation gives `NOT_VALIDATED`.
+Registration requires at least 80%; median reprojection error must be at most 1.5 pixels.
+
+CSV altitude references come from an explicit `altitude_reference` column or unambiguous
+headers (`rel_alt`, `height_above_takeoff`, `altitude_above_sealevel`,
+`absolute_ellipsoidal`). Generic `alt_m` is unknown. The inference source is recorded.
+Unknown references retain best-effort local height differences and an assumption warning,
+with vertical alignment `NOT_VALIDATED`. Relative and MSL heights use local tangent
+horizontal coordinates and height differences, never pretend to be ellipsoidal heights.
+Only explicit ellipsoidal altitude uses full geodetic ENU conversion. A configured origin's
+height must use the declared telemetry reference.
+
+The conservative mixed-reference guard rejects abrupt transitions between altitude magnitudes
+<=100 m and >=300 m, with a change >200 m and vertical speed >30 m/s. This is a discontinuity
+heuristic, not a datum detector: smooth climbs remain valid; suspected jumps require checking
+the source log. Parser rejection returns no records and a `MIXED_ALTITUDE_REFERENCE` warning.

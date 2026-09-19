@@ -75,6 +75,7 @@ def build_quality_report(
             if alignment.get("scale") is not None else None
         ),
         "known_distance": known_distance["passes_10_percent_gate"],
+        "altitude_reference": True if alignment.get("vertical_alignment_verdict") == "PASSED" else None,
         "real_evidence": True if genuine_real_evidence and not alignment.get("synthetic_fixture") else None,
     }
     verdict = (
@@ -98,6 +99,10 @@ def build_quality_report(
         "video_origin": record.video_origin,
         "telemetry_origin": record.telemetry_origin,
         "genuine_real_evidence": genuine_real_evidence,
+        "altitude_reference": alignment.get("altitude_reference", "unknown"),
+        "altitude_reference_source": alignment.get("altitude_reference_source"),
+        "altitude_reference_assumed": alignment.get("altitude_reference_assumed", True),
+        "vertical_alignment_verdict": alignment.get("vertical_alignment_verdict", "NOT_VALIDATED"),
         "matcher_actually_used": metrics.matcher_actually_used,
         "matcher_fallback_reason": metrics.matcher_fallback_reason,
         "masking_applied": metrics.masking_applied,

@@ -42,6 +42,7 @@ def test_missing_optional_model_falls_back_to_unmasked_frames(tmp_path: Path) ->
 
 def test_generated_masks_do_not_claim_reconstruction_effect(tmp_path: Path) -> None:
     import json
+
     from sih26158.colmap import ColmapRunner
     from sih26158.models import ArtifactEntry, MatcherMetrics, RunConfig, RunRecord
     from sih26158.report import build_quality_report

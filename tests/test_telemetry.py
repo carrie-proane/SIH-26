@@ -272,3 +272,31 @@ def test_synthetic_is_deterministic_for_a_seed():
     a = gen.generate("orbit", 18.5204, 73.8567, 25.0, 30.0, 10.0, 5.0, 140.0, 0.4, 0.15, 7)
     b = gen.generate("orbit", 18.5204, 73.8567, 25.0, 30.0, 10.0, 5.0, 140.0, 0.4, 0.15, 7)
     assert [r["lat"] for r in a] == [r["lat"] for r in b]
+
+
+def test_csv_altitude_reference_is_explicit_or_unknown(tmp_path: Path) -> None:
+    for header, expected in [("alt_m", "unknown"), ("rel_alt", "relative_to_launch"),
+                             ("altitude_above_sealevel", "absolute_msl"),
+                             ("absolute_ellipsoidal", "absolute_ellipsoidal")]:
+        path = tmp_path / "alt.csv"
+        path.write_text(f"timestamp_s,lat,lon,{header}\n0,18,73,30\n1,18,73,35\n")
+        result = parse_csv(path)
+        assert result.altitude_reference == expected
+        assert result.meta()["altitude_reference_source"]
+        assert result.warnings.has("ALTITUDE_REFERENCE_UNKNOWN") == (expected == "unknown")
+        if expected == "unknown":
+            assert result.records[0].alt_source == "unknown"
+
+
+def test_csv_rejects_mixed_altitude_ranges_and_declarations(tmp_path: Path) -> None:
+    path = tmp_path / "mixed.csv"
+    path.write_text("timestamp_s,lat,lon,alt_m\n" + "".join(
+        f"{i},18,73,{alt}\n" for i, alt in enumerate([30, 35, 40, 620, 618])))
+    result = parse_csv(path)
+    assert result.records == []
+    assert result.warnings.has("MIXED_ALTITUDE_REFERENCE")
+    path.write_text("timestamp_s,lat,lon,alt_m,altitude_reference\n"
+                    "0,18,73,30,relative_to_launch\n1,18,73,31,absolute_msl\n")
+    result = parse_csv(path)
+    assert result.records == []
+    assert result.warnings.has("MIXED_ALTITUDE_REFERENCE")

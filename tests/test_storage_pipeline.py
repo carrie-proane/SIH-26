@@ -353,3 +353,33 @@ def test_completed_processing_can_fail_evidence(tmp_path: Path, monkeypatch) -> 
     assert finished.status == RunStatus.COMPLETED
     assert finished.evidence_verdict == report["evidence_verdict"] == "FAILED"
     assert store.get_run(record.run_id).evidence_verdict == "FAILED"
+
+
+def test_unknown_altitude_assumption_propagates_to_quality_report(tmp_path: Path) -> None:
+    from sih26158.models import MatcherMetrics
+    from sih26158.report import build_quality_report
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(telemetry_offset_s=0))
+    run_dir = store.run_dir(project.project_id, record.run_id)
+    (run_dir / "keyframes.json").write_text(json.dumps({"frames": [
+        {"image_name": f"{i}.jpg", "timestamp_s": i, "frame_index": i} for i in range(4)]}))
+    (run_dir / "camera_poses.csv").write_text(
+        "image_name,sfm_x,sfm_y,sfm_z\n0.jpg,0,0,0\n1.jpg,1,0,0\n2.jpg,1,1,0\n3.jpg,0,1,0\n")
+    (run_dir / "normalized_telemetry.csv").write_text(
+        "timestamp_s,lat,lon,alt_m,alt_source,fix_quality,source_row\n"
+        "0,18,73,30,unknown,ok,0\n1,18,73.00001,30,unknown,ok,1\n"
+        "2,18.00001,73.00001,30,unknown,ok,2\n3,18.00001,73,30,unknown,ok,3\n")
+    (run_dir / "sparse" / "sparse.ply").write_text(
+        "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nend_header\n0 0 0\n")
+    warnings = []
+    PipelineRunner(store)._align_to_local_metric(record, warnings)
+    alignment = json.loads((run_dir / "local_transform.json").read_text())
+    report = build_quality_report(record, MatcherMetrics(matcher="SIFT", eligible_frames=4,
+        registered_frames=4, median_reprojection_error_px=0.5, p95_reprojection_error_px=1,
+        runtime_s=1), warnings, alignment=alignment)
+    assert report["altitude_reference"] == "unknown"
+    assert report["altitude_reference_assumed"] is True
+    assert report["vertical_alignment_verdict"] == "NOT_VALIDATED"
+    assert report["evidence_verdict"] == "NOT_VALIDATED"
+    assert any(w["code"] == "ALTITUDE_REFERENCE_ASSUMED" for w in report["warnings"])
