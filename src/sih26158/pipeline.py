@@ -930,6 +930,7 @@ class PipelineRunner:
                 warnings,
                 alignment=alignment_report,
                 confidence_available=confidence_available,
+                run_dir=self.store.run_dir(record.project_id, record.run_id),
             )
             record.evidence_verdict = report["evidence_verdict"]
             write_quality_report(quality_path, report)

@@ -31,3 +31,12 @@ high support at both endpoints, `evidence_verdict=PASSED`, and a well-conditione
 `NOT_VALIDATED` is deliberately insufficient: missing independent scale validation cannot
 be treated as passing. Unknown older reports also downgrade to `CAUTION`. Numeric visual
 estimates remain visible; lower-confidence and non-measurable geometry keep their rules.
+
+Known-distance validation uses `known_distance_m`, `known_distance_reference_source`, and
+`known_distance_endpoint_a` / `_b` (`point_id`, optional `description`). IDs are zero-based
+PLY vertex indices, matching the confidence artifact, from this run's metric sparse cloud.
+The report records endpoints, resolved coordinates, run ID, cloud checksum, and computation
+time. Typed `measured_distance_m` remains accepted for compatibility but is recorded only as
+`reported_input_measured_m`; it never supplies the validation result. Missing endpoints,
+unsupported geometry, or missing provenance cannot pass. Error above 10% fails evidence.
+This reference does not set the telemetry-fitted scale, so it is independent of scale fitting.

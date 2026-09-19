@@ -57,7 +57,7 @@ def test_viewer_manifest_uses_declared_completed_artifacts(tmp_path: Path) -> No
         assert payload["source_provenance"] == "SYNTHETIC"
         assert payload["cloud"]["url"].endswith("/sparse/sparse_local.ply")
         assert payload["ingest_report_url"].endswith("/ingest_report.json")
-        assert abs(payload["measurement_reference"]["percent_error"] - 6) < 1e-9
+        assert payload["measurement_reference"]["percent_error"] is None
         assert payload["ai_overlay"]["measurement"] == "DISABLED"
         assert payload["cloud"]["color_mode_label"] == "Photographic RGB"
         assert payload["visual_models"]["evidence_cloud"]["available"] is True

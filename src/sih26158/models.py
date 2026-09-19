@@ -80,6 +80,14 @@ class ProjectManifest(BaseModel):
     telemetry_origin: ProvenanceOrigin = ProvenanceOrigin.UNKNOWN
 
 
+class KnownDistanceEndpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Zero-based PLY vertex ID, matching point_confidence.json (not COLMAP image/point IDs).
+    point_id: int = Field(ge=0, strict=True)
+    description: str = ""
+
+
 class RunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -92,6 +100,9 @@ class RunConfig(BaseModel):
     use_gpu: bool = False
     known_distance_m: float | None = Field(default=None, gt=0)
     measured_distance_m: float | None = Field(default=None, gt=0)
+    known_distance_reference_source: str | None = None
+    known_distance_endpoint_a: KnownDistanceEndpoint | None = None
+    known_distance_endpoint_b: KnownDistanceEndpoint | None = None
     local_origin: tuple[float, float, float] | None = None
     preprocessing_run: str | None = None
     telemetry_offset_s: float | None = Field(default=None, ge=-5.0, le=5.0)

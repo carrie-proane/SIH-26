@@ -142,7 +142,8 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     assert "quality_report.json" in declared
     quality = json.loads((store.run_dir(project.project_id, result.run_id) / "quality_report.json").read_text())
     assert quality["synthetic_fixture"] is True
-    assert quality["metrics"]["known_distance"]["passes_10_percent_gate"] is True
+    assert quality["metrics"]["known_distance"]["passes_10_percent_gate"] is None
+    assert quality["metrics"]["known_distance"]["reported_input_measured_m"] == 10.5
     assert quality["metrics"]["metric_alignment"]["scale"] == 1.0
     assert any(warning["code"] == "SYNTHETIC_TELEMETRY" for warning in quality["warnings"])
     ingest = json.loads(

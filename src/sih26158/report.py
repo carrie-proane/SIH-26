@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,95 @@ def known_distance_metrics(reference_m: float | None, measured_m: float | None) 
     }
 
 
+def reconstructed_known_distance(record: RunRecord, run_dir: Path | None) -> dict[str, Any]:
+    """Read endpoints from this run's declared metric sparse cloud; never trust typed distances."""
+    config = record.config
+    endpoints = [config.known_distance_endpoint_a, config.known_distance_endpoint_b]
+    measured = None
+    computed_at = None
+    cloud_path = "sparse/sparse_local.ply"
+    cloud = next((a for a in record.artifacts if a.relative_path == cloud_path), None)
+    coords = None
+    note = "No independent reference distance supplied."
+    if config.known_distance_m is not None:
+        note = "Reconstructed distance unavailable: supply two PLY vertex endpoints for this run."
+        if all(endpoint is not None for endpoint in endpoints):
+            note = "This run has no available declared metric sparse point cloud."
+            if run_dir is not None and cloud is not None:
+                try:
+                    ids = [endpoint.point_id for endpoint in endpoints]
+                    if ids[0] == ids[1]:
+                        raise ValueError("Reference endpoints must be distinct vertices")
+                    coords = _read_sparse_endpoints(run_dir / cloud_path, ids)
+                    measured = math.dist(*coords)
+                    computed_at = utc_now()
+                    note = "Computed from this run's metric sparse PLY vertices; telemetry determined scale independently of this reference."
+                except (OSError, ValueError, UnicodeError) as exc:
+                    note = f"Reconstructed distance unavailable: {exc}"
+    result = known_distance_metrics(config.known_distance_m, measured)
+    result.update({
+        "reference_value_m": config.known_distance_m,
+        "reference_source": config.known_distance_reference_source,
+        "endpoint_a": endpoints[0].model_dump() if endpoints[0] else None,
+        "endpoint_b": endpoints[1].model_dump() if endpoints[1] else None,
+        "reconstructed_distance_m": measured,
+        "computed_at": computed_at,
+        "error_pct": result["percent_error"],
+        "gate_threshold_pct": 10.0,
+        "run_id": record.run_id,
+        "cloud_artifact": cloud_path if measured is not None else None,
+        "cloud_sha256": cloud.sha256 if measured is not None and cloud else None,
+        "endpoint_coordinates_m": coords,
+        "reported_input_measured_m": config.measured_distance_m,
+        "note": note,
+    })
+    return result
+
+
+def _read_sparse_endpoints(path: Path, point_ids: list[int]) -> list[list[float]]:
+    # Our COLMAP sparse exporter writes ASCII. Unknown formats stay unvalidated.
+    with path.open("r", encoding="ascii") as stream:
+        if stream.readline().strip() != "ply":
+            raise ValueError("Not a PLY point cloud")
+        count = 0
+        names: list[str] = []
+        in_vertices = False
+        ascii_format = False
+        for line in stream:
+            parts = line.split()
+            if parts == ["end_header"]:
+                break
+            if parts[:1] == ["format"]:
+                ascii_format = parts[1] == "ascii"
+            if parts[:2] == ["element", "vertex"]:
+                count = int(parts[2])
+                in_vertices = True
+            elif parts[:1] == ["element"]:
+                in_vertices = False
+            if in_vertices and parts[:1] == ["property"]:
+                if len(parts) != 3:
+                    raise ValueError("Unsupported PLY vertex property")
+                names.append(parts[2])
+        else:
+            raise ValueError("Missing PLY header terminator")
+        if not ascii_format or not {"x", "y", "z"} <= set(names):
+            raise ValueError("Expected an ASCII metric sparse cloud with xyz vertices")
+        if max(point_ids) >= count:
+            raise ValueError("Endpoint vertex ID is outside this run's point cloud")
+        indices = [names.index(axis) for axis in ("x", "y", "z")]
+        found = {}
+        for index in range(max(point_ids) + 1):
+            values = stream.readline().split()
+            if index in point_ids:
+                if len(values) != len(names):
+                    raise ValueError("Truncated PLY vertex")
+                point = [float(values[i]) for i in indices]
+                if not all(math.isfinite(value) for value in point):
+                    raise ValueError("Non-finite endpoint coordinates")
+                found[index] = point
+        return [found[index] for index in point_ids]
+
+
 def build_quality_report(
     record: RunRecord,
     metrics: MatcherMetrics,
@@ -38,6 +128,7 @@ def build_quality_report(
     *,
     alignment: dict[str, Any] | None = None,
     confidence_available: bool = False,
+    run_dir: Path | None = None,
 ) -> dict[str, Any]:
     registration_rate = metrics.registration_rate
     alignment = alignment or {}
@@ -64,9 +155,7 @@ def build_quality_report(
             }
         )
     genuine_real_evidence = record.source_provenance == ProvenanceOrigin.REAL
-    known_distance = known_distance_metrics(
-        record.config.known_distance_m, record.config.measured_distance_m
-    )
+    known_distance = reconstructed_known_distance(record, run_dir)
     gates = {
         "registration": registration_rate >= 0.8,
         "reprojection": metrics.median_reprojection_error_px <= 1.5,
@@ -75,6 +164,7 @@ def build_quality_report(
             if alignment.get("scale") is not None else None
         ),
         "known_distance": known_distance["passes_10_percent_gate"],
+        "known_distance_provenance": True if (record.config.known_distance_reference_source or "").strip() else None,
         "alignment_identifiability": True if alignment.get("alignment_identifiability") == "well_conditioned" else None,
         "altitude_reference": True if alignment.get("vertical_alignment_verdict") == "PASSED" else None,
         "real_evidence": True if genuine_real_evidence and not alignment.get("synthetic_fixture") else None,
