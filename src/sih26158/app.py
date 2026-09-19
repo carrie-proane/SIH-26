@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -17,7 +18,15 @@ from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
 def create_app(data_root: str | Path | None = None) -> FastAPI:
     store = ProjectStore(data_root or os.getenv("SIH_DATA_ROOT", "data/projects"))
     runner = PipelineRunner(store)
-    app = FastAPI(title="SIH26158 Reconstruction API", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        runner.startup()
+        try:
+            yield
+        finally:
+            runner.shutdown()
+
+    app = FastAPI(title="SIH26158 Reconstruction API", version="0.1.0", lifespan=lifespan)
     app.state.store = store
     app.state.runner = runner
     app.add_middleware(

@@ -107,3 +107,11 @@ Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evide
   per-run search, but ordinary GNSS remains a soft prior.
 - YOLO segmentation, SuperPoint/LightGlue and Depth Anything are optional experiments. Missing
   models never block the core SIFT reconstruction path.
+
+### Process lifetime
+
+Run this prototype with **one API worker process per data store** (`--workers 1`).
+An exclusive store lock rejects a second worker before it can recover or change live runs.
+At startup, queued or in-progress runs from a previous process become `FAILED` with
+`interrupted_by_restart`; partial files and declared artifacts are retained. Completed and
+already-failed runs are untouched. In-process reconstruction threads remain supported.

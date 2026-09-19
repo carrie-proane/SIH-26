@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import fcntl
 import json
 import shutil
 import subprocess
@@ -78,6 +79,39 @@ class PipelineRunner:
     def __init__(self, store: ProjectStore, max_workers: int = 2) -> None:
         self.store = store
         self.executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sih-run")
+        self._process_lock = None
+
+    def startup(self) -> None:
+        """Single API worker per store: lock before recovering previous-process work."""
+        lock = (self.store.root / ".runner.lock").open("a")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            lock.close()
+            raise RuntimeError("This prototype requires a single worker process per data store; use --workers 1.") from exc
+        self._process_lock = lock
+        try:
+            self.recover_interrupted_runs()
+        except Exception:
+            self.shutdown()
+            raise
+
+    def shutdown(self) -> None:
+        self.executor.shutdown(wait=True)
+        if self._process_lock is not None:
+            self._process_lock.close()
+            self._process_lock = None
+
+    def recover_interrupted_runs(self) -> None:
+        in_progress = {RunStatus.QUEUED, RunStatus.INGESTING, RunStatus.PREPROCESSING,
+                       RunStatus.RECONSTRUCTING, RunStatus.REPORTING}
+        for path in sorted(self.store.root.glob("*/runs/*/run_manifest.json")):
+            record = RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            if record.status not in in_progress:
+                continue
+            record.failure_reason = "interrupted_by_restart"
+            self._transition(record, RunStatus.FAILED, record.progress,
+                             "interrupted_by_restart: processing stopped before the previous process finished.", "FAILED")
 
     def submit(self, run_id: str) -> None:
         self.executor.submit(self.run, run_id)
