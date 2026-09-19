@@ -126,3 +126,76 @@ def test_overrides_are_recorded_and_preserve_minimum_selection(tmp_path: Path) -
     assert decisions[0]["override"] == "FORCE_EXCLUDE"
     assert decisions[0]["selected"] is False
     assert sum(bool(row["selected"]) for row in rows) >= 3
+
+
+def test_streaming_scores_preserve_original_formulas(tmp_path: Path) -> None:
+    from frames.scoring import load_images, stream_frame_scores
+    video = tmp_path / "scoring.avi"
+    make_video(video, frame_count=10)
+    frames = extract_frames(video, tmp_path / "frames", every_nth=1).frames
+    paths = [frame.frame_path for frame in frames]
+    images = load_images(paths)
+    actual = stream_frame_scores(paths, None)
+    expected = (blur_scores(images), [exposure_score(image) for image in images], redundancy_scores(images))
+    for a, b in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(a, b)
+
+
+def test_only_selected_previews_are_restored_at_full_resolution(tmp_path: Path, monkeypatch) -> None:
+    video = tmp_path / "native.avi"
+    make_video(video, frame_count=12)
+    monkeypatch.setattr("frames.extractor.detect_rotation", lambda _: 270)
+    frames = extract_frames(video, tmp_path / "frames", every_nth=1, preview_max_dimension=80).frames
+    assert all(max(cv2.imread(frame.frame_path).shape[:2]) == 80 for frame in frames)
+    rows = select_keyframes(frames, tmp_path / "selected", target_frames=4)
+    for row in rows:
+        shape = cv2.imread(str(row["frame_path"])).shape[:2]
+        assert shape == ((160, 96) if row["selected"] else (80, 48))
+
+
+def test_scoring_holds_only_adjacent_bounded_images(tmp_path: Path, monkeypatch) -> None:
+    import weakref
+
+    from frames import scoring
+    video = tmp_path / "stream.avi"
+    make_video(video, frame_count=12)
+    frames = extract_frames(video, tmp_path / "frames", every_nth=1).frames
+    original_read, original_ssim = scoring.cv2.imread, scoring._ssim
+    live_images = []
+    compared_shapes = []
+
+    def read(path):
+        image = original_read(path)
+        live_images.append(weakref.ref(image))
+        assert sum(ref() is not None for ref in live_images) <= 2
+        return image
+
+    def compare(first, second):
+        compared_shapes.extend([first.shape, second.shape])
+        return original_ssim(first, second)
+
+    monkeypatch.setattr(scoring.cv2, "imread", read)
+    monkeypatch.setattr(scoring, "_ssim", compare)
+    scoring.stream_frame_scores([frame.frame_path for frame in frames], max_dimension=80)
+    assert compared_shapes and all(max(shape[:2]) <= 80 for shape in compared_shapes)
+
+
+def test_real_video_preview_selection_and_peak_memory(tmp_path: Path) -> None:
+    import sys
+
+    import pytest
+
+    from frames.scoring import SCORING_MAX_DIMENSION
+    root = Path(__file__).parents[1]
+    video = root / "DJI_0574.MP4"
+    if not video.is_file():
+        pytest.skip("Real-video resource acceptance requires local DJI_0574.MP4; no fixture is fabricated")
+    report_path = tmp_path / "benchmark.json"
+    subprocess.run([sys.executable, str(root / "scripts/benchmark_frame_previews.py"),
+        "--video", str(video), "--dimension", str(SCORING_MAX_DIMENSION), "--output", str(report_path)],
+        check=True, capture_output=True, text=True, timeout=240)
+    report = json.loads(report_path.read_text())
+    assert report["exact_selection_overlap"] >= 0.9
+    assert report["peak_rss_reduction"] >= 0.2
+    assert report["preview"]["candidate_count"] == report["baseline"]["candidate_count"]
+    assert set(map(tuple, report["preview"]["selected_shapes"])) == {(2160, 3840)}

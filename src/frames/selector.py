@@ -8,8 +8,8 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .extractor import ExtractedFrame
-from .scoring import blur_scores, exposure_scores, load_images, redundancy_scores
+from .extractor import ExtractedFrame, restore_selected_frames
+from .scoring import SCORING_MAX_DIMENSION, stream_frame_scores
 
 FRAME_SCORE_COLUMNS = [
     "frame_index", "timestamp_s", "source_video", "frame_path", "blur_score",
@@ -49,6 +49,7 @@ def select_keyframes(
     frames: Sequence[ExtractedFrame], output_dir: str | Path, target_frames: int = 80,
     weights: SelectionWeights | None = None, min_spacing_s: float | None = None,
     force_include: set[int] | None = None, force_exclude: set[int] | None = None,
+    scoring_max_dimension: int | None = SCORING_MAX_DIMENSION,
 ) -> list[dict[str, object]]:
     """Score all extracted frames and write the CSV/JSON handoff artifacts."""
 
@@ -63,10 +64,9 @@ def select_keyframes(
     unknown = (force_include | force_exclude) - known_indices
     if unknown:
         raise ValueError(f"Frame overrides reference unknown indices: {sorted(unknown)}")
-    images = load_images([frame.frame_path for frame in frames])
-    blur = blur_scores(images)
-    exposure = exposure_scores(images)
-    redundancy = redundancy_scores(images)
+    blur, exposure, redundancy = stream_frame_scores(
+        (frame.frame_path for frame in frames), scoring_max_dimension
+    )
     composite = [weights.blur * b + weights.exposure * e + weights.redundancy * r for b, e, r in zip(blur, exposure, redundancy)]
     timestamps = [frame.timestamp_s for frame in frames]
     if min_spacing_s is None:
@@ -96,6 +96,7 @@ def select_keyframes(
         })
     if sum(bool(row["selected"]) for row in rows) < 3:
         raise ValueError("Frame overrides must preserve at least three selected images")
+    restore_selected_frames([frame for frame, row in zip(frames, rows, strict=True) if row["selected"]])
     with (output_dir / "frame_scores.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FRAME_SCORE_COLUMNS)
         writer.writeheader()

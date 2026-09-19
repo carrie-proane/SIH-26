@@ -2,12 +2,45 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from itertools import pairwise
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+# Bounded scoring resolution; full-resolution frames are restored after selection.
+SCORING_MAX_DIMENSION = 1920
+
+
+def scoring_preview(image: np.ndarray, max_dimension: int | None = SCORING_MAX_DIMENSION) -> np.ndarray:
+    if max_dimension is None or max(image.shape[:2]) <= max_dimension:
+        return image
+    factor = max_dimension / max(image.shape[:2])
+    return cv2.resize(image, (max(1, round(image.shape[1] * factor)),
+                             max(1, round(image.shape[0] * factor))), interpolation=cv2.INTER_AREA)
+
+
+def stream_frame_scores(paths: Iterable[str | Path], max_dimension: int | None = SCORING_MAX_DIMENSION):
+    """Keep only adjacent previews; retain scalar scores for global normalization."""
+    raw_blur, exposure, similarities = [], [], []
+    previous = None
+    for path in paths:
+        image = cv2.imread(str(path))
+        if image is None:
+            raise ValueError(f"Could not read frame: {path}")
+        image = scoring_preview(image, max_dimension)
+        raw_blur.append(float(cv2.Laplacian(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()))
+        exposure.append(exposure_score(image))
+        if previous is not None:
+            similarities.append(_ssim(previous, image))
+        previous = image
+    raw_redundancy = [
+        1.0 - sum(similarities[max(0, i - 1):i + 1]) / len(similarities[max(0, i - 1):i + 1])
+        for i in range(len(raw_blur))
+    ] if similarities else [1.0] * len(raw_blur)
+    redundancy = _normalize(raw_redundancy, constant_value=0.0) if similarities else raw_redundancy
+    return _normalize(raw_blur), exposure, redundancy
 
 
 def _normalize(values: Sequence[float], constant_value: float = 1.0) -> list[float]:

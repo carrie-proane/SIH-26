@@ -40,3 +40,24 @@ time. Typed `measured_distance_m` remains accepted for compatibility but is reco
 `reported_input_measured_m`; it never supplies the validation result. Missing endpoints,
 unsupported geometry, or missing provenance cannot pass. Error above 10% fails evidence.
 This reference does not set the telemetry-fitted scale, so it is independent of scale fitting.
+
+Frame scoring streams adjacent previews, bounded to a 1920-pixel longest dimension, while
+retaining only scalar scores for global normalization. Weights, SSIM formula, score
+normalization, greedy ranking, temporal spacing, and overrides are unchanged. Selected frames
+are decoded again at native resolution and original orientation; rejected candidates retain
+only previews. The second decode is a deliberate memory/time tradeoff.
+
+Real-video acceptance (`tests/test_frames.py`, local `DJI_0574.MP4`, 3840x2160, 32.27 seconds)
+uses 33 candidates sampled every 30 frames and target 20, retaining 17 after temporal spacing.
+The tolerance is >=90% **exact** selected-frame overlap and >=20% lower peak RSS, measured in
+fresh processes. At 1920 pixels, all 17 selections matched; peak RSS fell from 1,825,136 KiB
+to 460,868 KiB (74.7%). Total time was 35.2s versus 40.1s, including restoring native frames.
+A 1280-pixel trial reached only 76.5% exact overlap and was rejected. This validates the chosen
+bound on this representative clip, not equivalence on every video. The acceptance test skips
+explicitly if the private local video is absent. Reproduce with:
+
+```sh
+.venv/bin/python scripts/benchmark_frame_previews.py --video DJI_0574.MP4 --output /tmp/preview-report.json
+```
+
+The measured report is in `evidence/measurement-reliability/frame-preview-benchmark.json`.

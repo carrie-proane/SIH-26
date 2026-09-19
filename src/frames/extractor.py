@@ -12,6 +12,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .scoring import SCORING_MAX_DIMENSION, scoring_preview
+
 
 @dataclass(frozen=True)
 class ExtractedFrame:
@@ -21,6 +23,9 @@ class ExtractedFrame:
     timestamp_s: float
     source_video: str
     frame_path: str
+    source_path: str | None = None
+    rotation_degrees: int = 0
+    is_preview: bool = False
 
 
 @dataclass(frozen=True)
@@ -75,8 +80,9 @@ def extract_frames(
     every_nth: int | None = None,
     target_fps: float | None = None,
     frames_subdir: str = "frames",
+    preview_max_dimension: int | None = SCORING_MAX_DIMENSION,
 ) -> ExtractionResult:
-    """Decode a video with OpenCV and retain frames at a deterministic interval."""
+    """Write bounded candidate previews; selection restores survivors from the source."""
 
     video_path = Path(video_path).resolve()
     output_dir = Path(output_dir)
@@ -110,12 +116,17 @@ def extract_frames(
     retained: list[ExtractedFrame] = []
     index = 0
     while True:
-        ok, frame = capture.read()
-        if not ok:
+        if not capture.grab():
             break
         if index % interval == 0:
+            ok, frame = capture.retrieve()
+            if not ok:
+                capture.release()
+                raise ValueError(f"Could not decode candidate frame {index}")
             destination = frames_dir / f"frame_{index:06d}.jpg"
-            if not cv2.imwrite(str(destination), _rotate(frame, rotation)):
+            oriented = _rotate(frame, rotation)
+            preview = scoring_preview(oriented, preview_max_dimension)
+            if not cv2.imwrite(str(destination), preview):
                 capture.release()
                 raise OSError(f"Could not write extracted frame: {destination}")
             decoded_timestamp_s = float(capture.get(cv2.CAP_PROP_POS_MSEC)) / 1000.0
@@ -124,7 +135,8 @@ def extract_frames(
                 if "DECODED_TIMESTAMP_UNAVAILABLE" not in messages:
                     messages.append("DECODED_TIMESTAMP_UNAVAILABLE")
             retained.append(
-                ExtractedFrame(index, round(decoded_timestamp_s, 9), video_path.name, str(destination))
+                ExtractedFrame(index, round(decoded_timestamp_s, 9), video_path.name, str(destination),
+                               str(video_path), rotation, preview.shape != oriented.shape)
             )
         index += 1
     capture.release()
@@ -137,3 +149,31 @@ def extract_frames(
         writer.writerow(["frame_index", "timestamp_s", "source_video"])
         writer.writerows((f.frame_index, f"{f.timestamp_s:.6f}", f.source_video) for f in retained)
     return ExtractionResult(retained, fps, source_count, rotation, messages)
+
+
+def restore_selected_frames(frames: list[ExtractedFrame]) -> None:
+    """Sequentially decode only selected survivors at native resolution and orientation."""
+    sources = {frame.source_path for frame in frames if frame.is_preview}
+    for source in sources:
+        selected = {frame.frame_index: frame for frame in frames if frame.source_path == source and frame.is_preview}
+        capture = cv2.VideoCapture(str(source))
+        if hasattr(cv2, "CAP_PROP_ORIENTATION_AUTO"):
+            capture.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)
+        remaining = set(selected)
+        try:
+            for index in range(max(selected) + 1):
+                if not capture.grab():
+                    break
+                if index not in selected:
+                    continue
+                ok, image = capture.retrieve()
+                if not ok:
+                    raise ValueError(f"Could not restore selected frame {index}")
+                frame = selected[index]
+                if not cv2.imwrite(frame.frame_path, _rotate(image, frame.rotation_degrees)):
+                    raise OSError(f"Could not write selected frame {index}")
+                remaining.remove(index)
+        finally:
+            capture.release()
+        if remaining:
+            raise ValueError(f"Source video lacks selected frames: {sorted(remaining)}")

@@ -8,7 +8,6 @@ from numpy.typing import NDArray
 from .geo import SimilarityTransform, robust_similarity
 from .models import OffsetSource
 
-
 # Variance ratio 100 means at least a 10:1 spread in principal directions.
 # Use the two largest 3D eigenvalues so a planar orbit remains identifiable.
 MAX_TRAJECTORY_SPREAD_RATIO = 100.0
