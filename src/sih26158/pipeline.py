@@ -735,7 +735,9 @@ class PipelineRunner:
         atomic_json(
             transform_path,
             transform.as_dict()
+            | selected.identifiability
             | {
+                "residual_label": "camera-to-telemetry consistency metric",
                 "coordinate_frame": "LOCAL_ENU_METRES",
                 "altitude_reference": altitude_reference,
                 "altitude_reference_source": metadata.get("altitude_reference_source", "sidecar_or_unknown"),

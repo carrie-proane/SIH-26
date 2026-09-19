@@ -48,3 +48,14 @@ def test_zero_offset_baseline_remains_available() -> None:
     assert result.before is not None
     assert result.before.rmse_m == result.selected.rmse_m
     assert result.as_report()["rmse_before_m"] < 1e-10
+
+
+def test_identifiability_flags_line_but_accepts_planar_orbit() -> None:
+    times = np.linspace(0, 6, 30)
+    line = np.column_stack([times, 0.0001 * np.sin(times), np.zeros(len(times))])
+    orbit = np.column_stack([np.sin(times), np.cos(times), np.zeros(len(times))])
+    for points, expected in [(line, "degenerate"), (orbit, "well_conditioned")]:
+        result = calibrate_telemetry_offset(points, times, times, points, manual_offset_s=0)
+        assert result.selected.rmse_m < 1e-10
+        assert result.as_report()["alignment_identifiability"] == expected
+        assert result.selected.transform.scale > 0

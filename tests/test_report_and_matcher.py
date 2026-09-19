@@ -52,3 +52,16 @@ def test_missing_reference_is_not_validated_and_failed_gate_takes_precedence() -
     report = build_quality_report(record, metric("SIFT", 40, 3), [], alignment=alignment)
     assert report["evidence_verdict"] == "FAILED"
     assert report["status"] == "COMPLETED"
+
+
+def test_degenerate_alignment_cannot_pass_even_with_low_residual() -> None:
+    from sih26158.models import RunConfig, RunRecord
+    from sih26158.report import build_quality_report
+    record = RunRecord(project_id="p", run_id="r", source_provenance="REAL",
+                       config=RunConfig(known_distance_m=10, measured_distance_m=10))
+    alignment = {"scale": 1, "inlier_count": 10, "residuals_m": [0] * 10,
+                 "vertical_alignment_verdict": "PASSED", "alignment_identifiability": "degenerate"}
+    report = build_quality_report(record, metric("SIFT", 100, 0.1), [], alignment=alignment)
+    assert report["evidence_verdict"] == "NOT_VALIDATED"
+    assert report["alignment_identifiability"] == "degenerate"
+    assert report["metrics"]["metric_alignment"]["residual_label"] == "camera-to-telemetry consistency metric"

@@ -75,6 +75,7 @@ def build_quality_report(
             if alignment.get("scale") is not None else None
         ),
         "known_distance": known_distance["passes_10_percent_gate"],
+        "alignment_identifiability": True if alignment.get("alignment_identifiability") == "well_conditioned" else None,
         "altitude_reference": True if alignment.get("vertical_alignment_verdict") == "PASSED" else None,
         "real_evidence": True if genuine_real_evidence and not alignment.get("synthetic_fixture") else None,
     }
@@ -99,6 +100,7 @@ def build_quality_report(
         "video_origin": record.video_origin,
         "telemetry_origin": record.telemetry_origin,
         "genuine_real_evidence": genuine_real_evidence,
+        "alignment_identifiability": alignment.get("alignment_identifiability", "not_validated"),
         "altitude_reference": alignment.get("altitude_reference", "unknown"),
         "altitude_reference_source": alignment.get("altitude_reference_source"),
         "altitude_reference_assumed": alignment.get("altitude_reference_assumed", True),
@@ -122,6 +124,10 @@ def build_quality_report(
             "reprojection_gate_1_5_px": metrics.median_reprojection_error_px <= 1.5,
             "runtime_s": metrics.runtime_s,
             "metric_alignment": {
+                "residual_label": "camera-to-telemetry consistency metric",
+                "alignment_identifiability": alignment.get("alignment_identifiability", "not_validated"),
+                "trajectory_spread_ratio": alignment.get("trajectory_spread_ratio"),
+                "trajectory_spread_ratio_threshold": alignment.get("trajectory_spread_ratio_threshold"),
                 "scale": alignment.get("scale"),
                 "origin_wgs84": alignment.get("origin_wgs84"),
                 "camera_pairs": len(residuals),
@@ -131,6 +137,7 @@ def build_quality_report(
                 "p95_camera_prior_residual_m": p95_residual,
             },
             "telemetry_sync": {
+                "residual_label": "camera-to-telemetry consistency metric",
                 "telemetry_offset_s": record.telemetry_offset_s,
                 "offset_source": record.offset_source,
                 "rmse_before_m": record.rmse_before_m,
@@ -154,6 +161,7 @@ def build_quality_report(
         "warnings": report_warnings,
         "limitations": [
             "Geometry is defensible only where observed by multiple source frames.",
+            "Camera-to-telemetry consistency residuals measure fit to the supplied prior, not independent positional validation.",
             "Ordinary GNSS is a soft alignment prior and is not survey-grade ground truth.",
             "AI-assisted geometry is excluded from measurement evidence.",
             "Confidence-qualified measurement is unavailable without a valid explicit confidence artifact.",

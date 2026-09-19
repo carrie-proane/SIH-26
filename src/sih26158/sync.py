@@ -9,6 +9,26 @@ from .geo import SimilarityTransform, robust_similarity
 from .models import OffsetSource
 
 
+# Variance ratio 100 means at least a 10:1 spread in principal directions.
+# Use the two largest 3D eigenvalues so a planar orbit remains identifiable.
+MAX_TRAJECTORY_SPREAD_RATIO = 100.0
+
+
+def trajectory_identifiability(points: NDArray[np.float64]) -> dict[str, object]:
+    points = np.asarray(points, dtype=float)
+    centered = points - points.mean(axis=0)
+    eigenvalues = np.maximum(np.linalg.eigvalsh(centered.T @ centered / len(points)), 0)
+    largest, second = float(eigenvalues[-1]), float(eigenvalues[-2])
+    ratio = largest / second if second > np.finfo(float).eps else None
+    degenerate = ratio is None or ratio > MAX_TRAJECTORY_SPREAD_RATIO
+    return {
+        "alignment_identifiability": "degenerate" if degenerate else "well_conditioned",
+        "trajectory_spread_ratio": ratio,
+        "trajectory_spread_ratio_threshold": MAX_TRAJECTORY_SPREAD_RATIO,
+        "trajectory_spread_eigenvalues": eigenvalues.tolist(),
+    }
+
+
 @dataclass(frozen=True)
 class OffsetEvaluation:
     offset_s: float
@@ -16,6 +36,10 @@ class OffsetEvaluation:
     transform: SimilarityTransform
     matched_indices: NDArray[np.int64]
     metric_points: NDArray[np.float64]
+
+    @property
+    def identifiability(self) -> dict[str, object]:
+        return trajectory_identifiability(self.metric_points[self.transform.inliers])
 
     @property
     def inlier_count(self) -> int:
@@ -32,6 +56,8 @@ class OffsetCalibration:
     def as_report(self) -> dict[str, object]:
         return {
             "schema_version": "1.0",
+            **self.selected.identifiability,
+            "residual_label": "camera-to-telemetry consistency metric",
             "telemetry_offset_s": self.selected.offset_s,
             "offset_source": self.source.value,
             "rmse_before_m": self.before.rmse_m if self.before is not None else None,

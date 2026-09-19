@@ -17,3 +17,11 @@ The conservative mixed-reference guard rejects abrupt transitions between altitu
 <=100 m and >=300 m, with a change >200 m and vertical speed >30 m/s. This is a discontinuity
 heuristic, not a datum detector: smooth climbs remain valid; suspected jumps require checking
 the source log. Parser rejection returns no records and a `MIXED_ALTITUDE_REFERENCE` warning.
+
+Trajectory identifiability uses the two largest eigenvalues of the 3D covariance of
+matched telemetry inliers. Their variance ratio must be <=100 (a 10:1 standard-deviation
+ratio). This is a conservative conditioning heuristic, not an accuracy guarantee. Using
+the two largest eigenvalues avoids rejecting planar orbits merely because height is
+constant. A line, near-line, or stationary trajectory is degenerate. The best-effort
+transform is retained, but evidence cannot pass. Residuals are camera-to-telemetry
+consistency metrics; matching an uncertain telemetry prior does not validate true position.
