@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .confidence import confidence_contract, validate_point_confidence_for_ply
-from .models import ProvenanceOrigin, RunRecord
+from .confidence import confidence_contract, measurement_status, validate_point_confidence_for_ply
+from .models import ConfidenceLabel, ProvenanceOrigin, RunRecord
 
 CONFIDENCE_LEGEND = [
     {"label": "OBSERVED_HIGH", "color": "#20bf6b", "measurement": "ALLOWED"},
@@ -135,6 +135,8 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "run_id": record.run_id,
         "stage": record.stage,
         "status": record.status,
+        "evidence_verdict": quality.get("evidence_verdict", "NOT_VALIDATED"),
+        "alignment_identifiability": quality.get("alignment_identifiability", "not_validated"),
         "synthetic_fixture": record.synthetic_fixture,
         "source_provenance": record.source_provenance,
         "video_origin": record.video_origin,
@@ -201,7 +203,12 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
             "coordinate_frame": coordinate_frame,
         },
         "selected_frames": {"url": artifacts["keyframes.json"].url},
-        "confidence_legend": CONFIDENCE_LEGEND,
+        "confidence_legend": [
+            item | {"measurement": measurement_status(
+                [ConfidenceLabel(item["label"])] * 2,
+                quality.get("evidence_verdict"), quality.get("alignment_identifiability"),
+            )} for item in CONFIDENCE_LEGEND
+        ],
         "confidence": {
             "available": confidence_available,
             "url": artifacts[confidence_path].url if confidence_available else None,

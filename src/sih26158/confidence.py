@@ -95,3 +95,19 @@ def confidence_contract() -> dict[str, object]:
         "rgb_derivation_prohibited": True,
         "observed_thresholds": OBSERVED_CONFIDENCE_THRESHOLDS,
     }
+
+
+def measurement_status(
+    labels: list[ConfidenceLabel], evidence_verdict: str | None,
+    alignment_identifiability: str | None,
+) -> str:
+    """Local support cannot validate global scale; missing evidence is conservative."""
+    if any(label in {ConfidenceLabel.AI_ASSISTED_NOT_MEASURABLE, ConfidenceLabel.UNSEEN} for label in labels):
+        return "DISABLED"
+    if ConfidenceLabel.OBSERVED_LOW in labels:
+        return "CONFIRM"
+    if len(labels) != 2 or ConfidenceLabel.OBSERVED_MEDIUM in labels:
+        return "CAUTION"
+    if evidence_verdict != "PASSED" or alignment_identifiability != "well_conditioned":
+        return "CAUTION"
+    return "ALLOWED"

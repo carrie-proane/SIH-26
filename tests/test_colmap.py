@@ -159,3 +159,16 @@ def test_camera_pose_export_orders_source_timestamps_not_image_ids(tmp_path: Pat
     assert [float(r["timestamp_s"]) for r in rows] == [1, 2, 3]
     with pytest.raises(Exception, match="Missing source timestamp"):
         ColmapRunner._export_camera_poses(images, output, {})
+
+
+def test_measurement_status_requires_local_support_and_validated_scale() -> None:
+    from sih26158.confidence import measurement_status
+    from sih26158.models import ConfidenceLabel as C
+    high = [C.OBSERVED_HIGH, C.OBSERVED_HIGH]
+    assert measurement_status(high, "PASSED", "degenerate") == "CAUTION"
+    assert measurement_status(high, "NOT_VALIDATED", "well_conditioned") == "CAUTION"
+    assert measurement_status(high, "FAILED", "well_conditioned") == "CAUTION"
+    assert measurement_status(high, "PASSED", "well_conditioned") == "ALLOWED"
+    for label, expected in [(C.OBSERVED_MEDIUM, "CAUTION"), (C.OBSERVED_LOW, "CONFIRM"),
+                            (C.UNSEEN, "DISABLED"), (C.AI_ASSISTED_NOT_MEASURABLE, "DISABLED")]:
+        assert measurement_status([C.OBSERVED_HIGH, label], "PASSED", "well_conditioned") == expected

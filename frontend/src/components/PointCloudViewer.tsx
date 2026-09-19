@@ -4,6 +4,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 
+import { assessMeasurement } from "../confidence";
+
 import {
   declaredVisualArtifactUrls,
   fetchDeclaredVisualArtifact,
@@ -252,22 +254,7 @@ export function PointCloudViewer({
         });
         return;
       }
-      const status = labels.includes("OBSERVED_LOW")
-        ? "CONFIRM"
-        : labels.includes("OBSERVED_MEDIUM")
-          ? "CAUTION"
-          : "ALLOWED";
-      onMeasurementChangeRef.current({
-        distanceM: distance,
-        labels,
-        status,
-        message:
-          status === "ALLOWED"
-            ? "Both points have explicit high-confidence observed support."
-            : status === "CONFIRM"
-              ? "Low-confidence geometry requires explicit operator confirmation."
-              : "Measurement includes medium-confidence geometry; use with caution.",
-      });
+      onMeasurementChangeRef.current(assessMeasurement(distance, labels, manifest));
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
 

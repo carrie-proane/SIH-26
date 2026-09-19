@@ -1,3 +1,4 @@
+import { MeasurementReadout } from "./MeasurementReadout";
 import { useMemo, useState } from "react";
 
 import { resolveAssetUrl } from "../api";
@@ -310,16 +311,11 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
           visualMode={visualMode}
           onMeasurementChange={setMeasurement}
         />
-        <div className="measurement-readout" data-status={measurement.status}>
-          <span>{measurement.status === "IDLE" ? "DISTANCE TOOL" : measurement.status}</span>
-          <strong>{measurement.distanceM === null ? "—" : `${measurement.distanceM.toFixed(3)} m`}</strong>
-          <small>
-            {measurement.message}
-            {liveReferenceError !== null
-              ? ` Interactive error: ${liveReferenceError.toFixed(1)}% vs ${measurementReference.reference_m?.toFixed(3)} m reference.`
-              : ""}
-          </small>
-        </div>
+        <MeasurementReadout measurement={measurement} referenceNote={
+          liveReferenceError !== null
+            ? ` Interactive error: ${liveReferenceError.toFixed(1)}% vs ${measurementReference.reference_m?.toFixed(3)} m reference.`
+            : ""
+        } />
       </section>
 
       <aside className="inspector">

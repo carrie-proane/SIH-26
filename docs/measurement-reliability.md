@@ -25,3 +25,9 @@ the two largest eigenvalues avoids rejecting planar orbits merely because height
 constant. A line, near-line, or stationary trajectory is degenerate. The best-effort
 transform is retained, but evidence cannot pass. Residuals are camera-to-telemetry
 consistency metrics; matching an uncertain telemetry prior does not validate true position.
+
+Measurements need both local geometric support and global validation. `ALLOWED` requires
+high support at both endpoints, `evidence_verdict=PASSED`, and a well-conditioned alignment.
+`NOT_VALIDATED` is deliberately insufficient: missing independent scale validation cannot
+be treated as passing. Unknown older reports also downgrade to `CAUTION`. Numeric visual
+estimates remain visible; lower-confidence and non-measurable geometry keep their rules.

@@ -89,6 +89,8 @@ export interface ConfidenceLegendItem {
 }
 
 export interface ViewerManifest {
+  evidence_verdict?: "PASSED" | "FAILED" | "NOT_VALIDATED";
+  alignment_identifiability?: "degenerate" | "well_conditioned" | "not_validated";
   schema_version: string;
   project_id: string;
   run_id: string;
@@ -196,6 +198,8 @@ export interface CameraPose {
 }
 
 export interface QualityReport {
+  evidence_verdict?: "PASSED" | "FAILED" | "NOT_VALIDATED";
+  alignment_identifiability?: "degenerate" | "well_conditioned" | "not_validated";
   schema_version: string;
   project_id: string;
   run_id: string;

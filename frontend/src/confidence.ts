@@ -1,5 +1,7 @@
 import type {
   ConfidenceLabel,
+  MeasurementResult,
+  ViewerManifest,
   PointConfidenceArtifact,
   PointConfidenceRecord,
 } from "./types";
@@ -63,4 +65,25 @@ export function parsePointConfidence(payload: unknown): PointConfidenceArtifact 
   const ids = records.map((point) => point.point_id).sort((left, right) => left - right);
   if (ids.some((pointId, index) => pointId !== index)) return null;
   return { schema_version: "1.0", point_order: "PLY_VERTEX_ORDER", points: records };
+}
+
+export function assessMeasurement(
+  distanceM: number, labels: ConfidenceLabel[],
+  evidence: Pick<ViewerManifest, "evidence_verdict" | "alignment_identifiability">,
+): MeasurementResult {
+  if (labels.some(label => label === "AI_ASSISTED_NOT_MEASURABLE" || label === "UNSEEN")) {
+    return { distanceM: null, labels, status: "BLOCKED", message: "This geometry is not eligible for measurement." };
+  }
+  const scaleValidated = evidence.evidence_verdict === "PASSED" && evidence.alignment_identifiability === "well_conditioned";
+  const status = labels.includes("OBSERVED_LOW") ? "CONFIRM"
+    : labels.length !== 2 || labels.includes("OBSERVED_MEDIUM") || !scaleValidated ? "CAUTION" : "ALLOWED";
+  const supportMessage = labels.length !== 2 ? "Visual estimate - verification confidence unavailable."
+    : status === "CONFIRM" ? "Low-confidence geometry requires explicit operator confirmation."
+    : labels.includes("OBSERVED_MEDIUM") ? "Measurement includes medium-confidence geometry; use with caution."
+    : scaleValidated ? "Both points have explicit high-confidence observed support; scale validated."
+    : "Visual estimate - geometrically supported, scale not independently verified.";
+  return { distanceM, labels, status, message: supportMessage + (
+    !scaleValidated && (status === "CONFIRM" || labels.includes("OBSERVED_MEDIUM"))
+      ? " Visual estimate - scale not independently verified." : ""
+  ) };
 }
