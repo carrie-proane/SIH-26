@@ -61,3 +61,30 @@ explicitly if the private local video is absent. Reproduce with:
 ```
 
 The measured report is in `evidence/measurement-reliability/frame-preview-benchmark.json`.
+
+Automatic preprocessing profiles now control the retained-frame target: `smoke` 60,
+`diagnostic` 75, `preview` 100 (unchanged default), `balanced` 110, and `accurate` 120.
+These are selection budgets, capped by candidate availability and subject to the existing
+spacing and explicit overrides. The profile and effective target are recorded in telemetry
+preprocessing metadata. A validated supplied preprocessing handoff retains its own selection;
+the synthetic demo retains its explicitly labeled fixture. Profiles make no change to matcher
+choice, scoring weights, sparse-model selection, or dense/measurement separation.
+
+Verification history (the full backend, UI-unit, and browser suites were run after each
+numbered fix; this table records phase completion):
+
+| Milestone | Backend tests | UI tests | Browser tests |
+| --- | ---: | ---: | ---: |
+| Baseline | 73 | 15 | 2 |
+| Phase 1 | 81 | 16 | 2 |
+| Phase 2 | 89 | 18 | 2 |
+| Phase 3 | 93 | 18 | 2 |
+| Phase 4 | 97 | 18 | 2 |
+| Phase 5 | 98 | 18 | 2 |
+
+Final lint and the frontend production build pass. Backend tests ran outside the execution
+sandbox because its restrictions stalled TestClient. Browser tests used a temporary config
+changing the existing macOS `/private/tmp` data path to `/tmp`; the original browser config
+was preserved. The existing Starlette deprecation and frontend chunk-size warnings remain.
+The requested `contract_1_.md` was absent; the repository's four-section
+`docs/scientific-integrity-contract.md` and the audit's explicit preservation rules were used.

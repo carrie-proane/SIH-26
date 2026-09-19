@@ -88,6 +88,10 @@ class KnownDistanceEndpoint(BaseModel):
     description: str = ""
 
 
+# Automatic preprocessing budgets; preview preserves the original 100-frame target.
+PROFILE_TARGET_FRAMES = {"smoke": 60, "diagnostic": 75, "preview": 100, "balanced": 110, "accurate": 120}
+
+
 class RunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -113,6 +117,10 @@ class RunConfig(BaseModel):
     segmentation_model_path: str | None = None
     enable_dense_reconstruction: bool = False
     dense_provider: Literal["auto", "colmap", "openmvs"] = "auto"
+
+    @property
+    def target_frames(self) -> int:
+        return PROFILE_TARGET_FRAMES[self.profile]
 
     @field_validator("measured_distance_m")
     @classmethod

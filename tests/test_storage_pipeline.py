@@ -384,3 +384,31 @@ def test_unknown_altitude_assumption_propagates_to_quality_report(tmp_path: Path
     assert report["vertical_alignment_verdict"] == "NOT_VALIDATED"
     assert report["evidence_verdict"] == "NOT_VALIDATED"
     assert any(w["code"] == "ALTITUDE_REFERENCE_ASSUMED" for w in report["warnings"])
+
+
+def test_every_profile_changes_the_actual_selection_budget(tmp_path: Path, monkeypatch) -> None:
+    from typing import get_args
+
+    from frames.extractor import ExtractedFrame, ExtractionResult
+    from sih26158.models import PROFILE_TARGET_FRAMES
+    from sih26158.pipeline import PipelineError
+
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    candidates = [ExtractedFrame(i, float(i), "v.mp4", f"{i}.jpg") for i in range(160)]
+    monkeypatch.setattr("sih26158.pipeline.extract_frames", lambda *a, **kw:
+        ExtractionResult(candidates, 30, 4800, 0, []))
+    budgets = []
+    def selection_probe(frames, run_dir, *, target_frames, **kwargs):
+        budgets.append(target_frames)
+        raise ValueError("selection budget observed")
+    monkeypatch.setattr("sih26158.pipeline.select_keyframes", selection_probe)
+    profiles = get_args(RunConfig.model_fields["profile"].annotation)
+    assert set(profiles) == set(PROFILE_TARGET_FRAMES)
+    for profile in profiles:
+        record = store.create_run(project.project_id, RunConfig(profile=profile))
+        with pytest.raises(PipelineError, match="selection budget observed"):
+            PipelineRunner(store)._preprocess_uploaded_inputs(record)
+        assert budgets[-1] == PROFILE_TARGET_FRAMES[profile]
+    assert len(set(budgets)) == len(profiles)
+    assert RunConfig().target_frames == 100

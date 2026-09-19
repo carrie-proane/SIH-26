@@ -78,3 +78,9 @@ Frames must be the exact selected originals or matcher-resolution copies declare
 `alt_source`, `fix_quality`, and `source_row`, plus the metadata sidecar. The backend embeds the
 sidecar and warnings in `ingest_report.json`. Invalid overrides are explained and safely fall back
 to automatic processing of the immutable upload pair.
+
+`profile` controls automatic frame-selection targets: smoke=60, diagnostic=75, preview=100,
+balanced=110, accurate=120. Candidate count and temporal spacing may reduce the actual count.
+The default preview budget remains 100. Supplied preprocessing handoffs retain their recorded
+selection. See [measurement reliability](measurement-reliability.md) for report fields,
+altitude references, measurement provenance, and validation semantics.

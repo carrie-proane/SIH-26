@@ -355,7 +355,7 @@ class PipelineRunner:
             36,
             f"Decoded {len(candidates)} timestamped candidate frames.",
         )
-        target_frames = min(100, len(candidates))
+        target_frames = min(record.config.target_frames, len(candidates))
         try:
             rows = select_keyframes(
                 candidates,
@@ -476,6 +476,9 @@ class PipelineRunner:
         metadata["frame_selection_method"] = "NORMALIZED_BLUR_EXPOSURE_REDUNDANCY"
         metadata["candidate_frame_count"] = len(candidates)
         metadata["selected_frame_count"] = len(selected_rows)
+        metadata["selection_profile"] = record.config.profile
+        metadata["profile_target_frames"] = record.config.target_frames
+        metadata["effective_target_frames"] = target_frames
         metadata["video_duration_s"] = duration_s
         metadata["quality_score_means"] = averages
         atomic_json(telemetry_meta_path, metadata)
