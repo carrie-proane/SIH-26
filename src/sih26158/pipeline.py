@@ -895,6 +895,7 @@ class PipelineRunner:
                 alignment=alignment_report,
                 confidence_available=confidence_available,
             )
+            record.evidence_verdict = report["evidence_verdict"]
             write_quality_report(quality_path, report)
             self.store.register_artifacts(record, [quality_path])
             self._transition(record, RunStatus.COMPLETED, 100, "Run completed.", "COMPLETED")

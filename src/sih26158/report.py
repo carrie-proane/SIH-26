@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .confidence import confidence_contract
-from .models import MatcherMetrics, ProvenanceOrigin, RunRecord, utc_now
+from .models import EvidenceVerdict, MatcherMetrics, ProvenanceOrigin, RunRecord, utc_now
 
 
 def known_distance_metrics(reference_m: float | None, measured_m: float | None) -> dict[str, Any]:
@@ -64,12 +64,32 @@ def build_quality_report(
             }
         )
     genuine_real_evidence = record.source_provenance == ProvenanceOrigin.REAL
+    known_distance = known_distance_metrics(
+        record.config.known_distance_m, record.config.measured_distance_m
+    )
+    gates = {
+        "registration": registration_rate >= 0.8,
+        "reprojection": metrics.median_reprojection_error_px <= 1.5,
+        "metric_alignment": (
+            float(alignment["scale"]) > 0 and inlier_count >= 3
+            if alignment.get("scale") is not None else None
+        ),
+        "known_distance": known_distance["passes_10_percent_gate"],
+        "real_evidence": True if genuine_real_evidence and not alignment.get("synthetic_fixture") else None,
+    }
+    verdict = (
+        EvidenceVerdict.FAILED if any(value is False for value in gates.values()) else
+        EvidenceVerdict.NOT_VALIDATED if any(value is None for value in gates.values()) else
+        EvidenceVerdict.PASSED
+    )
     return {
         "schema_version": "1.0",
         "project_id": record.project_id,
         "run_id": record.run_id,
         "stage": "REPORTING",
         "status": "COMPLETED",
+        "evidence_verdict": verdict,
+        "evidence_gates": gates,
         "created_at": utc_now(),
         "config_version": record.config_version,
         "run_configuration": record.config.model_dump(mode="json"),
@@ -113,9 +133,7 @@ def build_quality_report(
                 "matched_camera_count": record.matched_camera_count,
                 "inlier_count": record.inlier_count,
             },
-            "known_distance": known_distance_metrics(
-                record.config.known_distance_m, record.config.measured_distance_m
-            ),
+            "known_distance": known_distance,
             "coverage": {"status": "NOT_EVALUATED", "reason": "Reference visible-region mask not supplied."},
         },
         "confidence_artifact": {

@@ -39,3 +39,16 @@ def test_report_uses_execution_matcher_not_requested_matcher() -> None:
     assert report["matcher_actually_used"] == "sift"
     metrics.matcher_actually_used = None
     assert build_quality_report(record, metrics, [])["matcher_actually_used"] is None
+
+
+def test_missing_reference_is_not_validated_and_failed_gate_takes_precedence() -> None:
+    from sih26158.models import RunConfig, RunRecord
+    from sih26158.report import build_quality_report
+
+    record = RunRecord(project_id="p", run_id="r", config=RunConfig(), source_provenance="REAL")
+    alignment = {"scale": 1.0, "inlier_count": 10}
+    report = build_quality_report(record, metric("SIFT", 90, 1), [], alignment=alignment)
+    assert report["evidence_verdict"] == "NOT_VALIDATED"
+    report = build_quality_report(record, metric("SIFT", 40, 3), [], alignment=alignment)
+    assert report["evidence_verdict"] == "FAILED"
+    assert report["status"] == "COMPLETED"

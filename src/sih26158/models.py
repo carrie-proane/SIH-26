@@ -21,6 +21,12 @@ class RunStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class EvidenceVerdict(StrEnum):
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    NOT_VALIDATED = "NOT_VALIDATED"
+
+
 class ConfidenceLabel(StrEnum):
     OBSERVED_HIGH = "OBSERVED_HIGH"
     OBSERVED_MEDIUM = "OBSERVED_MEDIUM"
@@ -157,6 +163,7 @@ class RunRecord(BaseModel):
     config: RunConfig
     environment: dict[str, str | None] = Field(default_factory=dict)
     failure_reason: str | None = None
+    evidence_verdict: EvidenceVerdict = EvidenceVerdict.NOT_VALIDATED
     events: list[StageEvent] = Field(default_factory=list)
     artifacts: list[ArtifactEntry] = Field(default_factory=list)
     synthetic_fixture: bool = False

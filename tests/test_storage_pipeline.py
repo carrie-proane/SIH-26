@@ -335,3 +335,21 @@ def test_real_run_retains_ingest_artifact_when_automatic_preprocessing_fails(
     assert result.status == RunStatus.FAILED
     assert "Automatic frame extraction failed" in (result.failure_reason or "")
     assert "ingest_report.json" in {item.relative_path for item in result.artifacts}
+
+
+def test_completed_processing_can_fail_evidence(tmp_path: Path, monkeypatch) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    runner = PipelineRunner(store)
+    reconstruct = runner._reconstruct
+    def low_registration(record):
+        result = reconstruct(record)
+        result.metrics.registered_frames = 4
+        return result
+    monkeypatch.setattr(runner, "_reconstruct", low_registration)
+    finished = runner.run(record.run_id)
+    report = json.loads((store.run_dir(project.project_id, record.run_id) / "quality_report.json").read_text())
+    assert finished.status == RunStatus.COMPLETED
+    assert finished.evidence_verdict == report["evidence_verdict"] == "FAILED"
+    assert store.get_run(record.run_id).evidence_verdict == "FAILED"
