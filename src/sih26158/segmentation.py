@@ -120,7 +120,9 @@ def run_optional_segmentation(
                 "sky_segmentation": False,
                 "selected_frame_count": len(fractions),
                 "mean_dynamic_mask_fraction": float(np.mean(fractions)) if fractions else 0.0,
-                "comparison": "COLMAP may use masks when supported; unmasked frames remain available.",
+                "comparison": "masks generated but not passed to COLMAP in this build",
+                "masking_applied": False,
+                "masking_note": "masks generated but not passed to COLMAP in this build",
             },
             indent=2,
         )

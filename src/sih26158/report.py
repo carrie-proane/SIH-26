@@ -80,6 +80,13 @@ def build_quality_report(
         "genuine_real_evidence": genuine_real_evidence,
         "matcher_actually_used": metrics.matcher_actually_used,
         "matcher_fallback_reason": metrics.matcher_fallback_reason,
+        "masking_applied": metrics.masking_applied,
+        "masking_note": (
+            None if metrics.masking_applied else
+            "masks generated but not passed to COLMAP in this build"
+            if any(a.relative_path == "segmentation_comparison.json" for a in record.artifacts)
+            else "no masks passed to COLMAP"
+        ),
         "metrics": {
             "eligible_frames": metrics.eligible_frames,
             "registered_frames": metrics.registered_frames,

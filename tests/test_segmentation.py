@@ -38,3 +38,30 @@ def test_missing_optional_model_falls_back_to_unmasked_frames(tmp_path: Path) ->
     )
     assert artifacts == []
     assert warnings[0]["code"] == "SEGMENTATION_UNAVAILABLE_USING_UNMASKED_FRAMES"
+
+
+def test_generated_masks_do_not_claim_reconstruction_effect(tmp_path: Path) -> None:
+    import json
+    from sih26158.colmap import ColmapRunner
+    from sih26158.models import ArtifactEntry, MatcherMetrics, RunConfig, RunRecord
+    from sih26158.report import build_quality_report
+
+    (tmp_path / "frames").mkdir()
+    artifacts, _ = run_optional_segmentation(
+        tmp_path, "r", [{"image_name": "a.jpg"}], None,
+        provider=lambda _: np.zeros((10, 10), np.uint8),
+    )
+    segmentation = json.loads(artifacts[-1].read_text())
+    commands = ColmapRunner().build_commands(tmp_path / "frames", tmp_path, RunConfig())
+    assert commands.masking_applied is False
+    record = RunRecord(project_id="p", run_id="r", config=RunConfig(), artifacts=[
+        ArtifactEntry(name="segmentation", relative_path=artifacts[-1].name,
+                      media_type="application/json", size_bytes=0, sha256="0" * 64)
+    ])
+    metrics = MatcherMetrics(matcher="SIFT", eligible_frames=10, registered_frames=9,
+        median_reprojection_error_px=1, p95_reprojection_error_px=1, runtime_s=1,
+        masking_applied=commands.masking_applied)
+    report = build_quality_report(record, metrics, [])
+    assert report["masking_applied"] is False
+    assert report["masking_note"] == segmentation["masking_note"]
+    assert "not passed to COLMAP" in report["masking_note"]

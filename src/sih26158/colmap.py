@@ -27,6 +27,10 @@ class ColmapCommands(list[list[str]]):
 
     matcher_actually_used = "sift"
 
+    @property
+    def masking_applied(self) -> bool:
+        return any("--ImageReader.mask_path" in command for command in self)
+
 
 @dataclass(frozen=True)
 class ReconstructionResult:
@@ -320,6 +324,7 @@ class ColmapRunner:
         metrics = MatcherMetrics(
             matcher=commands.matcher_actually_used.upper(),
             matcher_actually_used=commands.matcher_actually_used,
+            masking_applied=commands.masking_applied,
             eligible_frames=len(images),
             registered_frames=registered,
             median_reprojection_error_px=max(
