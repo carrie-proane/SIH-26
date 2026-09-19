@@ -201,6 +201,8 @@ class PointConfidenceArtifact(BaseModel):
 
 class MatcherMetrics(BaseModel):
     matcher: str
+    matcher_actually_used: str | None = None
+    matcher_fallback_reason: str | None = None
     eligible_frames: int = Field(gt=0)
     registered_frames: int = Field(ge=0)
     median_reprojection_error_px: float = Field(ge=0)

@@ -22,6 +22,12 @@ class ExternalToolError(RuntimeError):
     pass
 
 
+class ColmapCommands(list[list[str]]):
+    """Commands plus execution provenance, kept together through execution."""
+
+    matcher_actually_used = "sift"
+
+
 @dataclass(frozen=True)
 class ReconstructionResult:
     metrics: MatcherMetrics
@@ -99,12 +105,14 @@ class ColmapRunner:
             )
         return location
 
-    def build_commands(self, frames: Path, run_dir: Path, config: RunConfig) -> list[list[str]]:
+    def build_commands(self, frames: Path, run_dir: Path, config: RunConfig) -> ColmapCommands:
+        if config.matcher != "SIFT":
+            raise ValueError(f"Unsupported matcher in COLMAP execution: {config.matcher}")
         database = run_dir / "sparse" / "database.db"
         model = run_dir / "sparse" / "model"
         model.mkdir(parents=True, exist_ok=True)
         gpu = "1" if config.use_gpu else "0"
-        return [
+        return ColmapCommands([
             [
                 self.binary,
                 "feature_extractor",
@@ -139,7 +147,7 @@ class ColmapRunner:
                 "--output_path",
                 str(model),
             ],
-        ]
+        ])
 
     def _execute(self, command: list[str], log: Path) -> None:
         with log.open("a", encoding="utf-8") as stream:
@@ -310,7 +318,8 @@ class ColmapRunner:
         median_error = selected.median_reprojection_error_px
         p95_error = selected.p95_reprojection_error_px
         metrics = MatcherMetrics(
-            matcher=config.matcher,
+            matcher=commands.matcher_actually_used.upper(),
+            matcher_actually_used=commands.matcher_actually_used,
             eligible_frames=len(images),
             registered_frames=registered,
             median_reprojection_error_px=max(

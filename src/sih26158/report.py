@@ -78,6 +78,8 @@ def build_quality_report(
         "video_origin": record.video_origin,
         "telemetry_origin": record.telemetry_origin,
         "genuine_real_evidence": genuine_real_evidence,
+        "matcher_actually_used": metrics.matcher_actually_used,
+        "matcher_fallback_reason": metrics.matcher_fallback_reason,
         "metrics": {
             "eligible_frames": metrics.eligible_frames,
             "registered_frames": metrics.registered_frames,

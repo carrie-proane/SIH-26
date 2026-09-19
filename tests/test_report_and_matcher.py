@@ -26,3 +26,16 @@ def test_learned_matcher_must_improve_evidence() -> None:
     assert choose_matcher(metric("SIFT", 80, 1.2), metric("SUPERPOINT_LIGHTGLUE", 79, 0.8))[0] == "SIFT"
     assert choose_matcher(metric("SIFT", 80, 1.2), metric("SUPERPOINT_LIGHTGLUE", 80, 1.0))[0] == "SUPERPOINT_LIGHTGLUE"
 
+
+
+def test_report_uses_execution_matcher_not_requested_matcher() -> None:
+    from sih26158.models import RunConfig, RunRecord
+    from sih26158.report import build_quality_report
+
+    record = RunRecord(project_id="p", run_id="r", config=RunConfig(matcher="SUPERPOINT_LIGHTGLUE"))
+    metrics = metric("SIFT", 90, 1.0)
+    metrics.matcher_actually_used = "sift"
+    report = build_quality_report(record, metrics, [])
+    assert report["matcher_actually_used"] == "sift"
+    metrics.matcher_actually_used = None
+    assert build_quality_report(record, metrics, [])["matcher_actually_used"] is None

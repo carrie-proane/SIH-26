@@ -136,3 +136,11 @@ def test_confidence_count_mismatch_is_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="point count"):
         validate_point_confidence_for_ply(confidence, ply)
+
+
+def test_unsupported_matcher_is_rejected_and_sift_records_execution(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="SUPERPOINT_LIGHTGLUE"):
+        ColmapRunner().build_commands(tmp_path / "frames", tmp_path, RunConfig(matcher="SUPERPOINT_LIGHTGLUE"))
+    commands = ColmapRunner().build_commands(tmp_path / "frames", tmp_path, RunConfig())
+    assert commands.matcher_actually_used == "sift"
+    assert commands[1][1] == "sequential_matcher"
