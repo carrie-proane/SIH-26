@@ -85,6 +85,7 @@ class RunConfig(BaseModel):
     camera_model: str = "SIMPLE_RADIAL"
     camera_model_policy: Literal["AUTO", "FIXED"] = "AUTO"
     camera_params: str | None = None
+    camera_params_reference: Literal["PROCESSED_FRAMES", "SOURCE_VIDEO"] = "PROCESSED_FRAMES"
     refine_intrinsics: bool = True
     max_reconstruction_retries: int = Field(default=1, ge=0, le=1)
     sequential_overlap: int = Field(default=10, ge=1, le=50)
@@ -114,6 +115,15 @@ class RunConfig(BaseModel):
     sparse_timeout_s: float = Field(default=7200, ge=30, le=86400)
     dense_timeout_s: float = Field(default=21600, ge=30, le=172800)
     command_heartbeat_s: float = Field(default=10, ge=1, le=300)
+    max_candidate_frames: int = Field(default=240, ge=3, le=5000)
+    max_selected_frames: int = Field(default=100, ge=3, le=1000)
+    processing_max_image_dimension: int | None = Field(default=None, ge=640, le=16384)
+    worker_threads: int = Field(default=0, ge=0, le=256)
+    coverage_interval_s: float = Field(default=60.0, gt=0, le=600)
+    dataset_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    dataset_role: Literal["DEVELOPMENT", "VALIDATION", "HELD_OUT"] | None = None
+    dataset_manifest_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    dataset_benchmark_config_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("measured_distance_m")
     @classmethod
@@ -146,6 +156,8 @@ class RunConfig(BaseModel):
                 raise ValueError("PRIMARY_SUBJECT reconstruction requires AUTO or REQUIRED masking")
         if self.enable_segmentation and self.masking_mode == "OFF":
             self.masking_mode = "AUTO"
+        if self.max_selected_frames > self.max_candidate_frames:
+            raise ValueError("max_selected_frames cannot exceed max_candidate_frames")
         return self
 
 
@@ -201,6 +213,10 @@ class RunRecord(BaseModel):
     capability_profile_path: str | None = None
     effective_sparse_gpu: bool = False
     selected_dense_provider: Literal["colmap", "openmvs"] | None = None
+    processing_started_at: str | None = None
+    processing_completed_at: str | None = None
+    stage_timings_s: dict[str, float] = Field(default_factory=dict)
+    derived_from_run_id: str | None = None
 
 
 class StageCheckpoint(BaseModel):
@@ -210,6 +226,11 @@ class StageCheckpoint(BaseModel):
     completed_at: str = Field(default_factory=utc_now)
     artifacts: dict[str, str] = Field(default_factory=dict)
     warnings: list[dict[str, str]] = Field(default_factory=list)
+    input_fingerprint: str | None = None
+    configuration_fingerprint: str | None = None
+    environment_fingerprint: str | None = None
+    started_at: str | None = None
+    duration_s: float | None = Field(default=None, ge=0)
 
 
 class RunCheckpoint(BaseModel):
@@ -221,6 +242,62 @@ class RunCheckpoint(BaseModel):
     updated_at: str = Field(default_factory=utc_now)
     completed: dict[str, StageCheckpoint] = Field(default_factory=dict)
     warnings: list[dict[str, str]] = Field(default_factory=list)
+    active_stage_started_at: str | None = None
+
+
+class MeasurementEndpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    coordinates: tuple[float, float, float]
+    point_id: int | None = Field(default=None, ge=0)
+    face_id: int | None = Field(default=None, ge=0)
+
+    @field_validator("coordinates")
+    @classmethod
+    def finite_coordinates(cls, value: tuple[float, float, float]) -> tuple[float, float, float]:
+        import math
+
+        if not all(math.isfinite(component) for component in value):
+            raise ValueError("measurement endpoint coordinates must be finite")
+        return value
+
+
+class MeasurementCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    geometry_artifact_path: str
+    geometry_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    start: MeasurementEndpoint
+    end: MeasurementEndpoint
+    coordinate_frame: str = "LOCAL_ENU_METRES"
+    units: Literal["m"] = "m"
+    measurement_kind: Literal["DISTANCE_3D", "HORIZONTAL", "VERTICAL", "RELATIVE_DIMENSION"] = (
+        "DISTANCE_3D"
+    )
+    reference_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_.-]{1,120}$")
+    reference_value_m: float | None = Field(default=None, gt=0)
+    reference_method: str | None = None
+    reference_evidence: str | None = None
+    reference_role: Literal["NONE", "SCALE_CONTROL", "HELD_OUT_EVALUATION"] = "NONE"
+
+    @model_validator(mode="after")
+    def validate_reference(self) -> MeasurementCreate:
+        if self.reference_role != "NONE" and self.reference_value_m is None:
+            raise ValueError("reference_value_m is required for a reference measurement")
+        if self.reference_value_m is not None and self.reference_role == "NONE":
+            raise ValueError("reference_role must classify a supplied reference value")
+        return self
+
+
+class MeasurementRecord(MeasurementCreate):
+    measurement_id: str
+    run_id: str
+    created_at: str = Field(default_factory=utc_now)
+    backend_distance_m: float = Field(ge=0)
+    geometry_provenance: Literal["OBSERVED", "INFERRED", "UNKNOWN"]
+    measurement_eligible: bool
+    eligibility_reason: str
+    legacy_manual_reconstructed_value: bool = False
 
 
 class PointConfidenceRecord(BaseModel):

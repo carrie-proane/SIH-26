@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -29,6 +30,7 @@ class ManagedProcessExecutor:
         heartbeat_interval_s: float = 10.0,
         poll_interval_s: float = 0.25,
         terminate_grace_s: float = 5.0,
+        process_state_path: Path | None = None,
     ) -> None:
         self.deadline = time.monotonic() + timeout_s
         self.timeout_s = timeout_s
@@ -37,6 +39,28 @@ class ManagedProcessExecutor:
         self.heartbeat_interval_s = heartbeat_interval_s
         self.poll_interval_s = poll_interval_s
         self.terminate_grace_s = terminate_grace_s
+        self.process_state_path = process_state_path
+
+    def _write_process_state(self, process: subprocess.Popen[str], command: Sequence[str]) -> None:
+        if self.process_state_path is None:
+            return
+        self.process_state_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.process_state_path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "pid": process.pid,
+                    "process_group_id": process.pid if os.name != "nt" else None,
+                    "parent_pid": os.getpid(),
+                    "command": list(command),
+                    "started_monotonic": time.monotonic(),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.process_state_path)
 
     def _terminate_tree(self, process: subprocess.Popen[str]) -> None:
         if process.poll() is not None:
@@ -92,35 +116,40 @@ class ManagedProcessExecutor:
             start_new_session=start_new_session,
             creationflags=creationflags,
         )
+        self._write_process_state(process, command)
         last_heartbeat = 0.0
         captured_stdout: str | None = None
         captured_stderr: str | None = None
-        while True:
-            now = time.monotonic()
-            if self.cancel_requested():
-                self._terminate_tree(process)
-                raise ProcessCancelledError(
-                    f"Run cancellation terminated external command: {Path(command[0]).name}"
-                )
-            if now >= self.deadline:
-                self._terminate_tree(process)
-                raise ProcessTimeoutError(
-                    f"Stage exceeded its {self.timeout_s:.0f}-second timeout while running "
-                    f"{Path(command[0]).name}"
-                )
-            if now - last_heartbeat >= self.heartbeat_interval_s:
-                try:
-                    self.heartbeat()
-                except Exception:
+        try:
+            while True:
+                now = time.monotonic()
+                if self.cancel_requested():
                     self._terminate_tree(process)
-                    raise
-                last_heartbeat = now
-            wait_s = min(self.poll_interval_s, max(self.deadline - now, 0.01))
-            try:
-                captured_stdout, captured_stderr = process.communicate(timeout=wait_s)
-                break
-            except subprocess.TimeoutExpired:
-                continue
+                    raise ProcessCancelledError(
+                        f"Run cancellation terminated external command: {Path(command[0]).name}"
+                    )
+                if now >= self.deadline:
+                    self._terminate_tree(process)
+                    raise ProcessTimeoutError(
+                        f"Stage exceeded its {self.timeout_s:.0f}-second timeout while running "
+                        f"{Path(command[0]).name}"
+                    )
+                if now - last_heartbeat >= self.heartbeat_interval_s:
+                    try:
+                        self.heartbeat()
+                    except Exception:
+                        self._terminate_tree(process)
+                        raise
+                    last_heartbeat = now
+                wait_s = min(self.poll_interval_s, max(self.deadline - now, 0.01))
+                try:
+                    captured_stdout, captured_stderr = process.communicate(timeout=wait_s)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            if self.process_state_path is not None and process.poll() is not None:
+                self.process_state_path.unlink(missing_ok=True)
         return subprocess.CompletedProcess(
             list(command), process.returncode, captured_stdout, captured_stderr
         )

@@ -76,10 +76,22 @@ def estimate_similarity(source: NDArray[np.float64], target: NDArray[np.float64]
         raise ValueError("source and target must both have shape (N, 3)")
     if len(source) < 3:
         raise ValueError("At least three point pairs are required")
+    if not np.isfinite(source).all() or not np.isfinite(target).all():
+        raise ValueError("Alignment coordinates must be finite")
     source_mean = source.mean(axis=0)
     target_mean = target.mean(axis=0)
     source_centered = source - source_mean
     target_centered = target - target_mean
+    source_spread = np.linalg.svd(source_centered, compute_uv=False)
+    target_spread = np.linalg.svd(target_centered, compute_uv=False)
+    if source_spread[0] <= np.finfo(float).eps or target_spread[0] <= np.finfo(float).eps:
+        raise ValueError("Alignment trajectory is collapsed")
+    # A planar trajectory has two independent directions and remains usable.
+    # A line has an unconstrained rotation around its axis, even with many samples.
+    if source_spread[1] / source_spread[0] < 1e-3:
+        raise ValueError("Source trajectory is nearly collinear and cannot constrain 3D alignment")
+    if target_spread[1] / target_spread[0] < 1e-3:
+        raise ValueError("Target trajectory is nearly collinear and cannot constrain 3D alignment")
     covariance = target_centered.T @ source_centered / len(source)
     u, singular_values, vt = np.linalg.svd(covariance)
     correction = np.eye(3)
@@ -90,7 +102,11 @@ def estimate_similarity(source: NDArray[np.float64], target: NDArray[np.float64]
     if variance <= np.finfo(float).eps:
         raise ValueError("Source points are degenerate")
     scale = float(np.sum(singular_values * np.diag(correction)) / variance)
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("Alignment scale must be finite and positive")
     translation = target_mean - scale * (rotation @ source_mean)
+    if not np.isfinite(rotation).all() or not np.isfinite(translation).all():
+        raise ValueError("Alignment transform must be finite")
     predicted = scale * (source @ rotation.T) + translation
     residuals = np.linalg.norm(predicted - target, axis=1)
     return SimilarityTransform(scale, rotation, translation, np.ones(len(source), dtype=bool), residuals)

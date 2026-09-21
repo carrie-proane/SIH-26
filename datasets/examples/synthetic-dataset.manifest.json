@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "synthetic_contract_example",
+  "dataset_role": "DEVELOPMENT",
+  "description": "SYNTHETIC SCHEMA EXAMPLE ONLY. Paths and hashes are illustrative and are not real capture evidence.",
+  "synthetic_example": true,
+  "video": {
+    "path": "fixtures/synthetic-video.mp4",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "telemetry": {
+    "path": "fixtures/synthetic-telemetry.csv",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "benchmark_config": {
+    "path": "fixtures/synthetic-benchmark.json",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "capture": {
+    "device_make": "SYNTHETIC",
+    "device_model": "SCHEMA_EXAMPLE",
+    "recording_mode": "1920x1080 test fixture",
+    "calibration": {
+      "camera_model": "SIMPLE_RADIAL",
+      "parameters": null,
+      "image_width": 1920,
+      "image_height": 1080,
+      "coordinate_reference": "SOURCE_VIDEO",
+      "source": "Synthetic example declaration; not a measured calibration",
+      "stated_accuracy": null
+    }
+  },
+  "telemetry_metadata": {
+    "time_basis": "VIDEO_START_RELATIVE",
+    "altitude_reference": "ELLIPSOIDAL"
+  },
+  "references": {
+    "coordinate_system": {
+      "frame": "SYNTHETIC_LOCAL_ENU_METRES",
+      "units": "m",
+      "axis_convention": "+X east, +Y north, +Z up",
+      "vertical_datum": "SYNTHETIC_ELLIPSOIDAL",
+      "origin_wgs84": [18.5, 73.8, 100.0],
+      "reference_to_reconstruction_transform": null
+    },
+    "relative_distances": [
+      {
+        "id": "synthetic-width",
+        "distance_m": 5.0,
+        "acquisition_method": "Exact synthetic fixture construction",
+        "stated_accuracy_m": 0.001,
+        "role": "HELD_OUT_EVALUATION",
+        "evidence": "Synthetic fixture generator"
+      }
+    ],
+    "positional_checkpoints": [
+      {
+        "id": "synthetic-checkpoint-1",
+        "coordinates": [1.0, 2.0, 3.0],
+        "coordinate_frame": "SYNTHETIC_LOCAL_ENU_METRES",
+        "units": "m",
+        "altitude_reference": "ELLIPSOIDAL",
+        "acquisition_method": "Exact synthetic fixture construction",
+        "stated_accuracy_m": 0.001,
+        "role": "HELD_OUT_EVALUATION"
+      }
+    ]
+  }
+}

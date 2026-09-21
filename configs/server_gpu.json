@@ -1,0 +1,16 @@
+{
+  "config_version": "1.0",
+  "profile": "balanced",
+  "matcher": "SIFT",
+  "execution_mode": "COLMAP",
+  "matching_strategy": "SEQUENTIAL",
+  "sequential_overlap": 12,
+  "use_gpu": true,
+  "max_candidate_frames": 360,
+  "max_selected_frames": 140,
+  "processing_max_image_dimension": 3200,
+  "worker_threads": 8,
+  "sparse_timeout_s": 14400,
+  "dense_timeout_s": 28800,
+  "coverage_interval_s": 60
+}

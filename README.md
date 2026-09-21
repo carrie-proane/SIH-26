@@ -1,5 +1,9 @@
 # SIH26158 - Jay backend deliverable
 
+Real capture intake and server execution are documented in
+[`docs/real-dataset-validation.md`](docs/real-dataset-validation.md). The preparation command is
+safe to run before COLMAP/GPU access and does not start reconstruction.
+
 This repository implements Jay's seven-day contract scope for the trustworthy single-pass drone
 video reconstruction prototype: immutable ingest, FastAPI orchestration, exact run states, COLMAP
 execution, local-metric alignment utilities, SIFT-vs-learned matcher selection, declared artifact
@@ -145,13 +149,41 @@ Run the complete backend, lint, frontend build and browser verification gate wit
 The gate also rejects tracked run directories, reconstruction inputs, generated frontend output and
 files larger than 25 MiB. GitHub Actions runs the same gate from a clean Python/Node installation.
 
+The official SIH desired-output targets are tracked without overclaiming in
+`docs/requirements-matrix.md`. The reproducible local, CPU/GPU preflight, ten-minute benchmark,
+cancellation/resume, report inspection, SSH tunnel, and scheduler-intake workflow is in
+`docs/server-validation.md`.
+
+## Geometry exports
+
+Completed reports convert existing declared geometry without rerunning reconstruction. Observed
+and dense point clouds can produce LAS; existing meshes can produce OBJ/MTL/textures and GLB. Use
+the API contract rather than filesystem guesses:
+
+```bash
+curl -f http://127.0.0.1:8000/api/runs/RUN_ID/readiness
+curl -f -X POST http://127.0.0.1:8000/api/runs/RUN_ID/exports
+curl -f http://127.0.0.1:8000/api/runs/RUN_ID/exports
+```
+
+The POST backfills/revalidates exports for a terminal run using only its already-declared geometry;
+it does not execute reconstruction.
+
+Every downloadable file is declared and hash-addressed in `export_readiness.json`; each package has
+an `export_manifest.json` with source hash, provenance, options, coordinate convention and reopen
+validation. OBJ/LAS remain local ENU metres. GLB applies the documented reversible
+`(east, north, up) -> (east, up, -north)` rotation. LAS deliberately declares no EPSG for local ENU.
+A point-only run reports OBJ/GLB unavailable instead of inventing a surface, and successful export
+never changes measurement eligibility. See `docs/api.md` for exact frontend requests and download
+examples.
+
 ## Restart-safe execution
 
 Every run has an internal `.pipeline_checkpoint.json` and an advisory `.execution.lock`. A stage is
 checkpointed only after all of its artifacts have been declared and hashed. On resume, the pipeline
-validates those hashes in dependency order; the first missing or changed artifact causes that stage
-and every downstream stage to run again. Valid ingest, preprocessing and sparse stages are not
-repeated merely because the API process restarted.
+validates output hashes plus stage input, effective-configuration, and relevant executable
+fingerprints in dependency order; the first mismatch reruns only that stage and descendants. A
+separate cross-process heavy-job slot defaults to one active reconstruction across runs.
 
 The API automatically requeues interrupted `QUEUED`, `INGESTING`, `PREPROCESSING`,
 `RECONSTRUCTING`, and `REPORTING` records on startup. An honestly failed run can be retried with:
@@ -195,8 +227,10 @@ Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evide
 - Ordinary GNSS is a soft prior; absolute horizontal and vertical errors require independent checks.
 - AI-assisted geometry is never accepted as verified measurement.
 - Dense reconstruction and textured meshes are optional visual outputs after sparse/metric gates;
-  their availability depends on CUDA COLMAP or an external OpenMVS installation. GLB conversion,
-  Gaussian Splatting and orthomosaics are not implemented. Telemetry offset estimation is a bounded
-  per-run search, but ordinary GNSS remains a soft prior.
+  their availability depends on CUDA COLMAP or an external OpenMVS installation. OBJ/GLB export can
+  only convert a mesh that already exists; Gaussian Splatting and orthomosaics are not implemented.
+  Telemetry offset estimation is a bounded per-run search, but ordinary GNSS remains a soft prior.
+- OBJ/GLB/LAS correctness is verified on small deterministic fixtures only. Representative
+  real-scene, large-scene, memory/performance and college-server validation remain pending.
 - YOLO segmentation, SuperPoint/LightGlue and Depth Anything are optional experiments. Missing
   segmentation weights fall back only in `AUTO`; `REQUIRED` and `PRIMARY_SUBJECT` stop honestly.

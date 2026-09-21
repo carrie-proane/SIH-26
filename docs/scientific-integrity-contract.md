@@ -53,3 +53,23 @@ Observed thresholds are geometric and transparent. HIGH requires track length at
 reprojection error at most 1.0 px, and triangulation angle at least 5 degrees. MEDIUM requires track
 length at least three, error at most 2.0 px, and angle at least 2 degrees. Other COLMAP-observed
 points are LOW. RGB never enters classification.
+
+## Geometry export integrity
+
+Export is a representation change, not new reconstruction evidence. `sparse/sparse_local.ply`
+remains observed geometry; dense meshes/clouds remain `DERIVED_OBSERVED_VISUAL`; paths explicitly
+declared as inferred/completed/generated remain `INFERRED`. The export manifest repeats the source
+artifact path and SHA-256, provenance, measurement eligibility, options, coordinate convention,
+exporter version and output hashes. Exported OBJ, GLB and LAS are not accepted by the measurement
+API, so conversion can never promote a visual or inferred artifact.
+
+Photographic mesh textures are copied into OBJ packages with relative MTL references and embedded
+in GLB. LAS preserves available photographic RGB and standard 0-31 classification. Other source
+vertex attributes are named in `provenance.json` and remain bound to the unchanged source PLY hash;
+they are not silently recast as standard LAS dimensions. The LAS `SIH26158` VLR hash-binds that
+sidecar.
+
+Point-only geometry can be exported as PLY/LAS but is not triangulated into an observed surface.
+Malformed, empty, non-finite or unsupported geometry produces an actionable per-source failure.
+The report may be partially successful because formats and source artifacts are validated
+independently.

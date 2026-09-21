@@ -1,6 +1,7 @@
 import struct
 
 import numpy as np
+import pytest
 
 from sih26158.geo import (
     SimilarityTransform,
@@ -34,6 +35,16 @@ def test_robust_similarity_flags_gps_outlier() -> None:
     assert fit.inliers.sum() == 11
     assert not fit.inliers[-1]
     assert np.median(fit.residuals_m[:-1]) < 1e-8
+
+
+def test_similarity_rejects_nearly_collinear_trajectory_but_accepts_planar() -> None:
+    line = np.array([[value, value * 1e-5, 0] for value in range(5)], dtype=float)
+    with pytest.raises(ValueError, match="nearly collinear"):
+        estimate_similarity(line, 2 * line + 1)
+
+    planar = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]], dtype=float)
+    fit = estimate_similarity(planar, 3 * planar + np.array([4, 5, 6]))
+    assert np.allclose(fit.apply(planar), 3 * planar + np.array([4, 5, 6]))
 
 
 def test_ascii_ply_is_transformed_and_other_properties_survive(tmp_path) -> None:

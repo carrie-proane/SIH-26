@@ -1,6 +1,7 @@
 import csv
 import json
 import math
+import os
 import threading
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from sih26158.models import (
     RunConfig,
     RunStatus,
 )
-from sih26158.pipeline import PipelineRunner
+from sih26158.pipeline import PipelineRunner, _effective_worker_threads
 from sih26158.storage import ProjectStore, atomic_json, sha256_file
 
 
@@ -151,6 +152,8 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     ]
     declared = {artifact.relative_path for artifact in result.artifacts}
     assert "quality_report.json" in declared
+    assert "export_readiness.json" in declared
+    assert "benchmark_report.json" in declared
     assert "server_capabilities.json" in declared
     quality = json.loads(
         (store.run_dir(project.project_id, result.run_id) / "quality_report.json").read_text()
@@ -171,6 +174,18 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     )
     assert capabilities["sparse"]["selection"] == "NOT_APPLICABLE_SYNTHETIC_FIXTURE"
     assert result.capability_profile_path == "server_capabilities.json"
+    export_readiness = json.loads(
+        (store.run_dir(project.project_id, result.run_id) / "export_readiness.json").read_text()
+    )
+    assert export_readiness["formats"]["PLY"]["status"] == "AVAILABLE_VALIDATED"
+    assert export_readiness["formats"]["GEOTIFF"]["status"] == "UNAVAILABLE"
+    benchmark = json.loads(
+        (store.run_dir(project.project_id, result.run_id) / "benchmark_report.json").read_text()
+    )
+    assert benchmark["official_runtime_gate"]["status"] == (
+        "NOT_VALIDATED_NON_REPRESENTATIVE_DURATION"
+    )
+    assert benchmark["timing_contract"]["stage_timings_s"]["REPORT"] >= 0
 
 
 @pytest.mark.parametrize("execution_mode", ["COLMAP", "SYNTHETIC_DEMO"])
@@ -312,8 +327,12 @@ def test_calibrated_telemetry_offset_is_persisted_per_run(tmp_path: Path) -> Non
     assert sync["offset_source"] == "calibrated"
     updated_keyframes = json.loads((run_dir / "keyframes.json").read_text())["frames"]
     assert all(frame["telemetry_status"] == "INTERPOLATED" for frame in updated_keyframes)
+    assert all(
+        frame["reconstruction_status"] == "REGISTERED_SELECTED_COMPONENT"
+        for frame in updated_keyframes
+    )
     assert updated_keyframes[0]["telemetry_timestamp_s"] == pytest.approx(0.8)
-    assert not warnings
+    assert {warning["code"] for warning in warnings} == {"ALTITUDE_REFERENCE_UNCERTAIN"}
 
 
 def test_artifact_serving_rejects_undeclared_and_traversal(tmp_path: Path) -> None:
@@ -561,6 +580,29 @@ def test_recovery_requeues_interrupted_run(tmp_path: Path, monkeypatch: pytest.M
     assert persisted.events[-1].message.startswith("Recovered interrupted run")
 
 
+def test_recovery_defers_while_recorded_external_process_is_alive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(store, tmp_path)
+    record = store.create_run(project.project_id, RunConfig(execution_mode="SYNTHETIC_DEMO"))
+    record.stage = RunStatus.RECONSTRUCTING
+    record.status = RunStatus.RECONSTRUCTING
+    store.save_run(record)
+    marker = store.run_dir(project.project_id, record.run_id) / ".active_process.json"
+    marker.write_text(json.dumps({"pid": os.getpid(), "command": ["colmap"]}), encoding="utf-8")
+    runner = PipelineRunner(store)
+    submitted: list[str] = []
+    monkeypatch.setattr(runner, "submit", lambda run_id: not submitted.append(run_id))
+
+    recovered = runner.recover_interrupted_runs()
+
+    assert recovered == []
+    assert submitted == []
+    assert store.get_run(record.run_id).status == RunStatus.RECONSTRUCTING
+    assert marker.is_file()
+
+
 def test_cancel_marker_stops_run_at_safe_boundary_and_is_not_declared(tmp_path: Path) -> None:
     store = ProjectStore(tmp_path / "projects")
     project = make_project(store, tmp_path)
@@ -568,9 +610,13 @@ def test_cancel_marker_stops_run_at_safe_boundary_and_is_not_declared(tmp_path: 
     runner = PipelineRunner(store)
 
     requested, accepted = runner.request_cancel(record.run_id)
+    repeated, repeated_accepted = runner.request_cancel(record.run_id)
     result = runner.run(record.run_id)
 
     assert accepted is True
+    assert repeated_accepted is True
+    assert repeated.cancel_requested_at == requested.cancel_requested_at
+    assert len(repeated.events) == len(requested.events)
     assert requested.cancel_requested_at is not None
     assert result.status == RunStatus.CANCELLED
     assert result.failure_reason is None
@@ -597,3 +643,46 @@ def test_resume_clears_previous_cancellation_marker(
     assert resumed.cancel_requested_at is None
     assert resumed.cancelled_at is None
     assert not runner._cancel_path(resumed).exists()
+
+
+def test_checkpoint_fingerprints_invalidate_only_affected_stage(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    project = make_project(
+        store,
+        tmp_path,
+        video_origin=ProvenanceOrigin.SYNTHETIC,
+        telemetry_origin=ProvenanceOrigin.SYNTHETIC,
+    )
+    record = store.create_run(
+        project.project_id,
+        RunConfig(execution_mode="SYNTHETIC_DEMO", enable_dense_reconstruction=True),
+    )
+    runner = PipelineRunner(store)
+    completed = runner.run(record.run_id)
+    checkpoint = runner._load_checkpoint(completed)
+
+    assert runner._checkpoint_stage_valid(completed, checkpoint, "SPARSE") is True
+    assert runner._checkpoint_stage_valid(completed, checkpoint, "DENSE") is True
+    completed.config.dense_timeout_s += 1
+    store.save_run(completed)
+    changed = store.get_run(completed.run_id)
+    assert runner._checkpoint_stage_valid(changed, checkpoint, "SPARSE") is True
+    assert runner._checkpoint_stage_valid(changed, checkpoint, "DENSE") is False
+
+
+def test_global_heavy_job_slots_are_distinct_from_per_run_lock(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    first, second = store.heavy_job_locks(1), store.heavy_job_locks(1)
+    with first[0] as held:
+        assert held.acquired is True
+        with second[0] as competing:
+            assert competing.acquired is False
+
+
+def test_worker_threads_are_clamped_to_scheduler_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "2")
+
+    assert _effective_worker_threads(8) == 2
+    assert _effective_worker_threads(0) == 2

@@ -16,6 +16,10 @@ data/samples/*/
 *.SRT
 !tests/fixtures/*.srt
 data/projects/
+datasets/bundles/
+preparation_report.json
+dataset_evaluation_report.json
+benchmark_comparison.json
 data/prj_*/
 .env
 .DS_Store

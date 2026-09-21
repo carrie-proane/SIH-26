@@ -142,7 +142,7 @@ describe("operator application", () => {
     expect(screen.getByRole("combobox", { name: /reconstruction target/i })).toHaveValue(
       "FULL_SCENE",
     );
-    expect(screen.getByRole("combobox", { name: /scene-aware masking/i })).toHaveValue("AUTO");
+    expect(screen.getByRole("combobox", { name: /scene-aware masking/i })).toHaveValue("OFF");
     expect(screen.getByPlaceholderText(/nothing is downloaded automatically/i)).toBeVisible();
   });
 

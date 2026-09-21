@@ -23,7 +23,9 @@ def build_capability_profile(
     preflight: dict[str, Any], config: RunConfig
 ) -> dict[str, Any]:
     sparse_available = _status(preflight, "colmap.sparse_capabilities") == "PASS"
-    cuda_available = _status(preflight, "gpu.nvidia_cuda") == "PASS"
+    cuda_device_available = _status(preflight, "gpu.nvidia_cuda") == "PASS"
+    colmap_cuda_available = _status(preflight, "colmap.cuda_build") == "PASS"
+    cuda_available = cuda_device_available and colmap_cuda_available
     colmap_dense = (
         _status(preflight, "dense.colmap_cuda") == "PASS" and cuda_available
     )
@@ -65,6 +67,8 @@ def build_capability_profile(
             "colmap_available": sparse_available,
             "gpu_requested": config.use_gpu,
             "cuda_available": cuda_available,
+            "cuda_device_available": cuda_device_available,
+            "colmap_cuda_build": colmap_cuda_available,
             "effective_gpu": effective_sparse_gpu,
             "selection": "COLMAP_GPU" if effective_sparse_gpu else "COLMAP_CPU",
         },
@@ -110,6 +114,8 @@ def synthetic_capability_profile(config: RunConfig) -> dict[str, Any]:
             "colmap_available": None,
             "gpu_requested": config.use_gpu,
             "cuda_available": None,
+            "cuda_device_available": None,
+            "colmap_cuda_build": None,
             "effective_gpu": False,
             "selection": "NOT_APPLICABLE_SYNTHETIC_FIXTURE",
         },

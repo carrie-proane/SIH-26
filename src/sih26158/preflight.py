@@ -132,10 +132,20 @@ def _colmap_sparse_capabilities(
             "--database_path",
             "--image_path",
             "--FeatureExtraction.use_gpu",
+            "--FeatureExtraction.num_threads",
+            "--FeatureExtraction.max_image_size",
         ),
-        "exhaustive_matcher": ("--database_path", "--FeatureMatching.use_gpu"),
-        "sequential_matcher": ("--database_path", "--FeatureMatching.use_gpu"),
-        "mapper": ("--database_path", "--image_path", "--output_path"),
+        "exhaustive_matcher": (
+            "--database_path",
+            "--FeatureMatching.use_gpu",
+            "--FeatureMatching.num_threads",
+        ),
+        "sequential_matcher": (
+            "--database_path",
+            "--FeatureMatching.use_gpu",
+            "--FeatureMatching.num_threads",
+        ),
+        "mapper": ("--database_path", "--image_path", "--output_path", "--Mapper.num_threads"),
         "bundle_adjuster": ("--input_path", "--output_path"),
         "model_analyzer": ("--path",),
         "model_converter": ("--input_path", "--output_path", "--output_type"),
@@ -223,6 +233,36 @@ def _colmap_dense_capability(
     )
 
 
+def _colmap_cuda_build(path: str | None, colmap_root_help: str) -> dict[str, Any]:
+    if path is None:
+        return _check(
+            "colmap.cuda_build",
+            "WARN",
+            "COLMAP CUDA support cannot be established without the executable",
+        )
+    normalized = colmap_root_help.lower()
+    if "without cuda" in normalized:
+        return _check(
+            "colmap.cuda_build",
+            "WARN",
+            "The installed COLMAP executable explicitly reports a CPU-only build",
+            path=path,
+        )
+    if "with cuda" in normalized or "cuda enabled" in normalized:
+        return _check(
+            "colmap.cuda_build",
+            "PASS",
+            "The installed COLMAP executable reports CUDA build support",
+            path=path,
+        )
+    return _check(
+        "colmap.cuda_build",
+        "WARN",
+        "GPU hardware may exist, but this COLMAP build did not declare CUDA support",
+        path=path,
+    )
+
+
 def _openmvs_capability(*, which: Which) -> dict[str, Any]:
     paths = {tool: which(tool) for tool in OPENMVS_TOOLS}
     missing = [tool for tool, path in paths.items() if path is None]
@@ -245,6 +285,14 @@ def _openmvs_capability(*, which: Which) -> dict[str, Any]:
 def _nvidia_cuda(*, runner: Runner, which: Which, required: bool) -> dict[str, Any]:
     path = which("nvidia-smi")
     status = "BLOCKED" if required else "WARN"
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible is not None and visible.strip().lower() in {"", "-1", "none", "void"}:
+        return _check(
+            "gpu.nvidia_cuda",
+            status,
+            "CUDA devices are hidden by the scheduler/process environment",
+            cuda_visible_devices=visible,
+        )
     if path is None:
         return _check(
             "gpu.nvidia_cuda",
@@ -252,14 +300,16 @@ def _nvidia_cuda(*, runner: Runner, which: Which, required: bool) -> dict[str, A
             "No NVIDIA CUDA device probe is available",
             note="Apple Metal and Intel integrated GPUs are not CUDA devices.",
         )
-    returncode, output = _run(
-        runner,
+    command = [path]
+    if visible is not None:
+        command.extend(["-i", visible])
+    command.extend(
         [
-            path,
             "--query-gpu=name,driver_version,memory.total,compute_cap",
             "--format=csv,noheader,nounits",
-        ],
+        ]
     )
+    returncode, output = _run(runner, command)
     if returncode != 0 or not output:
         return _check(
             "gpu.nvidia_cuda",
@@ -274,6 +324,8 @@ def _nvidia_cuda(*, runner: Runner, which: Which, required: bool) -> dict[str, A
         "PASS",
         "NVIDIA CUDA device is available",
         devices=output.splitlines(),
+        cuda_visible_devices=visible,
+        scheduler_scope_respected=visible is not None,
     )
 
 
@@ -283,13 +335,30 @@ def _resource_checks(
     minimum_free_disk_gb: float,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
-    cpu_count = os.cpu_count() or 0
+    detected_cpu_count = os.cpu_count() or 0
+    try:
+        affinity_count = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        affinity_count = detected_cpu_count
+    scheduler_cpu_raw = os.environ.get("SLURM_CPUS_PER_TASK", "0") or "0"
+    try:
+        scheduler_count = int(scheduler_cpu_raw)
+    except ValueError:
+        scheduler_count = 0
+    limits = [value for value in (detected_cpu_count, affinity_count, scheduler_count) if value > 0]
+    cpu_count = min(limits) if limits else 0
     checks.append(
         _check(
             "resource.cpu",
             "PASS" if cpu_count >= 2 else "WARN",
             f"{cpu_count} logical CPU(s) detected",
             logical_cpu_count=cpu_count,
+            host_logical_cpu_count=detected_cpu_count,
+            affinity_cpu_count=affinity_count,
+            scheduler_cpu_count=scheduler_count or None,
+            scheduler_cpu_count_raw=(
+                scheduler_cpu_raw if scheduler_cpu_raw not in {"0", str(scheduler_count)} else None
+            ),
         )
     )
     memory_bytes = _memory_bytes()
@@ -493,9 +562,10 @@ def collect_preflight(
     )
 
     cuda_check = _nvidia_cuda(runner=runner, which=which, required=require_gpu)
+    colmap_cuda = _colmap_cuda_build(colmap_path, colmap_help)
     colmap_dense = _colmap_dense_capability(colmap_path, colmap_help, runner=runner)
     openmvs_dense = _openmvs_capability(which=which)
-    checks.extend((cuda_check, colmap_dense, openmvs_dense))
+    checks.extend((cuda_check, colmap_cuda, colmap_dense, openmvs_dense))
 
     provider_available = {
         "colmap": colmap_dense["status"] == "PASS" and cuda_check["status"] == "PASS",

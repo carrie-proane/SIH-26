@@ -69,7 +69,7 @@ export interface RunRecord {
   updated_at: string;
   config_version: string;
   config: Record<string, unknown>;
-  environment: Record<string, string | null>;
+  environment: Record<string, string | boolean | number | null>;
   failure_reason: string | null;
   events: StageEvent[];
   artifacts: ArtifactEntry[];
@@ -84,9 +84,119 @@ export interface RunRecord {
   last_heartbeat_at?: string | null;
   cancel_requested_at?: string | null;
   cancelled_at?: string | null;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
+  stage_timings_s?: Record<string, number>;
+  derived_from_run_id?: string | null;
   capability_profile_path?: string | null;
   effective_sparse_gpu?: boolean;
   selected_dense_provider?: "colmap" | "openmvs" | null;
+}
+
+export interface RunReadiness {
+  schema_version: "1.0";
+  run_id: string;
+  stage: RunStatus;
+  status: RunStatus;
+  sparse_preview_ready: boolean;
+  sparse_preview_missing: string[];
+  quality_report_ready: boolean;
+  dense_status: "AVAILABLE" | "FAILED_OR_UNAVAILABLE" | "NOT_READY_OR_NOT_REQUESTED";
+  dense_visual_artifacts: string[];
+  measurement_geometry: string | null;
+  inferred_geometry_measurement_eligible: false;
+  export_report_ready: boolean;
+  export_report_url: string | null;
+  export_status: Record<string, string>;
+}
+
+export interface ExportFile {
+  relative_path: string;
+  url: string;
+  sha256: string;
+  size_bytes: number;
+  media_type: string;
+}
+
+export interface GeometryExport {
+  status: "AVAILABLE_VALIDATED";
+  format: "OBJ" | "LAS" | "GLB";
+  variant: string;
+  source_artifact: { path: string; sha256: string };
+  geometry_provenance: "OBSERVED" | "DERIVED_OBSERVED_VISUAL" | "INFERRED" | "UNKNOWN";
+  measurement_eligible: boolean;
+  measurement_api_supported: false;
+  coordinate_contract: Record<string, unknown>;
+  validation: Record<string, unknown>;
+  reused: boolean;
+  files: ExportFile[];
+  manifest_url: string;
+}
+
+export interface ExportFormatStatus {
+  status: "AVAILABLE_VALIDATED" | "UNAVAILABLE" | "INVALID" | "INVALID_OR_UNSUPPORTED";
+  reason?: string;
+  exports?: GeometryExport[];
+  failures?: Array<{ source_artifact_path: string; reason: string }>;
+  download_files?: ExportFile[];
+  artifact_path?: string;
+  artifact_url?: string;
+  artifact_sha256?: string;
+  coordinate_frame?: string;
+  geometry_provenance?: string;
+  measurement_eligible?: boolean;
+  validation?: Record<string, unknown>;
+}
+
+export interface ExportReadiness {
+  schema_version: "2.0";
+  run_id: string;
+  exporter: { name: string; version: string };
+  listed_formats_mandatory: "ORGANIZER_CLARIFICATION_REQUIRED";
+  coordinate_contract: Record<string, unknown>;
+  formats: Record<string, ExportFormatStatus>;
+  available_validated_formats: string[];
+  generated_files: ExportFile[];
+  partial_success: boolean;
+  measurement_eligibility_statement: string;
+}
+
+export interface MeasurementEndpointPayload {
+  coordinates: [number, number, number];
+  point_id?: number | null;
+  face_id?: number | null;
+}
+
+export interface MeasurementCreatePayload {
+  geometry_artifact_path: string;
+  geometry_artifact_sha256: string;
+  start: MeasurementEndpointPayload;
+  end: MeasurementEndpointPayload;
+  coordinate_frame?: string;
+  units?: "m";
+  measurement_kind?: "DISTANCE_3D" | "HORIZONTAL" | "VERTICAL" | "RELATIVE_DIMENSION";
+  reference_value_m?: number | null;
+  reference_method?: string | null;
+  reference_evidence?: string | null;
+  reference_role?: "NONE" | "SCALE_CONTROL" | "HELD_OUT_EVALUATION";
+}
+
+export interface MeasurementRecordPayload extends MeasurementCreatePayload {
+  measurement_id: string;
+  run_id: string;
+  created_at: string;
+  backend_distance_m: number;
+  geometry_provenance: "OBSERVED" | "INFERRED" | "UNKNOWN";
+  measurement_eligible: boolean;
+  eligibility_reason: string;
+  legacy_manual_reconstructed_value: boolean;
+}
+
+export interface MeasurementListResponse {
+  schema_version: "1.0";
+  run_id: string;
+  measurements: MeasurementRecordPayload[];
+  evaluation: Record<string, unknown>;
 }
 
 export interface ConfidenceLegendItem {
@@ -209,6 +319,11 @@ export interface Keyframe {
   mask_semantics?: "NONZERO_IS_EXCLUDED";
   selected_automatically?: boolean;
   override?: "NONE" | "FORCE_INCLUDE" | "FORCE_EXCLUDE";
+  reconstruction_status?:
+    | "NOT_SELECTED"
+    | "REGISTERED_SELECTED_COMPONENT"
+    | "NOT_REGISTERED_IN_SELECTED_COMPONENT";
+  reconstruction_exclusion_reason?: string | null;
   confidence?: ConfidenceLabel;
 }
 

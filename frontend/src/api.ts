@@ -2,11 +2,16 @@ import { parseCsv } from "./csv";
 import { parsePointConfidence } from "./confidence";
 import type {
   CameraPose,
+  ExportReadiness,
   Keyframe,
+  MeasurementCreatePayload,
+  MeasurementListResponse,
+  MeasurementRecordPayload,
   ProjectManifest,
   ProvenanceOrigin,
   QualityReport,
   RunRecord,
+  RunReadiness,
   ViewerBundle,
   ViewerManifest,
 } from "./types";
@@ -78,6 +83,44 @@ export async function startRun(
 
 export function getRun(runId: string): Promise<RunRecord> {
   return request<RunRecord>(`/api/runs/${runId}`);
+}
+
+export function getRunReadiness(runId: string): Promise<RunReadiness> {
+  return request<RunReadiness>(`/api/runs/${runId}/readiness`);
+}
+
+export function rerunRun(
+  runId: string,
+  config: Record<string, unknown>,
+): Promise<RunRecord> {
+  return request<RunRecord>(`/api/runs/${runId}/rerun`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
+export function getExports(runId: string): Promise<ExportReadiness> {
+  return request<ExportReadiness>(`/api/runs/${runId}/exports`);
+}
+
+export function createExports(runId: string): Promise<ExportReadiness> {
+  return request<ExportReadiness>(`/api/runs/${runId}/exports`, { method: "POST" });
+}
+
+export function createMeasurement(
+  runId: string,
+  measurement: MeasurementCreatePayload,
+): Promise<MeasurementRecordPayload> {
+  return request<MeasurementRecordPayload>(`/api/runs/${runId}/measurements`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(measurement),
+  });
+}
+
+export function getMeasurements(runId: string): Promise<MeasurementListResponse> {
+  return request<MeasurementListResponse>(`/api/runs/${runId}/measurements`);
 }
 
 export function cancelRun(runId: string): Promise<RunRecord> {

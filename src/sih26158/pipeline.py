@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
+import os
 import shutil
 import subprocess
 import threading
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +27,7 @@ from telemetry.models import sha256_file as telemetry_sha256_file
 from telemetry.models import write_csv as write_telemetry_csv
 from telemetry.srt_parser import parse_srt
 
+from .benchmark import build_benchmark_report
 from .capabilities import collect_server_capabilities, synthetic_capability_profile
 from .colmap import ColmapRunner, ExternalToolError, ReconstructionResult, write_matcher_benchmark
 from .confidence import validate_point_confidence_for_ply
@@ -32,6 +37,7 @@ from .dense import (
     run_dense_stage,
     select_dense_provider,
 )
+from .exports import build_export_readiness, export_artifact_paths, write_export_readiness
 from .geo import SimilarityTransform, geodetic_to_enu, transform_ply
 from .models import (
     MatcherMetrics,
@@ -62,6 +68,29 @@ class PipelineError(RuntimeError):
 
 def _is_synthetic_demo(record: RunRecord) -> bool:
     return record.config.execution_mode == "SYNTHETIC_DEMO"
+
+
+def _effective_worker_threads(requested: int) -> int:
+    """Clamp explicit threads to scheduler/affinity limits without guessing shared capacity."""
+
+    host_count = os.cpu_count() or 1
+    try:
+        affinity_count = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        affinity_count = host_count
+    try:
+        scheduler_count = int(os.environ.get("SLURM_CPUS_PER_TASK", "0") or 0)
+    except ValueError:
+        scheduler_count = 0
+    limits = [value for value in (host_count, affinity_count, scheduler_count) if value > 0]
+    available = min(limits) if limits else 1
+    if requested > 0:
+        return min(requested, available)
+    # On an allocated/cgroup-constrained server, make the limit explicit. On an
+    # unconstrained workstation, zero retains the installed tool's default.
+    if scheduler_count > 0 or affinity_count < host_count:
+        return available
+    return 0
 
 
 def _asset_path(store: ProjectStore, record: RunRecord, role: str) -> Path:
@@ -95,12 +124,84 @@ def _synthetic_ply(path: Path) -> None:
     )
 
 
+def _temporal_coverage(
+    frames: list[dict[str, object]],
+    duration_s: float,
+    interval_s: float,
+    registered_names: set[str] | None = None,
+) -> dict[str, object]:
+    """Report time-binned candidate/selection/registration coverage without inventing area coverage."""
+
+    duration_s = max(duration_s, max((float(row.get("timestamp_s", 0)) for row in frames), default=0))
+    interval_count = max(1, int(np.ceil(max(duration_s, 0.001) / interval_s)))
+    intervals: list[dict[str, object]] = []
+    for index in range(interval_count):
+        start = index * interval_s
+        end = min(duration_s, (index + 1) * interval_s)
+        contained = [
+            row
+            for row in frames
+            if start <= float(row.get("timestamp_s", 0))
+            and (index == interval_count - 1 or float(row.get("timestamp_s", 0)) < end)
+        ]
+        selected = [row for row in contained if bool(row.get("selected", False))]
+        item: dict[str, object] = {
+            "start_s": round(start, 6),
+            "end_s": round(end, 6),
+            "candidate_count": len(contained),
+            "selected_count": len(selected),
+        }
+        if registered_names is not None:
+            item["registered_count"] = sum(
+                Path(str(row.get("image_name", ""))).name in registered_names
+                for row in selected
+            )
+        intervals.append(item)
+
+    def zero_ranges(field: str) -> list[dict[str, float]]:
+        ranges: list[dict[str, float]] = []
+        range_start: float | None = None
+        for item in intervals:
+            if int(item.get(field, 0)) == 0 and range_start is None:
+                range_start = float(item["start_s"])
+            if int(item.get(field, 0)) > 0 and range_start is not None:
+                ranges.append({"start_s": range_start, "end_s": float(item["start_s"])})
+                range_start = None
+        if range_start is not None:
+            ranges.append({"start_s": range_start, "end_s": duration_s})
+        return ranges
+
+    return {
+        "status": "DIAGNOSTIC_ONLY",
+        "interval_s": interval_s,
+        "video_duration_s": duration_s,
+        "intervals": intervals,
+        "long_unrepresented_selected_intervals": zero_ranges("selected_count"),
+        "long_unrepresented_registered_intervals": (
+            zero_ranges("registered_count") if registered_names is not None else None
+        ),
+        "interpretation": (
+            "Temporal registration coverage is a capture diagnostic, not a denominator-based "
+            "visible-surface completeness measurement."
+        ),
+    }
+
+
 class PipelineRunner:
     def __init__(self, store: ProjectStore, max_workers: int = 2) -> None:
         self.store = store
         self.executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sih-run")
         self._submitted: dict[str, Future[RunRecord]] = {}
         self._submitted_lock = threading.Lock()
+        self._stage_started_monotonic: dict[tuple[str, str], float] = {}
+        try:
+            configured_heavy_limit = int(os.getenv("SIH_HEAVY_JOB_LIMIT", "1"))
+        except ValueError:
+            configured_heavy_limit = 1
+        self.heavy_job_limit = max(1, configured_heavy_limit)
+        self.heavy_job_wait_timeout_s = max(
+            1.0, float(os.getenv("SIH_HEAVY_JOB_WAIT_TIMEOUT_S", "86400"))
+        )
 
     def submit(self, run_id: str) -> bool:
         """Submit once per process; the filesystem lock covers other processes."""
@@ -145,12 +246,37 @@ class PipelineRunner:
             cancel_requested=lambda: self._cancel_requested(record),
             heartbeat=lambda: self._heartbeat(record.run_id),
             heartbeat_interval_s=record.config.command_heartbeat_s,
+            process_state_path=(
+                self.store.run_dir(record.project_id, record.run_id) / ".active_process.json"
+            ),
         )
+
+    def _surviving_process_state(self, record: RunRecord) -> dict[str, object] | None:
+        path = self.store.run_dir(record.project_id, record.run_id) / ".active_process.json"
+        if not path.is_file():
+            return None
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            pid = int(state["pid"])
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            raise PipelineError(
+                "An unreadable active-process marker requires operator review before recovery."
+            ) from exc
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            path.unlink(missing_ok=True)
+            return None
+        except PermissionError:
+            return state
+        return state
 
     def request_cancel(self, run_id: str) -> tuple[RunRecord, bool]:
         record = self.store.get_run(run_id)
         if record.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}:
             return record, False
+        if self._cancel_path(record).is_file():
+            return record, True
         self._cancel_path(record).write_text(utc_now() + "\n", encoding="utf-8")
         record.cancel_requested_at = utc_now()
         record.last_heartbeat_at = utc_now()
@@ -168,6 +294,154 @@ class PipelineRunner:
     def _checkpoint_path(self, record: RunRecord) -> Path:
         return self.store.run_dir(record.project_id, record.run_id) / ".pipeline_checkpoint.json"
 
+    @staticmethod
+    def _fingerprint(value: object) -> str:
+        payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _tool_signature(names: tuple[str, ...]) -> dict[str, object]:
+        signatures: dict[str, object] = {}
+        for name in names:
+            path = shutil.which(name)
+            if path is None:
+                signatures[name] = None
+                continue
+            try:
+                stat = Path(path).stat()
+                signatures[name] = {
+                    "path": str(Path(path).resolve()),
+                    "size_bytes": stat.st_size,
+                    "mtime_ns": stat.st_mtime_ns,
+                }
+            except OSError:
+                signatures[name] = {"path": path, "stat": "unavailable"}
+        return signatures
+
+    def _stage_fingerprints(
+        self, record: RunRecord, checkpoint: RunCheckpoint, stage: str
+    ) -> tuple[str, str, str]:
+        project = self.store.get_project(record.project_id)
+        project_inputs = {
+            asset.role: {"sha256": asset.sha256, "size_bytes": asset.size_bytes}
+            for asset in project.assets
+        }
+        ancestor_names = {
+            "INGEST": (),
+            "PREPROCESS": ("INGEST",),
+            "SPARSE": ("PREPROCESS",),
+            # Dense consumes selected frames/masks as well as the sparse model.
+            "DENSE": ("PREPROCESS", "SPARSE"),
+            # Reporting consumes frame/coverage diagnostics even when dense is disabled.
+            "REPORT": ("PREPROCESS", "SPARSE", "DENSE"),
+        }[stage]
+        dependencies = {
+            name: checkpoint.completed[name].artifacts
+            for name in ancestor_names
+            if name in checkpoint.completed
+        }
+        config = record.config.model_dump(mode="json")
+        fields = {
+            "INGEST": (),
+            "PREPROCESS": (
+                "preprocessing_run",
+                "force_include_frame_indices",
+                "force_exclude_frame_indices",
+                "frame_min_laplacian_variance",
+                "frame_min_exposure_score",
+                "frame_relative_sharpness_floor",
+                "frame_min_feature_count",
+                "frame_min_feature_grid_coverage",
+                "frame_max_parallax_fraction",
+                "enable_segmentation",
+                "segmentation_model_path",
+                "reconstruction_target",
+                "masking_mode",
+                "max_candidate_frames",
+                "max_selected_frames",
+                "processing_max_image_dimension",
+            ),
+            "SPARSE": (
+                "profile",
+                "matcher",
+                "camera_model",
+                "camera_model_policy",
+                "camera_params",
+                "camera_params_reference",
+                "refine_intrinsics",
+                "max_reconstruction_retries",
+                "sequential_overlap",
+                "use_gpu",
+                "telemetry_offset_s",
+                "telemetry_offset_source",
+                "local_origin",
+                "matching_strategy",
+                "vocab_tree_path",
+                "sparse_timeout_s",
+                "command_heartbeat_s",
+                "worker_threads",
+            ),
+            "DENSE": (
+                "profile",
+                "enable_dense_reconstruction",
+                "dense_provider",
+                "dense_timeout_s",
+                "command_heartbeat_s",
+                "worker_threads",
+                "reconstruction_target",
+                "masking_mode",
+            ),
+            "REPORT": ("known_distance_m", "measured_distance_m", "coverage_interval_s"),
+        }[stage]
+        tool_names = {
+            "INGEST": ("ffprobe",),
+            "PREPROCESS": ("ffmpeg", "ffprobe"),
+            "SPARSE": ("colmap",),
+            "DENSE": ("colmap", "InterfaceCOLMAP", "DensifyPointCloud", "TextureMesh"),
+            "REPORT": (),
+        }[stage]
+        input_material: dict[str, object] = {"project_inputs": project_inputs}
+        if stage != "INGEST":
+            input_material["dependency_artifacts"] = dependencies
+        if stage == "PREPROCESS" and record.config.preprocessing_run:
+            handoff = Path(record.config.preprocessing_run)
+            input_material["preprocessing_handoff"] = {
+                name: sha256_file(handoff / name) if (handoff / name).is_file() else None
+                for name in (
+                    "keyframes.json",
+                    "frame_scores.csv",
+                    "normalized_telemetry.csv",
+                    "normalized_telemetry.meta.json",
+                )
+            }
+        if stage == "PREPROCESS" and record.config.segmentation_model_path:
+            model = Path(record.config.segmentation_model_path)
+            input_material["segmentation_model"] = (
+                sha256_file(model) if model.is_file() else "UNAVAILABLE"
+            )
+        resource_signature = (
+            {
+                "effective_worker_threads": _effective_worker_threads(
+                    record.config.worker_threads
+                ),
+                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+                "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
+            }
+            if stage in {"SPARSE", "DENSE"}
+            else {}
+        )
+        stage_contract = "3.0" if stage == "REPORT" else "2.0"
+        return (
+            self._fingerprint(input_material),
+            self._fingerprint(
+                {name: config[name] for name in fields} | {"contract": stage_contract}
+            ),
+            self._fingerprint(
+                self._tool_signature(tool_names)
+                | {"contract": stage_contract, "resources": resource_signature}
+            ),
+        )
+
     def _load_checkpoint(self, record: RunRecord) -> RunCheckpoint:
         path = self._checkpoint_path(record)
         if not path.is_file():
@@ -179,12 +453,6 @@ class PipelineRunner:
         return checkpoint if checkpoint.run_id == record.run_id else RunCheckpoint(run_id=record.run_id)
 
     def _save_checkpoint(self, record: RunRecord, checkpoint: RunCheckpoint) -> None:
-        declared = {item.relative_path: item for item in record.artifacts}
-        for stage in checkpoint.completed.values():
-            for relative_path in list(stage.artifacts):
-                artifact = declared.get(relative_path)
-                if artifact is not None:
-                    stage.artifacts[relative_path] = artifact.sha256
         checkpoint.updated_at = utc_now()
         atomic_json(self._checkpoint_path(record), checkpoint.model_dump(mode="json"))
 
@@ -195,6 +463,10 @@ class PipelineRunner:
         stage: str,
     ) -> None:
         checkpoint.active_stage = stage
+        checkpoint.active_stage_started_at = utc_now()
+        self._stage_started_monotonic[(record.run_id, stage)] = time.monotonic()
+        if stage == "PREPROCESS" and record.processing_started_at is None:
+            record.processing_started_at = checkpoint.active_stage_started_at
         record.checkpoint_stage = stage
         record.last_heartbeat_at = utc_now()
         self._save_checkpoint(record, checkpoint)
@@ -218,14 +490,36 @@ class PipelineRunner:
                 artifact = declared.get(relative)
                 if artifact is not None:
                     artifacts[relative] = artifact.sha256
+        # Some downstream stages deliberately enrich an upstream JSON artifact
+        # (telemetry metadata in ingest; registered-frame status in keyframes).
+        # Refresh only hashes that were explicitly re-registered, at the stage
+        # completion boundary, before fingerprinting the dependent stage.
+        for prior in checkpoint.completed.values():
+            for relative_path in list(prior.artifacts):
+                artifact = declared.get(relative_path)
+                if artifact is not None:
+                    prior.artifacts[relative_path] = artifact.sha256
+        input_fingerprint, config_fingerprint, environment_fingerprint = (
+            self._stage_fingerprints(record, checkpoint, stage)
+        )
+        started = self._stage_started_monotonic.pop((record.run_id, stage), None)
+        duration_s = max(0.0, time.monotonic() - started) if started is not None else None
         checkpoint.completed[stage] = StageCheckpoint(
             stage=stage,  # type: ignore[arg-type]
             artifacts=artifacts,
             warnings=list(warnings),
+            input_fingerprint=input_fingerprint,
+            configuration_fingerprint=config_fingerprint,
+            environment_fingerprint=environment_fingerprint,
+            started_at=checkpoint.active_stage_started_at,
+            duration_s=duration_s,
         )
         checkpoint.active_stage = None
+        checkpoint.active_stage_started_at = None
         checkpoint.warnings = list(warnings)
         record.checkpoint_stage = stage
+        if duration_s is not None:
+            record.stage_timings_s[stage] = duration_s
         record.last_heartbeat_at = utc_now()
         self._save_checkpoint(record, checkpoint)
         self.store.save_run(record)
@@ -239,6 +533,13 @@ class PipelineRunner:
         completed = checkpoint.completed.get(stage)
         if completed is None or not completed.artifacts:
             return False
+        expected = self._stage_fingerprints(record, checkpoint, stage)
+        if (
+            completed.input_fingerprint,
+            completed.configuration_fingerprint,
+            completed.environment_fingerprint,
+        ) != expected:
+            return False
         run_dir = self.store.run_dir(record.project_id, record.run_id)
         declared = {item.relative_path: item.sha256 for item in record.artifacts}
         for relative_path, expected_sha256 in completed.artifacts.items():
@@ -250,6 +551,29 @@ class PipelineRunner:
             ):
                 return False
         return True
+
+    @contextmanager
+    def _heavy_job_slot(self, record: RunRecord):
+        """Limit expensive work across runs and processes; OS locks recover after crashes."""
+
+        started = time.monotonic()
+        while True:
+            self._raise_if_cancelled(record)
+            for candidate in self.store.heavy_job_locks(self.heavy_job_limit):
+                slot = candidate.__enter__()
+                if slot.acquired:
+                    try:
+                        yield slot.path.name
+                    finally:
+                        slot.__exit__(None, None, None)
+                    return
+                slot.__exit__(None, None, None)
+            if time.monotonic() - started >= self.heavy_job_wait_timeout_s:
+                raise PipelineError(
+                    "Timed out waiting for a global heavy-job slot; another run may still be active."
+                )
+            self._heartbeat(record.run_id)
+            time.sleep(0.1)
 
     def recover_interrupted_runs(self) -> list[str]:
         recovered: list[str] = []
@@ -265,6 +589,8 @@ class PipelineRunner:
                 continue
             with self.store.execution_lock(record.run_id) as execution_lock:
                 if not execution_lock.acquired:
+                    continue
+                if self._surviving_process_state(record) is not None:
                     continue
                 record = self.store.get_run(record.run_id)
                 record.stage = RunStatus.QUEUED
@@ -289,6 +615,10 @@ class PipelineRunner:
         record = self.store.get_run(run_id)
         if record.status == RunStatus.COMPLETED:
             return record, False
+        with self._submitted_lock:
+            submitted = self._submitted.get(run_id)
+            if submitted is not None and not submitted.done():
+                return record, False
         with self.store.execution_lock(run_id) as execution_lock:
             if not execution_lock.acquired:
                 return self.store.get_run(run_id), False
@@ -337,6 +667,24 @@ class PipelineRunner:
             else collect_server_capabilities(data_root=self.store.root, config=record.config)
         )
         path = run_dir / "server_capabilities.json"
+        profile["resource_policy"] = {
+            "heavy_job_limit": self.heavy_job_limit,
+            "heavy_job_limit_source": "SIH_HEAVY_JOB_LIMIT",
+            "worker_threads_requested": record.config.worker_threads,
+            "worker_threads_effective": _effective_worker_threads(
+                record.config.worker_threads
+            ),
+            "scheduler_environment": {
+                name: os.environ.get(name)
+                for name in (
+                    "CUDA_VISIBLE_DEVICES",
+                    "SLURM_JOB_ID",
+                    "SLURM_CPUS_PER_TASK",
+                    "SLURM_GPUS",
+                )
+                if os.environ.get(name) is not None
+            },
+        }
         atomic_json(path, profile)
         record.capability_profile_path = "server_capabilities.json"
         record.effective_sparse_gpu = bool(profile["sparse"]["effective_gpu"])
@@ -571,6 +919,8 @@ class PipelineRunner:
                 video,
                 run_dir,
                 frames_subdir="preprocessing/candidates",
+                max_candidates=record.config.max_candidate_frames,
+                max_image_dimension=record.config.processing_max_image_dimension,
             )
         except (ValueError, OSError) as exc:
             raise PipelineError(f"Automatic frame extraction failed: {exc}") from exc
@@ -586,7 +936,7 @@ class PipelineRunner:
             36,
             f"Decoded {len(candidates)} timestamped candidate frames.",
         )
-        target_frames = min(100, len(candidates))
+        target_frames = min(record.config.max_selected_frames, len(candidates))
         try:
             rows = select_keyframes(
                 candidates,
@@ -618,6 +968,7 @@ class PipelineRunner:
         frames_dir.mkdir(parents=True, exist_ok=True)
         selected_paths: list[Path] = []
         keyframes: list[dict[str, object]] = []
+        extracted_by_index = {item.frame_index: item for item in candidates}
         for row in rows:
             candidate = Path(str(row["frame_path"]))
             selected = bool(row["selected"])
@@ -631,6 +982,16 @@ class PipelineRunner:
             safe_row["image_name"] = candidate.name
             safe_row["path"] = safe_row["frame_path"]
             safe_row["source"] = "AUTO_SCORED_SELECTION_FROM_UPLOADED_VIDEO"
+            extracted = extracted_by_index[int(row["frame_index"])]
+            safe_row["image_transform"] = {
+                "source_width": extracted.source_width,
+                "source_height": extracted.source_height,
+                "output_width": extracted.output_width,
+                "output_height": extracted.output_height,
+                "rotation_degrees_clockwise": extraction.rotation_degrees,
+                "uniform_resize_scale": extracted.resize_scale,
+                "cropped": False,
+            }
             if selected:
                 safe_row["image_url"] = (
                     f"/api/runs/{record.run_id}/artifacts/frames/{candidate.name}"
@@ -660,6 +1021,18 @@ class PipelineRunner:
                     "force_include": record.config.force_include_frame_indices,
                     "force_exclude": record.config.force_exclude_frame_indices,
                 },
+                "resource_limits": {
+                    "max_candidate_frames": record.config.max_candidate_frames,
+                    "max_selected_frames": record.config.max_selected_frames,
+                    "processing_max_image_dimension": record.config.processing_max_image_dimension,
+                    "streaming_decode": True,
+                    "full_resolution_frames_retained_in_memory": False,
+                },
+                "temporal_coverage": _temporal_coverage(
+                    keyframes,
+                    extraction.source_frame_count / extraction.fps,
+                    record.config.coverage_interval_s,
+                ),
                 "frames": keyframes,
             },
         )
@@ -996,9 +1369,73 @@ class PipelineRunner:
         transform_path = run_dir / "local_transform.json"
         sync_path = run_dir / "sync_report.json"
         sync_report = calibration.as_report()
+        if calibration.ambiguity_status == "AMBIGUOUS":
+            warnings.append(
+                {
+                    "code": "TELEMETRY_OFFSET_AMBIGUOUS",
+                    "message": (
+                        "Multiple bounded time offsets produced nearly equivalent alignment fits; "
+                        "the selected minimum is not evidence of precise synchronization."
+                    ),
+                }
+            )
         selected_keyframes = [
             item for item in keyframes if isinstance(item, dict) and item.get("selected", True)
         ]
+        registered_names = {
+            Path(row["image_name"]).name for row in pose_rows if row.get("image_name")
+        }
+        for item in keyframes:
+            if not isinstance(item, dict):
+                continue
+            if not item.get("selected", True):
+                item["reconstruction_status"] = "NOT_SELECTED"
+                item["reconstruction_exclusion_reason"] = (
+                    item.get("quality_rejection_reasons") or "FRAME_SELECTION_POLICY"
+                )
+                continue
+            image_name = Path(str(item.get("image_name") or item.get("filename") or "")).name
+            if image_name in registered_names:
+                item["reconstruction_status"] = "REGISTERED_SELECTED_COMPONENT"
+                item["reconstruction_exclusion_reason"] = None
+            else:
+                item["reconstruction_status"] = "NOT_REGISTERED_IN_SELECTED_COMPONENT"
+                item["reconstruction_exclusion_reason"] = (
+                    "COLMAP did not register this selected frame in the delivered component."
+                )
+        try:
+            preprocessing_meta = json.loads(
+                (run_dir / "normalized_telemetry.meta.json").read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            preprocessing_meta = {}
+        altitude_reference = preprocessing_meta.get("altitude_reference", "unknown")
+        sync_report["altitude_reference"] = altitude_reference
+        sync_report["altitude_reference_status"] = (
+            "DECLARED_NON_SURVEY_REFERENCE"
+            if str(altitude_reference).lower() in {"relative", "relative_to_launch", "unknown"}
+            else "DECLARED"
+        )
+        if sync_report["altitude_reference_status"] == "DECLARED_NON_SURVEY_REFERENCE":
+            warnings.append(
+                {
+                    "code": "ALTITUDE_REFERENCE_UNCERTAIN",
+                    "message": (
+                        f"Telemetry altitude reference is {altitude_reference!r}; vertical alignment "
+                        "residuals are not independent vertical-accuracy evidence."
+                    ),
+                }
+            )
+        video_duration_s = float(
+            preprocessing_meta.get("video_duration_s")
+            or max((float(item.get("timestamp_s", 0)) for item in keyframes), default=0)
+        )
+        keyframe_payload["temporal_coverage"] = _temporal_coverage(
+            keyframes,
+            video_duration_s,
+            record.config.coverage_interval_s,
+            registered_names,
+        )
         out_of_range: list[int] = []
         latitudes = np.array([float(row["lat"]) for row in telemetry])
         longitudes = np.array([float(row["lon"]) for row in telemetry])
@@ -1018,6 +1455,12 @@ class PipelineRunner:
             }
         sync_report["out_of_range_frame_indices"] = out_of_range
         sync_report["selected_keyframe_count"] = len(selected_keyframes)
+        sync_report["telemetry_covered_keyframe_count"] = len(selected_keyframes) - len(out_of_range)
+        sync_report["telemetry_coverage_fraction"] = (
+            (len(selected_keyframes) - len(out_of_range)) / len(selected_keyframes)
+            if selected_keyframes
+            else 0.0
+        )
         if out_of_range:
             warnings.append(
                 {
@@ -1045,6 +1488,8 @@ class PipelineRunner:
                 "offset_source": calibration.source,
                 "rmse_before_m": calibration.before.rmse_m,
                 "rmse_after_m": selected.rmse_m,
+                "offset_ambiguity_status": calibration.ambiguity_status,
+                "altitude_reference": altitude_reference,
             },
         )
         record.telemetry_offset_s = selected.offset_s
@@ -1078,8 +1523,34 @@ class PipelineRunner:
                 runtime_s=0.01,
             )
             return ReconstructionResult(metrics, [ply, poses], [])
+        if record.config.camera_params and record.config.camera_params_reference == "SOURCE_VIDEO":
+            payload = json.loads((run_dir / "keyframes.json").read_text(encoding="utf-8"))
+            selected = [
+                item
+                for item in payload.get("frames", [])
+                if isinstance(item, dict) and item.get("selected", True)
+            ]
+            transformed = [
+                item.get("image_transform", {})
+                for item in selected
+                if item.get("image_transform", {}).get("rotation_degrees_clockwise", 0) != 0
+                or abs(
+                    float(item.get("image_transform", {}).get("uniform_resize_scale", 1.0)) - 1.0
+                )
+                > 1e-9
+                or item.get("image_transform", {}).get("cropped", False)
+            ]
+            if transformed:
+                raise PipelineError(
+                    "Source-video camera parameters cannot be applied after frame rotation, resize, "
+                    "or crop without an explicit intrinsic transform. Supply calibration for "
+                    "PROCESSED_FRAMES or disable the image transform."
+                )
         effective_config = record.config.model_copy(
-            update={"use_gpu": record.effective_sparse_gpu}
+            update={
+                "use_gpu": record.effective_sparse_gpu,
+                "worker_threads": _effective_worker_threads(record.config.worker_threads),
+            }
         )
         return ColmapRunner(
             executor=self._managed_executor(record, record.config.sparse_timeout_s)
@@ -1133,6 +1604,7 @@ class PipelineRunner:
             reconstruction_target=record.config.reconstruction_target,
             scene_analysis=scene_analysis,
             profile=record.config.profile,
+            worker_threads=_effective_worker_threads(record.config.worker_threads),
         )
         gate_reasons: list[str] = []
         if record.synthetic_fixture:
@@ -1184,6 +1656,15 @@ class PipelineRunner:
         with self.store.execution_lock(run_id) as execution_lock:
             if not execution_lock.acquired:
                 return self.store.get_run(run_id)
+            record = self.store.get_run(run_id)
+            surviving = self._surviving_process_state(record)
+            if surviving is not None:
+                record.failure_reason = (
+                    "Recovery deferred: a previously managed child process is still alive "
+                    f"(pid {surviving.get('pid')}). No duplicate reconstruction was launched."
+                )
+                self.store.save_run(record)
+                return record
             return self._run_locked(run_id)
 
     def _run_locked(self, run_id: str) -> RunRecord:
@@ -1192,11 +1673,13 @@ class PipelineRunner:
             return record
         checkpoint = self._load_checkpoint(record)
         warnings: list[dict[str, str]] = []
+        reused_stages: list[str] = []
         resume_chain = True
         run_dir = self.store.run_dir(record.project_id, record.run_id)
         try:
             self._raise_if_cancelled(record)
             if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "INGEST"):
+                reused_stages.append("INGEST")
                 warnings = list(checkpoint.completed["INGEST"].warnings)
             else:
                 resume_chain = False
@@ -1214,6 +1697,7 @@ class PipelineRunner:
             self._raise_if_cancelled(record)
             scene_path = run_dir / "scene_analysis.json"
             if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "PREPROCESS"):
+                reused_stages.append("PREPROCESS")
                 warnings = list(checkpoint.completed["PREPROCESS"].warnings)
             else:
                 resume_chain = False
@@ -1285,6 +1769,7 @@ class PipelineRunner:
             metrics_path = run_dir / "sparse_metrics.json"
             alignment_path = run_dir / "local_transform.json"
             if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "SPARSE"):
+                reused_stages.append("SPARSE")
                 warnings = list(checkpoint.completed["SPARSE"].warnings)
                 metrics = MatcherMetrics.model_validate_json(metrics_path.read_text(encoding="utf-8"))
                 result = ReconstructionResult(metrics, [], [])
@@ -1295,7 +1780,8 @@ class PipelineRunner:
                 self._transition(
                     record, RunStatus.RECONSTRUCTING, 55, "Running sparse reconstruction."
                 )
-                result = self._reconstruct(record)
+                with self._heavy_job_slot(record):
+                    result = self._reconstruct(record)
                 self.store.register_artifacts(record, result.artifacts)
                 alignment = self._align_to_local_metric(record, warnings)
                 self.store.register_artifacts(record, alignment)
@@ -1322,6 +1808,7 @@ class PipelineRunner:
             self._raise_if_cancelled(record)
             if record.config.enable_dense_reconstruction:
                 if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "DENSE"):
+                    reused_stages.append("DENSE")
                     warnings = list(checkpoint.completed["DENSE"].warnings)
                 else:
                     resume_chain = False
@@ -1332,9 +1819,10 @@ class PipelineRunner:
                         75,
                         "Running optional dense visual reconstruction after sparse metric gates.",
                     )
-                    dense_artifacts = self._run_optional_dense(
-                        record, result, alignment_report, warnings
-                    )
+                    with self._heavy_job_slot(record):
+                        dense_artifacts = self._run_optional_dense(
+                            record, result, alignment_report, warnings
+                        )
                     self.store.register_artifacts(record, dense_artifacts)
                     self._complete_checkpoint_stage(
                         record, checkpoint, "DENSE", dense_artifacts, warnings
@@ -1364,6 +1852,10 @@ class PipelineRunner:
                         )
                 geometry_path = run_dir / "sparse" / "geometry_diagnostics.json"
                 camera_selection_path = run_dir / "sparse" / "camera_model_selection.json"
+                keyframe_report = json.loads(
+                    (run_dir / "keyframes.json").read_text(encoding="utf-8")
+                )
+                dense_report_path = run_dir / "dense_report.json"
                 report = build_quality_report(
                     record,
                     result.metrics,
@@ -1375,9 +1867,7 @@ class PipelineRunner:
                         if scene_path.is_file()
                         else None
                     ),
-                    frame_quality=json.loads(
-                        (run_dir / "keyframes.json").read_text(encoding="utf-8")
-                    ).get("frame_quality_gate", {}),
+                    frame_quality=keyframe_report.get("frame_quality_gate", {}),
                     geometry_diagnostics=(
                         json.loads(geometry_path.read_text(encoding="utf-8"))
                         if geometry_path.is_file()
@@ -1388,12 +1878,69 @@ class PipelineRunner:
                         if camera_selection_path.is_file()
                         else None
                     ),
+                    temporal_coverage=keyframe_report.get("temporal_coverage", {}),
+                    dense_report=(
+                        json.loads(dense_report_path.read_text(encoding="utf-8"))
+                        if dense_report_path.is_file()
+                        else None
+                    ),
                 )
                 write_quality_report(quality_path, report)
-                self.store.register_artifacts(record, [quality_path])
-                self._complete_checkpoint_stage(
-                    record, checkpoint, "REPORT", [quality_path], warnings
+                export_path = run_dir / "export_readiness.json"
+                export_started = time.monotonic()
+                export_report = build_export_readiness(record, run_dir)
+                write_export_readiness(export_path, export_report)
+                generated_exports = export_artifact_paths(export_report, run_dir)
+                export_duration_s = max(0.0, time.monotonic() - export_started)
+                record.processing_completed_at = utc_now()
+                self.store.save_run(record)
+                report["execution"]["processing_completed_at"] = record.processing_completed_at
+                write_quality_report(quality_path, report)
+                self.store.register_artifacts(
+                    record, [quality_path, export_path, *generated_exports]
                 )
+                capabilities_path = run_dir / "server_capabilities.json"
+                capabilities_payload = (
+                    json.loads(capabilities_path.read_text(encoding="utf-8"))
+                    if capabilities_path.is_file()
+                    else {}
+                )
+                benchmark_path = run_dir / "benchmark_report.json"
+                report_started = self._stage_started_monotonic.get((record.run_id, "REPORT"))
+                active_report_duration_s = (
+                    max(0.0, time.monotonic() - report_started)
+                    if report_started is not None
+                    else None
+                )
+                atomic_json(
+                    benchmark_path,
+                    build_benchmark_report(
+                        record,
+                        checkpoint,
+                        json.loads((run_dir / "ingest_report.json").read_text(encoding="utf-8")),
+                        keyframe_report,
+                        capabilities_payload,
+                        reused_stages=reused_stages,
+                        active_report_duration_s=active_report_duration_s,
+                        export_duration_s=export_duration_s,
+                        export_report=export_report,
+                        dense_report=(
+                            json.loads(dense_report_path.read_text(encoding="utf-8"))
+                            if dense_report_path.is_file()
+                            else None
+                        ),
+                    ),
+                )
+                self.store.register_artifacts(record, [benchmark_path])
+                self._complete_checkpoint_stage(
+                    record,
+                    checkpoint,
+                    "REPORT",
+                    [quality_path, export_path, benchmark_path, *generated_exports],
+                    warnings,
+                )
+            if record.processing_completed_at is None:
+                record.processing_completed_at = utc_now()
             self._transition(record, RunStatus.COMPLETED, 100, "Run completed.", "COMPLETED")
             return record
         except ProcessCancelledError as exc:

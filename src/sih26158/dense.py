@@ -46,6 +46,7 @@ class DenseContext:
     reconstruction_target: str = "FULL_SCENE"
     scene_analysis: dict[str, object] = field(default_factory=dict)
     profile: str = "preview"
+    worker_threads: int = 0
 
 
 @dataclass(frozen=True)
@@ -278,6 +279,7 @@ def _write_dense_metadata(
             "face_count": result.face_count,
             "texture_coverage": result.texture_coverage,
             "runtime_s": result.runtime_s,
+            "worker_threads": context.worker_threads,
             "environment": environment,
             "warnings": result.warnings,
             "metric_alignment_preserved": result.metric_alignment_preserved,
@@ -460,7 +462,13 @@ class ColmapDenseProvider(DenseReconstructionProvider):
         }.get(context.profile, "1200")
         if "--PatchMatchStereo.max_image_size" in patch_help:
             commands[1].extend(["--PatchMatchStereo.max_image_size", patch_max_size])
+        if context.worker_threads and "--PatchMatchStereo.num_threads" in patch_help:
+            commands[1].extend(
+                ["--PatchMatchStereo.num_threads", str(context.worker_threads)]
+            )
         fusion_help = self._help("stereo_fusion")
+        if context.worker_threads and "--StereoFusion.num_threads" in fusion_help:
+            commands[2].extend(["--StereoFusion.num_threads", str(context.worker_threads)])
         if "--StereoFusion.min_num_pixels" in fusion_help:
             commands[2].extend(
                 ["--StereoFusion.min_num_pixels", str(profile_settings.number_views_fuse)]
@@ -873,6 +881,10 @@ class OpenMVSProvider(DenseReconstructionProvider):
                 str(profile_settings.refine_resolution_level),
             ],
         ]
+        if context.worker_threads:
+            for command in [*core_commands, texture_command]:
+                if "--max-threads" in self._help(command[0]):
+                    command.extend(["--max-threads", str(context.worker_threads)])
         commands.extend(core_commands)
         for command in core_commands:
             self._execute(command, log_path)

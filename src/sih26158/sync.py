@@ -28,6 +28,9 @@ class OffsetCalibration:
     before: OffsetEvaluation
     source: OffsetSource
     searched_offsets: tuple[tuple[float, float, int], ...]
+    ambiguity_status: str
+    near_optimal_offsets_s: tuple[float, ...]
+    relative_improvement_from_zero: float | None
 
     def as_report(self) -> dict[str, object]:
         return {
@@ -42,6 +45,10 @@ class OffsetCalibration:
                 {"offset_s": offset, "robust_rmse_m": rmse, "inlier_count": inliers}
                 for offset, rmse, inliers in self.searched_offsets
             ],
+            "ambiguity_status": self.ambiguity_status,
+            "near_optimal_offsets_s": list(self.near_optimal_offsets_s),
+            "relative_improvement_from_zero": self.relative_improvement_from_zero,
+            "precise_automatic_offset_supported": self.ambiguity_status == "WELL_OBSERVED",
         }
 
 
@@ -122,6 +129,11 @@ def calibrate_telemetry_offset(
             before=before,
             source=source,
             searched_offsets=((selected.offset_s, selected.rmse_m, selected.inlier_count),),
+            ambiguity_status="NOT_APPLICABLE_MANUAL",
+            near_optimal_offsets_s=(selected.offset_s,),
+            relative_improvement_from_zero=(
+                (before.rmse_m - selected.rmse_m) / before.rmse_m if before.rmse_m > 0 else None
+            ),
         )
 
     if search_step_s <= 0 or search_min_s > search_max_s:
@@ -153,6 +165,22 @@ def calibrate_telemetry_offset(
             item.offset_s,
         ),
     )
+    near_tolerance_m = max(0.02, selected.rmse_m * 0.02)
+    near_optimal = tuple(
+        item.offset_s for item in evaluations if item.rmse_m <= selected.rmse_m + near_tolerance_m
+    )
+    improvement = (
+        (before.rmse_m - selected.rmse_m) / before.rmse_m if before.rmse_m > 0 else None
+    )
+    separated_equivalent = any(
+        abs(offset - selected.offset_s) >= max(0.1, 2 * search_step_s)
+        for offset in near_optimal
+    )
+    ambiguity_status = (
+        "AMBIGUOUS"
+        if separated_equivalent or improvement is None or improvement < 0.05
+        else "WELL_OBSERVED"
+    )
     return OffsetCalibration(
         selected=selected,
         before=before,
@@ -160,4 +188,7 @@ def calibrate_telemetry_offset(
         searched_offsets=tuple(
             (item.offset_s, item.rmse_m, item.inlier_count) for item in evaluations
         ),
+        ambiguity_status=ambiguity_status,
+        near_optimal_offsets_s=near_optimal,
+        relative_improvement_from_zero=improvement,
     )

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "reconstruction_coordinate_frame": "SYNTHETIC_LOCAL_ENU_METRES",
+  "units": "m",
+  "altitude_reference": "ELLIPSOIDAL",
+  "checkpoints": [
+    {
+      "checkpoint_id": "synthetic-checkpoint-1",
+      "reconstructed_coordinates": [1.1, 1.8, 3.05]
+    }
+  ]
+}

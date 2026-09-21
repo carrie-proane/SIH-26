@@ -167,6 +167,10 @@ class ColmapRunner:
                 else "8192"
             ),
         ]
+        if config.worker_threads:
+            feature_command.extend(
+                ["--FeatureExtraction.num_threads", str(config.worker_threads)]
+            )
         if recovery:
             feature_command.extend(["--SiftExtraction.peak_threshold", "0.003"])
         if config.profile == "accurate":
@@ -209,6 +213,10 @@ class ColmapRunner:
             "--TwoViewGeometry.max_error",
             "3",
         ]
+        if config.worker_threads:
+            matching_command.extend(
+                ["--FeatureMatching.num_threads", str(config.worker_threads)]
+            )
         if not exhaustive:
             matching_command.extend(
                 [
@@ -249,6 +257,8 @@ class ColmapRunner:
             "--Mapper.ba_global_max_num_iterations",
             "100" if config.profile == "accurate" else "75",
         ]
+        if config.worker_threads:
+            mapper_command.extend(["--Mapper.num_threads", str(config.worker_threads)])
         if recovery:
             mapper_command.extend(
                 [
@@ -572,6 +582,13 @@ class ColmapRunner:
     @staticmethod
     def _attempt_payload(attempt: CameraModelAttempt, root: Path) -> dict[str, object]:
         sparse = attempt.sparse_model
+        component_report = attempt.workspace / "sparse" / "model_selection.json"
+        try:
+            component_candidates = json.loads(
+                component_report.read_text(encoding="utf-8")
+            ).get("candidates", [])
+        except (OSError, json.JSONDecodeError):
+            component_candidates = []
         return {
             "attempt_id": attempt.attempt_id,
             "camera_model": attempt.camera_model,
@@ -589,6 +606,8 @@ class ColmapRunner:
             "intrinsics": attempt.intrinsics,
             "failure_reason": attempt.failure_reason,
             "commands": attempt.commands,
+            "disconnected_components": component_candidates,
+            "component_count": len(component_candidates),
         }
 
     @staticmethod
@@ -730,6 +749,37 @@ class ColmapRunner:
             ),
             "selected_camera_model": selected_attempt.camera_model,
             "rationale": camera_report["rationale"],
+            "excluded_components": [
+                {
+                    "attempt_id": attempt.attempt_id,
+                    "camera_model": attempt.camera_model,
+                    "path": str(
+                        (
+                            attempt.workspace
+                            / "sparse"
+                            / "model"
+                            / str(component.get("path"))
+                        ).relative_to(run_dir / "sparse")
+                    ),
+                    "registered_images": component.get("registered_images"),
+                    "reason": (
+                        "DISCONNECTED_COMPONENT_NOT_SELECTED; no supported alignment was available, "
+                        "so it was not merged into the delivered model."
+                    ),
+                }
+                for attempt in attempts
+                for component in self._attempt_payload(attempt, run_dir).get(
+                    "disconnected_components", []
+                )
+                if not (
+                    attempt is selected_attempt
+                    and str(component.get("path")) == selected_attempt.sparse_model.path.name
+                )
+            ],
+            "component_policy": (
+                "Every disconnected mapper component is reported. Only the deterministic winner is "
+                "delivered; components are never merged without a supported alignment."
+            ),
         }
         selection_path.write_text(json.dumps(selection_report, indent=2) + "\n", encoding="utf-8")
         commands = [command for attempt in attempts for command in attempt.commands]

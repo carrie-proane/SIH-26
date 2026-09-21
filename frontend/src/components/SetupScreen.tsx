@@ -52,7 +52,7 @@ export function SetupScreen({
   const [reconstructionTarget, setReconstructionTarget] = useState<
     "FULL_SCENE" | "PRIMARY_SUBJECT"
   >("FULL_SCENE");
-  const [maskingMode, setMaskingMode] = useState<"OFF" | "AUTO" | "REQUIRED">("AUTO");
+  const [maskingMode, setMaskingMode] = useState<"OFF" | "AUTO" | "REQUIRED">("OFF");
   const [segmentationModelPath, setSegmentationModelPath] = useState("");
   const [localError, setLocalError] = useState("");
 

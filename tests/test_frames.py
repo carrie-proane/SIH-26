@@ -47,7 +47,17 @@ def test_extraction_produces_expected_count_and_index(tmp_path: Path) -> None:
     assert result.frames[1].frame_index == 3
     assert result.frames[1].timestamp_s == 0.3
     with (tmp_path / "run/frame_index.csv").open(newline="") as handle:
-        assert next(csv.reader(handle)) == ["frame_index", "timestamp_s", "source_video"]
+        assert next(csv.reader(handle)) == [
+            "frame_index",
+            "timestamp_s",
+            "source_video",
+            "source_width",
+            "source_height",
+            "output_width",
+            "output_height",
+            "resize_scale",
+            "rotation_degrees",
+        ]
 
 
 def test_negative_90_display_matrix_is_applied_once(tmp_path: Path, monkeypatch) -> None:
@@ -57,6 +67,67 @@ def test_negative_90_display_matrix_is_applied_once(tmp_path: Path, monkeypatch)
     result = extract_frames(video, tmp_path / "run", every_nth=1)
     image = cv2.imread(result.frames[0].frame_path)
     assert image.shape[:2] == (160, 96)
+
+
+def test_extraction_bounds_candidates_and_processing_resolution(tmp_path: Path) -> None:
+    video = tmp_path / "longer.avi"
+    make_video(video, frame_count=120)
+
+    result = extract_frames(
+        video,
+        tmp_path / "bounded",
+        max_candidates=12,
+        max_image_dimension=80,
+    )
+
+    assert 3 <= len(result.frames) <= 12
+    assert max(frame.output_width or 0 for frame in result.frames) <= 80
+    assert max(frame.output_height or 0 for frame in result.frames) <= 80
+    assert all(frame.resize_scale == 0.5 for frame in result.frames)
+
+
+def test_candidate_bound_holds_when_container_frame_count_is_unknown(
+    tmp_path: Path, monkeypatch
+) -> None:
+    video = tmp_path / "unknown-count.avi"
+    make_video(video, frame_count=120)
+    real_capture = cv2.VideoCapture
+
+    class UnknownCountCapture:
+        def __init__(self, path: str) -> None:
+            self.inner = real_capture(path)
+
+        def isOpened(self):
+            return self.inner.isOpened()
+
+        def get(self, property_id: int):
+            if property_id == cv2.CAP_PROP_FRAME_COUNT:
+                return 0
+            return self.inner.get(property_id)
+
+        def set(self, property_id: int, value: float):
+            return self.inner.set(property_id, value)
+
+        def read(self):
+            return self.inner.read()
+
+        def release(self):
+            return self.inner.release()
+
+    monkeypatch.setattr("frames.extractor.cv2.VideoCapture", UnknownCountCapture)
+    monkeypatch.setattr("frames.extractor.detect_rotation", lambda _: 0)
+
+    result = extract_frames(
+        video,
+        tmp_path / "unknown-bounded",
+        target_fps=10,
+        max_candidates=12,
+    )
+
+    assert len(result.frames) == 12
+    assert result.frames == sorted(result.frames, key=lambda item: item.frame_index)
+    assert "CANDIDATE_RESERVOIR_BOUND_APPLIED" in result.warnings
+    assert len(list((tmp_path / "unknown-bounded/frames").glob("*.jpg"))) == 12
 
 
 def test_rotation_detector_reads_negative_display_matrix(monkeypatch) -> None:

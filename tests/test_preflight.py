@@ -11,7 +11,8 @@ from sih26158.preflight import OPENMVS_TOOLS, collect_preflight
 COLMAP_FLAGS = (
     "--database_path --image_path --output_path --input_path --path --output_type "
     "--FeatureExtraction.use_gpu --FeatureMatching.use_gpu --workspace_path "
-    "--PatchMatchStereo.gpu_index"
+    "--FeatureExtraction.num_threads --FeatureExtraction.max_image_size "
+    "--FeatureMatching.num_threads --Mapper.num_threads --PatchMatchStereo.gpu_index"
 )
 
 
@@ -108,6 +109,44 @@ def test_preflight_blocks_when_required_sparse_tools_are_missing(tmp_path: Path)
     assert "colmap.sparse_capabilities" in report["blockers"]
 
 
+def test_preflight_handles_malformed_scheduler_cpu_limit(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "not-an-integer")
+
+    report = collect_preflight(
+        data_root=tmp_path / "projects",
+        minimum_free_disk_gb=0,
+        runner=_runner,
+        which=_all_tools,
+    )
+
+    cpu = next(item for item in report["checks"] if item["id"] == "resource.cpu")
+    assert cpu["details"]["scheduler_cpu_count"] is None
+    assert cpu["details"]["scheduler_cpu_count_raw"] == "not-an-integer"
+
+
+def test_gpu_probe_is_scoped_to_cuda_visible_devices(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2")
+    commands: list[list[str]] = []
+
+    def recording_runner(command: list[str], **kwargs: object):
+        commands.append(command)
+        return _runner(command, **kwargs)
+
+    collect_preflight(
+        data_root=tmp_path / "projects",
+        minimum_free_disk_gb=0,
+        runner=recording_runner,
+        which=_all_tools,
+    )
+
+    gpu_command = next(command for command in commands if Path(command[0]).name == "nvidia-smi")
+    assert gpu_command[gpu_command.index("-i") + 1] == "2"
+
+
 def test_optional_dense_unavailable_preserves_sparse_readiness(tmp_path: Path) -> None:
     report = collect_preflight(
         data_root=tmp_path / "projects",
@@ -162,6 +201,7 @@ def test_capability_profile_falls_back_to_cpu_sparse_and_openmvs_dense() -> None
         "checks": [
             {"id": "colmap.sparse_capabilities", "status": "PASS"},
             {"id": "gpu.nvidia_cuda", "status": "WARN"},
+            {"id": "colmap.cuda_build", "status": "WARN"},
             {"id": "dense.colmap_cuda", "status": "PASS"},
             {"id": "dense.openmvs", "status": "PASS"},
         ],
@@ -185,6 +225,7 @@ def test_capability_profile_selects_cuda_colmap_when_verified() -> None:
         "checks": [
             {"id": "colmap.sparse_capabilities", "status": "PASS"},
             {"id": "gpu.nvidia_cuda", "status": "PASS"},
+            {"id": "colmap.cuda_build", "status": "PASS"},
             {"id": "dense.colmap_cuda", "status": "PASS"},
             {"id": "dense.openmvs", "status": "PASS"},
         ],

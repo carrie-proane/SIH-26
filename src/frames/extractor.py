@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import subprocess
 import warnings
 from dataclasses import dataclass
@@ -21,6 +22,11 @@ class ExtractedFrame:
     timestamp_s: float
     source_video: str
     frame_path: str
+    source_width: int | None = None
+    source_height: int | None = None
+    output_width: int | None = None
+    output_height: int | None = None
+    resize_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -75,6 +81,8 @@ def extract_frames(
     every_nth: int | None = None,
     target_fps: float | None = None,
     frames_subdir: str = "frames",
+    max_candidates: int = 240,
+    max_image_dimension: int | None = None,
 ) -> ExtractionResult:
     """Decode a video with OpenCV and retain frames at a deterministic interval."""
 
@@ -84,6 +92,10 @@ def extract_frames(
     frames_dir.mkdir(parents=True, exist_ok=True)
     if every_nth is not None and every_nth < 1:
         raise ValueError("every_nth must be at least 1")
+    if max_candidates < 3:
+        raise ValueError("max_candidates must be at least 3")
+    if max_image_dimension is not None and max_image_dimension < 1:
+        raise ValueError("max_image_dimension must be positive")
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise ValueError(f"Could not open video: {video_path}")
@@ -98,24 +110,49 @@ def extract_frames(
         capture.release()
         raise ValueError("Video reports an invalid frame rate")
     duration_s = source_count / fps if source_count > 0 else 0.0
-    # Aim for roughly 160 candidates, bounded to avoid decoding an excessive
-    # number of near-duplicates on long videos or starving short captures.
-    adaptive_fps = 160.0 / duration_s if duration_s > 0 else 2.0
-    effective_target_fps = target_fps or min(8.0, max(2.0, adaptive_fps))
+    # Sample uniformly across the complete duration and bound retained images.
+    # Decoding remains streaming: only the current frame and retained JPEGs exist.
+    adaptive_fps = max_candidates / duration_s if duration_s > 0 else 2.0
+    effective_target_fps = target_fps or min(8.0, max(0.1, adaptive_fps))
     if effective_target_fps <= 0:
         capture.release()
         raise ValueError("target_fps must be positive")
-    interval = every_nth or max(1, round(fps / effective_target_fps))
+    interval = every_nth or max(1, math.ceil(fps / effective_target_fps))
+    if every_nth is None and source_count > 0:
+        interval = max(interval, math.ceil(source_count / max_candidates))
     rotation = detect_rotation(video_path)
     retained: list[ExtractedFrame] = []
+    sampled_count = 0
+    reservoir_rng = np.random.default_rng(26158)
     index = 0
     while True:
         ok, frame = capture.read()
         if not ok:
             break
         if index % interval == 0:
+            sampled_count += 1
+            if len(retained) < max_candidates:
+                retained_slot = len(retained)
+            else:
+                retained_slot = int(reservoir_rng.integers(0, sampled_count))
+                if retained_slot >= max_candidates:
+                    index += 1
+                    continue
             destination = frames_dir / f"frame_{index:06d}.jpg"
-            if not cv2.imwrite(str(destination), _rotate(frame, rotation)):
+            source_height, source_width = frame.shape[:2]
+            output_frame = _rotate(frame, rotation)
+            output_height, output_width = output_frame.shape[:2]
+            resize_scale = 1.0
+            if max_image_dimension is not None and max(output_height, output_width) > max_image_dimension:
+                resize_scale = max_image_dimension / max(output_height, output_width)
+                output_width = max(1, round(output_width * resize_scale))
+                output_height = max(1, round(output_height * resize_scale))
+                output_frame = cv2.resize(
+                    output_frame,
+                    (output_width, output_height),
+                    interpolation=cv2.INTER_AREA,
+                )
+            if not cv2.imwrite(str(destination), output_frame):
                 capture.release()
                 raise OSError(f"Could not write extracted frame: {destination}")
             decoded_timestamp_s = float(capture.get(cv2.CAP_PROP_POS_MSEC)) / 1000.0
@@ -123,17 +160,58 @@ def extract_frames(
                 decoded_timestamp_s = index / fps
                 if "DECODED_TIMESTAMP_UNAVAILABLE" not in messages:
                     messages.append("DECODED_TIMESTAMP_UNAVAILABLE")
-            retained.append(
-                ExtractedFrame(index, round(decoded_timestamp_s, 9), video_path.name, str(destination))
+            extracted = ExtractedFrame(
+                index,
+                round(decoded_timestamp_s, 9),
+                video_path.name,
+                str(destination),
+                source_width,
+                source_height,
+                output_width,
+                output_height,
+                resize_scale,
             )
+            if retained_slot == len(retained):
+                retained.append(extracted)
+            else:
+                Path(retained[retained_slot].frame_path).unlink(missing_ok=True)
+                retained[retained_slot] = extracted
         index += 1
     capture.release()
+    retained.sort(key=lambda item: item.frame_index)
+    if sampled_count > max_candidates:
+        messages.append("CANDIDATE_RESERVOIR_BOUND_APPLIED")
     if not retained:
         messages.append("NO_FRAMES_EXTRACTED")
         warnings.warn("No frames were decoded from the video.")
     index_path = output_dir / "frame_index.csv"
     with index_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["frame_index", "timestamp_s", "source_video"])
-        writer.writerows((f.frame_index, f"{f.timestamp_s:.6f}", f.source_video) for f in retained)
+        writer.writerow(
+            [
+                "frame_index",
+                "timestamp_s",
+                "source_video",
+                "source_width",
+                "source_height",
+                "output_width",
+                "output_height",
+                "resize_scale",
+                "rotation_degrees",
+            ]
+        )
+        writer.writerows(
+            (
+                f.frame_index,
+                f"{f.timestamp_s:.6f}",
+                f.source_video,
+                f.source_width,
+                f.source_height,
+                f.output_width,
+                f.output_height,
+                f"{f.resize_scale:.9f}",
+                rotation,
+            )
+            for f in retained
+        )
     return ExtractionResult(retained, fps, source_count, rotation, messages)

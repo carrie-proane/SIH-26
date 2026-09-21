@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import mimetypes
 import os
 import platform
@@ -19,6 +20,8 @@ from typing import BinaryIO, Self
 from .models import (
     ArtifactEntry,
     InputAsset,
+    MeasurementCreate,
+    MeasurementRecord,
     ProjectManifest,
     ProvenanceOrigin,
     RunConfig,
@@ -125,7 +128,9 @@ def runtime_environment() -> dict[str, str | None]:
         "numpy",
         "opencv-python-headless",
         "opencv-python",
+        "Pillow",
         "pydantic",
+        "trimesh",
         "ultralytics",
     ):
         try:
@@ -149,6 +154,28 @@ def runtime_environment() -> dict[str, str | None]:
             environment[tool] = output[0][:240] if output else "installed"
         except (OSError, subprocess.TimeoutExpired):
             environment[tool] = "installed; version check failed"
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        ).stdout.strip()
+        dirty = bool(
+            subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=5,
+            ).stdout.strip()
+        )
+        environment["git_revision"] = revision
+        environment["git_dirty"] = str(dirty).lower()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        environment["git_revision"] = None
+        environment["git_dirty"] = None
     return environment
 
 
@@ -278,6 +305,15 @@ class ProjectStore:
         self.save_run(record)
         return record
 
+    def create_linked_run(self, source_run_id: str, config: RunConfig) -> RunRecord:
+        source = self.get_run(source_run_id)
+        if source.status.value != "COMPLETED":
+            raise ValueError("Only completed runs can be used as immutable rerun evidence")
+        record = self.create_run(source.project_id, config)
+        record.derived_from_run_id = source.run_id
+        self.save_run(record)
+        return record
+
     def get_run(self, run_id: str) -> RunRecord:
         self._validate_id(run_id)
         matches = list(self.root.glob(f"*/runs/{run_id}/run_manifest.json"))
@@ -300,6 +336,14 @@ class ProjectStore:
             self.run_dir(record.project_id, record.run_id) / ".execution.lock",
             blocking=blocking,
         )
+
+    def heavy_job_locks(self, limit: int) -> list[RunExecutionLock]:
+        """Return process-safe resource slots shared by every run in this data root."""
+
+        if limit < 1:
+            raise ValueError("heavy job limit must be at least one")
+        directory = self.root / ".resource_locks"
+        return [RunExecutionLock(directory / f"heavy-{index}.lock") for index in range(limit)]
 
     def save_run(self, record: RunRecord) -> None:
         record.updated_at = utc_now()
@@ -340,3 +384,119 @@ class ProjectStore:
         if not path.is_file() or not path.is_relative_to(self.run_dir(record.project_id, run_id)):
             raise FileNotFoundError(artifact_path)
         return path
+
+    def _measurements_path(self, record: RunRecord) -> Path:
+        return self.run_dir(record.project_id, record.run_id) / "measurements.json"
+
+    @staticmethod
+    def _ply_counts(path: Path) -> tuple[int | None, int | None]:
+        vertex_count: int | None = None
+        face_count: int | None = None
+        with path.open("rb") as stream:
+            for raw in stream:
+                try:
+                    line = raw.decode("ascii").strip()
+                except UnicodeDecodeError as exc:
+                    raise ValueError("PLY header is not ASCII") from exc
+                if line.startswith("element vertex "):
+                    vertex_count = int(line.split()[-1])
+                elif line.startswith("element face "):
+                    face_count = int(line.split()[-1])
+                elif line == "end_header":
+                    return vertex_count, face_count
+        raise ValueError("PLY is missing end_header")
+
+    def list_measurements(self, run_id: str) -> list[MeasurementRecord]:
+        record = self.get_run(run_id)
+        path = self._measurements_path(record)
+        if not path.is_file():
+            return []
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        rows = payload.get("measurements", []) if isinstance(payload, dict) else []
+        return [MeasurementRecord.model_validate(item) for item in rows]
+
+    def add_measurement(self, run_id: str, value: MeasurementCreate) -> MeasurementRecord:
+        """Persist a backend-computed measurement bound to one declared geometry hash."""
+
+        record = self.get_run(run_id)
+        declared = {item.relative_path: item for item in record.artifacts}
+        artifact = declared.get(value.geometry_artifact_path)
+        if artifact is None:
+            raise ValueError("geometry artifact is not declared by this run")
+        if artifact.sha256 != value.geometry_artifact_sha256:
+            raise ValueError("geometry artifact hash does not match the declared run artifact")
+        geometry = self.resolve_declared_artifact(run_id, value.geometry_artifact_path)
+        if sha256_file(geometry) != value.geometry_artifact_sha256:
+            raise ValueError("geometry artifact no longer matches its declared checksum")
+        if geometry.suffix.lower() != ".ply":
+            raise ValueError("measurement references currently require a validated PLY artifact")
+
+        vertex_count, face_count = self._ply_counts(geometry)
+        for endpoint in (value.start, value.end):
+            if endpoint.point_id is not None and (
+                vertex_count is None or endpoint.point_id >= vertex_count
+            ):
+                raise ValueError("measurement point reference is outside the geometry artifact")
+            if endpoint.face_id is not None and (
+                face_count is None or endpoint.face_id >= face_count
+            ):
+                raise ValueError("measurement face reference is outside the geometry artifact")
+
+        delta = [
+            end - start
+            for start, end in zip(value.start.coordinates, value.end.coordinates, strict=True)
+        ]
+        if value.measurement_kind == "HORIZONTAL":
+            distance = math.hypot(delta[0], delta[1])
+        elif value.measurement_kind == "VERTICAL":
+            distance = abs(delta[2])
+        else:
+            distance = math.sqrt(sum(component * component for component in delta))
+
+        observed_paths = {"sparse/sparse_local.ply", "sparse/sparse.ply"}
+        inferred = any(
+            token in value.geometry_artifact_path.lower()
+            for token in ("inferred", "completion", "generated")
+        )
+        provenance = "INFERRED" if inferred else (
+            "OBSERVED" if value.geometry_artifact_path in observed_paths else "UNKNOWN"
+        )
+        eligible = (
+            provenance == "OBSERVED"
+            and value.geometry_artifact_path == "sparse/sparse_local.ply"
+            and value.coordinate_frame == "LOCAL_ENU_METRES"
+            and record.source_provenance != ProvenanceOrigin.SYNTHETIC
+            and record.config.execution_mode != "SYNTHETIC_DEMO"
+        )
+        if provenance != "OBSERVED":
+            reason = "Only original observed sparse geometry is measurement eligible."
+        elif value.geometry_artifact_path != "sparse/sparse_local.ply":
+            reason = "Measurement requires the aligned local-metric sparse artifact."
+        elif value.coordinate_frame != "LOCAL_ENU_METRES":
+            reason = "Coordinate frame is not the run's local metric frame."
+        elif record.source_provenance == ProvenanceOrigin.SYNTHETIC:
+            reason = "Synthetic fixtures are not measurement evidence."
+        elif record.config.execution_mode == "SYNTHETIC_DEMO":
+            reason = "Synthetic execution mode is not measurement evidence."
+        else:
+            reason = "Observed local-metric geometry with a validated artifact hash."
+        measurement = MeasurementRecord(
+            **value.model_dump(mode="python"),
+            measurement_id=self.new_id("msr"),
+            run_id=run_id,
+            backend_distance_m=distance,
+            geometry_provenance=provenance,
+            measurement_eligible=eligible,
+            eligibility_reason=reason,
+        )
+        measurements = self.list_measurements(run_id)
+        measurements.append(measurement)
+        atomic_json(
+            self._measurements_path(record),
+            {
+                "schema_version": "1.0",
+                "run_id": run_id,
+                "measurements": [item.model_dump(mode="json") for item in measurements],
+            },
+        )
+        return measurement
