@@ -1,0 +1,15 @@
+{
+  "config_version": "1.0",
+  "profile": "balanced",
+  "matcher": "SIFT",
+  "execution_mode": "COLMAP",
+  "camera_model": "SIMPLE_RADIAL",
+  "sequential_overlap": 12,
+  "use_gpu": false,
+  "max_candidate_frames": 60,
+  "max_selected_frames": 30,
+  "processing_max_image_dimension": 1920,
+  "reconstruction_target": "FULL_SCENE",
+  "masking_mode": "OFF",
+  "enable_segmentation": false
+}

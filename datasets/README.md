@@ -19,3 +19,7 @@ causes evaluation to be rejected as control leakage.
 The reference frame, units, axis convention, altitude reference, acquisition method and stated
 accuracy belong in the manifest. Local ENU, geographic latitude/longitude, ellipsoidal altitude,
 orthometric altitude and relative-to-launch height are not interchangeable.
+
+The first real development intake for this round is documented in
+[cards/dji_0574/README.md](cards/dji_0574/README.md), with the external bundle location, hashes,
+actual preparation report and unresolved reference/model/orientation limitations.

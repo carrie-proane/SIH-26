@@ -1,0 +1,83 @@
+{
+  "comparison": "No local segmentation weights were supplied; no model was downloaded automatically.",
+  "downstream_consumption_verified": false,
+  "dynamic_classes": [
+    "bicycle",
+    "bus",
+    "car",
+    "motorcycle",
+    "person",
+    "truck"
+  ],
+  "execution": {
+    "actual_device": null,
+    "cache_classification": "FRESH_CALL",
+    "contract": "segmentation-2.1",
+    "excluded_classes": [
+      "bicycle",
+      "bus",
+      "car",
+      "motorcycle",
+      "person",
+      "sky",
+      "truck"
+    ],
+    "executed_provider": null,
+    "model_sha256": null,
+    "model_source": "NONE",
+    "parameters": {
+      "confidence": 0.25,
+      "device": "cpu",
+      "image_size": 640,
+      "max_detections": 100,
+      "max_frames": 1000,
+      "review_sample_size": 6,
+      "timeout_s": 300.0
+    },
+    "requested_device": "cpu",
+    "requested_provider": "YOLO_SEGMENTATION_LOCAL_WEIGHTS",
+    "resolved_model_path": null,
+    "settings": {
+      "confidence": 0.25,
+      "device": "cpu",
+      "image_size": 640,
+      "max_detections": 100,
+      "max_frames": 1000,
+      "review_sample_size": 6,
+      "timeout_s": 300.0
+    },
+    "timeout_enforcement": "COOPERATIVE_BETWEEN_CALLS; process isolation required for hard deadlines",
+    "versions": {
+      "numpy": "2.5.2",
+      "opencv-python-headless": "4.14.0.94",
+      "torch": null,
+      "ultralytics": null
+    }
+  },
+  "limitations": [
+    "Class-based exclusion does not prove object motion; parked vehicles may be excluded.",
+    "Animals are not excluded; sky is excluded only if the checkpoint supports sky.",
+    "Mask fractions and this report are not reconstruction A/B or accuracy evidence."
+  ],
+  "mask_semantics": {
+    "reconstruction_masks": "ZERO_IS_EXCLUDED",
+    "review_masks": "NONZERO_IS_EXCLUDED"
+  },
+  "masking_decision": "UNMASKED_FALLBACK",
+  "masking_mode": "AUTO",
+  "masks_applied_to": [
+    "COLMAP_SPARSE_FEATURE_EXTRACTION",
+    "OPENMVS_DENSE_MATCHING",
+    "OPENMVS_TEXTURE_GENERATION"
+  ],
+  "mean_excluded_fraction": null,
+  "provider": "UNAVAILABLE",
+  "reconstruction_target": "FULL_SCENE",
+  "runtime_s": 0.01036104900049395,
+  "schema_version": "2.1",
+  "selected_frame_count": 6,
+  "sky_classes_when_model_supports_them": [
+    "sky"
+  ],
+  "status": "UNAVAILABLE_FALLBACK"
+}

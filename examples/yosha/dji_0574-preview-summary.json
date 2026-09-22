@@ -1,0 +1,27 @@
+{
+  "candidate_count": 12,
+  "dataset_id": "dji_0574_development",
+  "extraction_warnings": [],
+  "manual_source_qa": {
+    "appearance": "Scene looks sideways in reviewed contact sheet; intended capture orientation needs confirmation.",
+    "geometric_accuracy": null,
+    "mask_review_status": "UNAVAILABLE_NO_MODEL",
+    "metadata_rotation_applied": true
+  },
+  "max_candidates": 12,
+  "max_image_dimension": 960,
+  "purpose": "SOURCE_QA_PREVIEW_NOT_BENCHMARK",
+  "reconstruction_executed": false,
+  "rotation_degrees": 180,
+  "segmentation_executed": false,
+  "segmentation_warnings": [
+    {
+      "code": "SEGMENTATION_UNAVAILABLE_USING_UNMASKED_FRAMES",
+      "message": "No local segmentation weights were supplied; no model was downloaded automatically."
+    }
+  ],
+  "selected_count": 6,
+  "synthetic": false,
+  "target_selected_frames": 6,
+  "video_sha256": "72651891c53acf108fc53fd8412e183a8edb03bfb59d853b3e8f40433700e7ed"
+}

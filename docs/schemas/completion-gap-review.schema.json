@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "DatasetAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "DatasetAsset",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "boundary_id": {
+      "title": "Boundary Id",
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "CONFIRMED_SMALL_GAP",
+        "STRUCTURAL_OPENING",
+        "UNKNOWN"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "reviewer": {
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "explanation": {
+      "minLength": 1,
+      "title": "Explanation",
+      "type": "string"
+    },
+    "source_images": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DatasetAsset"
+      },
+      "title": "Source Images",
+      "type": "array"
+    }
+  },
+  "required": [
+    "boundary_id",
+    "decision",
+    "reviewer",
+    "explanation"
+  ],
+  "title": "GapReview",
+  "type": "object"
+}

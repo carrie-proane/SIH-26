@@ -383,6 +383,8 @@ def test_openmvs_applies_masks_and_adaptive_primary_subject_filtering(
     provider = OpenMVSProvider()
     monkeypatch.setattr("sih26158.dense.shutil.which", lambda _: "/usr/bin/tool")
     monkeypatch.setattr(provider, "_require_flags", lambda *_: None)
+    # This command-contract fixture must not depend on an installed OpenMVS binary.
+    monkeypatch.setattr(provider, "_help", lambda *_: "--local-seam-leveling")
 
     def execute(command: list[str], _: Path) -> None:
         output_flag = "-o" if "-o" in command else "--output_path"

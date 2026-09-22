@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "DatasetAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "DatasetAsset",
+      "type": "object"
+    },
+    "MeshCoordinates": {
+      "additionalProperties": false,
+      "properties": {
+        "source_frame": {
+          "const": "LOCAL_ENU_METRES",
+          "default": "LOCAL_ENU_METRES",
+          "title": "Source Frame",
+          "type": "string"
+        },
+        "units": {
+          "const": "metre",
+          "default": "metre",
+          "title": "Units",
+          "type": "string"
+        },
+        "axis_convention": {
+          "default": [
+            "east",
+            "north",
+            "up"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "east",
+              "type": "string"
+            },
+            {
+              "const": "north",
+              "type": "string"
+            },
+            {
+              "const": "up",
+              "type": "string"
+            }
+          ],
+          "title": "Axis Convention",
+          "type": "array"
+        },
+        "alignment_verified": {
+          "const": true,
+          "title": "Alignment Verified",
+          "type": "boolean"
+        },
+        "altitude_reference": {
+          "minLength": 1,
+          "title": "Altitude Reference",
+          "type": "string"
+        },
+        "alignment_evidence": {
+          "$ref": "#/$defs/DatasetAsset"
+        }
+      },
+      "required": [
+        "alignment_verified",
+        "altitude_reference",
+        "alignment_evidence"
+      ],
+      "title": "MeshCoordinates",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "minLength": 1,
+      "title": "Run Id",
+      "type": "string"
+    },
+    "artifact": {
+      "$ref": "#/$defs/DatasetAsset"
+    },
+    "coordinates": {
+      "$ref": "#/$defs/MeshCoordinates"
+    },
+    "geometry_source": {
+      "const": "OBSERVED_RECONSTRUCTION",
+      "default": "OBSERVED_RECONSTRUCTION",
+      "title": "Geometry Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "artifact",
+    "coordinates"
+  ],
+  "title": "MeshSource",
+  "type": "object"
+}

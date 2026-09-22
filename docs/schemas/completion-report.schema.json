@@ -1,0 +1,301 @@
+{
+  "$defs": {
+    "CompletionParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "max_area_m2": {
+          "default": 0.25,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Max Area M2",
+          "type": "number"
+        },
+        "max_diameter_m": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "maximum": 2,
+          "title": "Max Diameter M",
+          "type": "number"
+        },
+        "max_edge_m": {
+          "default": 0.5,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Max Edge M",
+          "type": "number"
+        },
+        "max_plane_distance_m": {
+          "default": 0.01,
+          "exclusiveMinimum": 0,
+          "maximum": 0.05,
+          "title": "Max Plane Distance M",
+          "type": "number"
+        },
+        "max_normal_angle_deg": {
+          "default": 10,
+          "exclusiveMinimum": 0,
+          "maximum": 20,
+          "title": "Max Normal Angle Deg",
+          "type": "number"
+        },
+        "min_support_faces": {
+          "default": 6,
+          "minimum": 3,
+          "title": "Min Support Faces",
+          "type": "integer"
+        },
+        "min_support_area_ratio": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Min Support Area Ratio",
+          "type": "number"
+        },
+        "max_boundary_vertices": {
+          "default": 64,
+          "maximum": 256,
+          "minimum": 3,
+          "title": "Max Boundary Vertices",
+          "type": "integer"
+        },
+        "max_regions": {
+          "default": 64,
+          "maximum": 256,
+          "minimum": 1,
+          "title": "Max Regions",
+          "type": "integer"
+        },
+        "max_source_faces": {
+          "default": 200000,
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Max Source Faces",
+          "type": "integer"
+        },
+        "max_source_bytes": {
+          "default": 50000000,
+          "maximum": 250000000,
+          "minimum": 1,
+          "title": "Max Source Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "CompletionParameters",
+      "type": "object"
+    },
+    "DatasetAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "DatasetAsset",
+      "type": "object"
+    },
+    "MeshCoordinates": {
+      "additionalProperties": false,
+      "properties": {
+        "source_frame": {
+          "const": "LOCAL_ENU_METRES",
+          "default": "LOCAL_ENU_METRES",
+          "title": "Source Frame",
+          "type": "string"
+        },
+        "units": {
+          "const": "metre",
+          "default": "metre",
+          "title": "Units",
+          "type": "string"
+        },
+        "axis_convention": {
+          "default": [
+            "east",
+            "north",
+            "up"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "east",
+              "type": "string"
+            },
+            {
+              "const": "north",
+              "type": "string"
+            },
+            {
+              "const": "up",
+              "type": "string"
+            }
+          ],
+          "title": "Axis Convention",
+          "type": "array"
+        },
+        "alignment_verified": {
+          "const": true,
+          "title": "Alignment Verified",
+          "type": "boolean"
+        },
+        "altitude_reference": {
+          "minLength": 1,
+          "title": "Altitude Reference",
+          "type": "string"
+        },
+        "alignment_evidence": {
+          "$ref": "#/$defs/DatasetAsset"
+        }
+      },
+      "required": [
+        "alignment_verified",
+        "altitude_reference",
+        "alignment_evidence"
+      ],
+      "title": "MeshCoordinates",
+      "type": "object"
+    },
+    "MeshSource": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/DatasetAsset"
+        },
+        "coordinates": {
+          "$ref": "#/$defs/MeshCoordinates"
+        },
+        "geometry_source": {
+          "const": "OBSERVED_RECONSTRUCTION",
+          "default": "OBSERVED_RECONSTRUCTION",
+          "title": "Geometry Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "artifact",
+        "coordinates"
+      ],
+      "title": "MeshSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "contract_status": {
+      "const": "PROPOSED_NOT_INTEGRATED",
+      "default": "PROPOSED_NOT_INTEGRATED",
+      "title": "Contract Status",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "NOT_RUN",
+        "UNAVAILABLE",
+        "REJECTED",
+        "COMPLETED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "method": {
+      "const": "BOUNDED_PLANAR_GAP",
+      "default": "BOUNDED_PLANAR_GAP",
+      "title": "Method",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeshSource"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "parameters": {
+      "$ref": "#/$defs/CompletionParameters"
+    },
+    "runtime_s": {
+      "minimum": 0,
+      "title": "Runtime S",
+      "type": "number"
+    },
+    "generated_vertex_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Generated Vertex Count",
+      "type": "integer"
+    },
+    "generated_face_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Generated Face Count",
+      "type": "integer"
+    },
+    "accepted_regions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Accepted Regions",
+      "type": "array"
+    },
+    "rejected_regions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Rejected Regions",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "measurement_eligible": {
+      "const": false,
+      "default": false,
+      "title": "Measurement Eligible",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "status",
+    "reason",
+    "source",
+    "parameters",
+    "runtime_s"
+  ],
+  "title": "CompletionReport",
+  "type": "object"
+}

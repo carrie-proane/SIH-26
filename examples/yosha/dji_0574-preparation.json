@@ -1,0 +1,175 @@
+{
+  "accuracy_claim_status": "UNVERIFIED_NO_HELD_OUT_REFERENCE",
+  "blockers": [],
+  "checks": [
+    {
+      "details": {
+        "actual_sha256": "72651891c53acf108fc53fd8412e183a8edb03bfb59d853b3e8f40433700e7ed",
+        "expected_sha256": "72651891c53acf108fc53fd8412e183a8edb03bfb59d853b3e8f40433700e7ed",
+        "relative_path": "raw/capture.mp4",
+        "size_bytes": 241962258
+      },
+      "id": "asset.video",
+      "status": "PASS",
+      "summary": "Declared video hash matches"
+    },
+    {
+      "details": {
+        "actual_sha256": "795871e745666654c3e0b9bee06236def8c2a136144c226f7a64288eabb639ce",
+        "expected_sha256": "795871e745666654c3e0b9bee06236def8c2a136144c226f7a64288eabb639ce",
+        "relative_path": "raw/telemetry.srt",
+        "size_bytes": 170370
+      },
+      "id": "asset.telemetry",
+      "status": "PASS",
+      "summary": "Declared telemetry hash matches"
+    },
+    {
+      "details": {
+        "actual_sha256": "0fba069e65f6971cbacf8cb67a8bd498c22d798040da4f078d08b13b18535223",
+        "expected_sha256": "0fba069e65f6971cbacf8cb67a8bd498c22d798040da4f078d08b13b18535223",
+        "relative_path": "benchmark.json",
+        "size_bytes": 388
+      },
+      "id": "asset.benchmark_config",
+      "status": "PASS",
+      "summary": "Declared benchmark_config hash matches"
+    },
+    {
+      "details": {
+        "average_frame_rate": "30000/1001",
+        "codec": "h264",
+        "duration_s": 32.265567,
+        "height": 2160,
+        "path": "/home/scaiety/Documents/Cllg/hackathon/SIH-26-datasets/dji_0574-development/raw/capture.mp4",
+        "pixel_format": "yuv420p",
+        "rotation": null,
+        "size_bytes": 241962258,
+        "width": 3840
+      },
+      "id": "input.video",
+      "status": "PASS",
+      "summary": "Video stream is readable"
+    },
+    {
+      "details": {
+        "duration_s": 32.22,
+        "field_coverage": {
+          "alt_m": 1.0,
+          "lat": 1.0,
+          "lon": 1.0
+        },
+        "path": "/home/scaiety/Documents/Cllg/hackathon/SIH-26-datasets/dji_0574-development/raw/telemetry.srt",
+        "row_count": 1075,
+        "sample_rate_hz_estimated": 33.333,
+        "source_dialect": "gps_tuple",
+        "source_format": "dji_srt",
+        "warnings": []
+      },
+      "id": "input.telemetry",
+      "status": "PASS",
+      "summary": "Telemetry is readable"
+    },
+    {
+      "details": {
+        "absolute_difference_s": 0.04556699999999836,
+        "telemetry_duration_s": 32.22,
+        "tolerance_s": 6.4531133999999994,
+        "video_duration_s": 32.265567
+      },
+      "id": "input.duration_coverage",
+      "status": "PASS",
+      "summary": "Telemetry plausibly covers the video duration"
+    },
+    {
+      "details": {
+        "enable_dense_reconstruction": false,
+        "execution_mode": "COLMAP",
+        "profile": "balanced"
+      },
+      "id": "benchmark.configuration",
+      "status": "PASS",
+      "summary": "Benchmark configuration is compatible with real execution"
+    },
+    {
+      "details": {},
+      "id": "capture.metadata",
+      "status": "PASS",
+      "summary": "Capture device and recording mode are declared"
+    },
+    {
+      "details": {},
+      "id": "capture.calibration",
+      "status": "WARN",
+      "summary": "No independent camera calibration was supplied; intrinsics remain uncertain"
+    },
+    {
+      "details": {
+        "duration_s": 32.265567,
+        "profile": "balanced",
+        "representative_ten_minute_input": false
+      },
+      "id": "benchmark.workload_profile",
+      "status": "PASS",
+      "summary": "Benchmark profile matches the declared workload phase"
+    },
+    {
+      "details": {
+        "declared": "VIDEO_START_RELATIVE"
+      },
+      "id": "telemetry.time_basis",
+      "status": "PASS",
+      "summary": "Telemetry time basis is declared"
+    },
+    {
+      "details": {},
+      "id": "telemetry.altitude_reference",
+      "status": "WARN",
+      "summary": "Telemetry vertical datum is unknown; vertical/geolocated accuracy is unavailable"
+    },
+    {
+      "details": {
+        "held_out_positional_checkpoints": 0,
+        "held_out_relative_distances": 0
+      },
+      "id": "references.independent_evaluation",
+      "status": "WARN",
+      "summary": "No held-out reference is supplied; reconstruction may run but accuracy remains unverified"
+    }
+  ],
+  "dataset_id": "dji_0574_development",
+  "dataset_role": "DEVELOPMENT",
+  "declared_assets": {
+    "benchmark_config": {
+      "relative_path": "benchmark.json",
+      "sha256": "0fba069e65f6971cbacf8cb67a8bd498c22d798040da4f078d08b13b18535223"
+    },
+    "telemetry": {
+      "relative_path": "raw/telemetry.srt",
+      "sha256": "795871e745666654c3e0b9bee06236def8c2a136144c226f7a64288eabb639ce"
+    },
+    "video": {
+      "relative_path": "raw/capture.mp4",
+      "sha256": "72651891c53acf108fc53fd8412e183a8edb03bfb59d853b3e8f40433700e7ed"
+    }
+  },
+  "generated_at": "2026-09-21T18:17:37.245451+00:00",
+  "limitations": [
+    "Preparation validates declared inputs; it does not run reconstruction or establish accuracy.",
+    "Missing held-out references do not block reconstruction, but do block an accuracy-pass claim.",
+    "Large-scene runtime and memory behavior require execution on the target server."
+  ],
+  "manifest_path": "/home/scaiety/Documents/Cllg/hackathon/SIH-26-datasets/dji_0574-development/dataset.manifest.json",
+  "manifest_sha256": "2b5d7a012ab5be7c81604927169cf8893f46430b6fb5d61947e1b7cdc463978e",
+  "ready_for_explicit_execution": true,
+  "reconstruction_started": false,
+  "reconstruction_tools_checked": false,
+  "schema_version": "1.0",
+  "status": "READY_WITH_WARNINGS",
+  "synthetic_example": false,
+  "warnings": [
+    "capture.calibration",
+    "telemetry.altitude_reference",
+    "references.independent_evaluation"
+  ]
+}

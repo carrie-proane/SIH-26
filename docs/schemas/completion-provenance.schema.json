@@ -1,0 +1,191 @@
+{
+  "$defs": {
+    "DatasetAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "DatasetAsset",
+      "type": "object"
+    },
+    "MeshCoordinates": {
+      "additionalProperties": false,
+      "properties": {
+        "source_frame": {
+          "const": "LOCAL_ENU_METRES",
+          "default": "LOCAL_ENU_METRES",
+          "title": "Source Frame",
+          "type": "string"
+        },
+        "units": {
+          "const": "metre",
+          "default": "metre",
+          "title": "Units",
+          "type": "string"
+        },
+        "axis_convention": {
+          "default": [
+            "east",
+            "north",
+            "up"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "east",
+              "type": "string"
+            },
+            {
+              "const": "north",
+              "type": "string"
+            },
+            {
+              "const": "up",
+              "type": "string"
+            }
+          ],
+          "title": "Axis Convention",
+          "type": "array"
+        },
+        "alignment_verified": {
+          "const": true,
+          "title": "Alignment Verified",
+          "type": "boolean"
+        },
+        "altitude_reference": {
+          "minLength": 1,
+          "title": "Altitude Reference",
+          "type": "string"
+        },
+        "alignment_evidence": {
+          "$ref": "#/$defs/DatasetAsset"
+        }
+      },
+      "required": [
+        "alignment_verified",
+        "altitude_reference",
+        "alignment_evidence"
+      ],
+      "title": "MeshCoordinates",
+      "type": "object"
+    },
+    "MeshSource": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/DatasetAsset"
+        },
+        "coordinates": {
+          "$ref": "#/$defs/MeshCoordinates"
+        },
+        "geometry_source": {
+          "const": "OBSERVED_RECONSTRUCTION",
+          "default": "OBSERVED_RECONSTRUCTION",
+          "title": "Geometry Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "artifact",
+        "coordinates"
+      ],
+      "title": "MeshSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/MeshSource"
+    },
+    "output": {
+      "$ref": "#/$defs/DatasetAsset"
+    },
+    "geometry_source": {
+      "const": "AI_INFERRED",
+      "default": "AI_INFERRED",
+      "title": "Geometry Source",
+      "type": "string"
+    },
+    "confidence_label": {
+      "const": "AI_ASSISTED_NOT_MEASURABLE",
+      "default": "AI_ASSISTED_NOT_MEASURABLE",
+      "title": "Confidence Label",
+      "type": "string"
+    },
+    "method": {
+      "const": "BOUNDED_PLANAR_GAP",
+      "default": "BOUNDED_PLANAR_GAP",
+      "title": "Method",
+      "type": "string"
+    },
+    "measurable": {
+      "const": false,
+      "default": false,
+      "title": "Measurable",
+      "type": "boolean"
+    },
+    "face_ids": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Face Ids",
+      "type": "array"
+    },
+    "regions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Regions",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "score_semantics": {
+      "const": "RULE_BASED_NOT_CALIBRATED_PROBABILITY",
+      "default": "RULE_BASED_NOT_CALIBRATED_PROBABILITY",
+      "title": "Score Semantics",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "output",
+    "face_ids",
+    "regions",
+    "assumptions"
+  ],
+  "title": "CompletionProvenance",
+  "type": "object"
+}

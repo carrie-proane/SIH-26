@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "dji_0574_development",
+  "dataset_role": "DEVELOPMENT",
+  "description": "User-supplied real 32.265567-second DJI clip. Development only; no independent references. Source display rotation is -180 degrees; downstream extraction must honor it.",
+  "synthetic_example": false,
+  "video": {
+    "path": "raw/capture.mp4",
+    "sha256": "72651891c53acf108fc53fd8412e183a8edb03bfb59d853b3e8f40433700e7ed"
+  },
+  "telemetry": {
+    "path": "raw/telemetry.srt",
+    "sha256": "795871e745666654c3e0b9bee06236def8c2a136144c226f7a64288eabb639ce"
+  },
+  "benchmark_config": {
+    "path": "benchmark.json",
+    "sha256": "0fba069e65f6971cbacf8cb67a8bd498c22d798040da4f078d08b13b18535223"
+  },
+  "capture": {
+    "device_make": "DJI (container encoder metadata)",
+    "device_model": "UNKNOWN",
+    "recording_mode": "3840x2160 H.264, 30000/1001 fps; source display rotation -180 degrees",
+    "calibration": null
+  },
+  "telemetry_metadata": {
+    "time_basis": "VIDEO_START_RELATIVE",
+    "altitude_reference": "UNKNOWN"
+  },
+  "references": {
+    "coordinate_system": null,
+    "relative_distances": [],
+    "positional_checkpoints": []
+  }
+}

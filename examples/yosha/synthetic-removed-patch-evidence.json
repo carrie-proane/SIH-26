@@ -1,0 +1,38 @@
+{
+  "deterministic_output": "Checked by repeated independent outputs in unit test",
+  "evidence_origin": "SYNTHETIC_FIXTURE",
+  "generated_face_count": 6,
+  "limitations": [
+    "Ideal flat removed-patch behavior only; no real completion quality claim."
+  ],
+  "measurement_eligible": false,
+  "real_gap_accuracy": null,
+  "real_gap_accuracy_reason": "No real reference geometry supplied",
+  "removed_patch_plane_max_error_m": 0.0,
+  "schema_version": "1.0",
+  "source": {
+    "artifact": {
+      "path": "observed.ply",
+      "sha256": "111823e2e601ee7e1a093f1e00d9ee9c91a86c4a8804290588f8927b17980432"
+    },
+    "coordinates": {
+      "alignment_evidence": {
+        "path": "alignment.json",
+        "sha256": "78628a0a0cb0aa42cc0cff5b62739292077ea302455d6805f528e8420e7c78a0"
+      },
+      "alignment_verified": true,
+      "altitude_reference": "SYNTHETIC_LOCAL_Z",
+      "axis_convention": [
+        "east",
+        "north",
+        "up"
+      ],
+      "source_frame": "LOCAL_ENU_METRES",
+      "units": "metre"
+    },
+    "geometry_source": "OBSERVED_RECONSTRUCTION",
+    "run_id": "synthetic_removed_patch"
+  },
+  "source_immutability": "Checked in unit test",
+  "status": "COMPLETED"
+}
