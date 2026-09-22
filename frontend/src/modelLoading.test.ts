@@ -20,13 +20,22 @@ const manifest = {
       texture_urls: ["/api/atlas.png"],
     },
     gaussian_splat: { available: false, url: null },
+    inferred_geometry: { available: true, url: "/api/inferred.ply", format: "PLY" },
+    completed_geometry: { available: true, url: "/api/completed.ply", format: "PLY" },
   },
 } as ViewerManifest;
 
 describe("declared visual artifact loading", () => {
   it("allows only URLs published by the manifest", () => {
     const urls = declaredVisualArtifactUrls(manifest);
-    expect(urls).toEqual(new Set(["/api/evidence.ply", "/api/fused.ply", "/api/model.glb", "/api/atlas.png"]));
+    expect(urls).toEqual(new Set([
+      "/api/evidence.ply",
+      "/api/fused.ply",
+      "/api/model.glb",
+      "/api/inferred.ply",
+      "/api/completed.ply",
+      "/api/atlas.png",
+    ]));
     expect(isDeclaredVisualArtifact(manifest, "/api/model.glb")).toBe(true);
     expect(isDeclaredVisualArtifact(manifest, "/api/secret.ply")).toBe(false);
   });

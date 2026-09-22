@@ -22,6 +22,18 @@ const manifest = {
       url: "/dense/model.splat",
       measurement_eligible: true,
     },
+    inferred_geometry: {
+      available: true,
+      url: "/completion/inferred.ply",
+      format: "PLY",
+      measurement_eligible: false,
+    },
+    completed_geometry: {
+      available: true,
+      url: "/completion/completed.ply",
+      format: "PLY",
+      measurement_eligible: false,
+    },
   },
 } as ViewerManifest;
 
@@ -38,6 +50,8 @@ describe("visual reconstruction protections", () => {
     expect(visualModeMeasurementEligible("EVIDENCE", {} as ViewerManifest)).toBe(false);
     expect(visualModeMeasurementEligible("TEXTURED", manifest)).toBe(false);
     expect(visualModeMeasurementEligible("PHOTOREAL", manifest)).toBe(false);
+    expect(visualModeMeasurementEligible("INFERRED", manifest)).toBe(false);
+    expect(visualModeMeasurementEligible("BOTH", manifest)).toBe(false);
     expect(visualArtifactMeasurementLabel("EVIDENCE", manifest)).toBe(
       "measurement eligible",
     );
@@ -51,6 +65,9 @@ describe("visual reconstruction protections", () => {
     expect(visualModeAvailable("TEXTURED", {} as ViewerManifest)).toBe(false);
     expect(visualModeAvailable("TEXTURED", manifest)).toBe(true);
     expect(visualModeAvailable("PHOTOREAL", manifest)).toBe(false);
+    expect(visualModeAvailable("INFERRED", manifest)).toBe(true);
+    expect(visualModeAvailable("BOTH", manifest)).toBe(true);
+    expect(visualModeReason("INFERRED", manifest)).toMatch(/measurement disabled/i);
     expect(visualModeReason("PHOTOREAL", manifest)).toMatch(/Photoreal View unavailable/);
     expect(visualModeReason("TEXTURED", {} as ViewerManifest)).toMatch(/not declared/);
     expect(visualModeReason("EVIDENCE", {} as ViewerManifest)).toMatch(

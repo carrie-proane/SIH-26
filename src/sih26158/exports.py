@@ -927,7 +927,7 @@ def _read_las_summary(path: Path) -> dict[str, Any]:
     }
 
 
-def _mesh_candidates(record: RunRecord) -> list[str]:
+def _mesh_candidates(record: RunRecord, *, include_inferred: bool = False) -> list[str]:
     declared = _declared(record)
     priority = [
         "dense/textured/model.ply",
@@ -954,10 +954,10 @@ def _mesh_candidates(record: RunRecord) -> list[str]:
         if path.lower().endswith(".ply")
         and any(token in path.lower() for token in ("inferred", "completion", "generated"))
     ]
-    return list(dict.fromkeys([*candidates, *inferred]))
+    return list(dict.fromkeys([*candidates, *inferred] if include_inferred else candidates))
 
 
-def _point_candidates(record: RunRecord) -> list[str]:
+def _point_candidates(record: RunRecord, *, include_inferred: bool = False) -> list[str]:
     declared = _declared(record)
     candidates = [
         path
@@ -971,7 +971,7 @@ def _point_candidates(record: RunRecord) -> list[str]:
         and any(token in path.lower() for token in ("inferred", "completion", "generated"))
         and path not in candidates
     ]
-    if inferred:
+    if include_inferred and inferred:
         candidates.append(inferred[0])
     return candidates
 
@@ -1001,12 +1001,14 @@ def _export_mesh_formats(
     record: RunRecord,
     run_dir: Path,
     coordinate_contract: dict[str, Any],
+    *,
+    include_inferred: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     obj_exports: list[dict[str, Any]] = []
     glb_exports: list[dict[str, Any]] = []
     obj_failures: list[dict[str, str]] = []
     glb_failures: list[dict[str, str]] = []
-    candidates = _mesh_candidates(record)
+    candidates = _mesh_candidates(record, include_inferred=include_inferred)
     for source_relative in candidates:
         try:
             mesh, source_path, textures = _mesh_context(record, run_dir, source_relative)
@@ -1014,7 +1016,20 @@ def _export_mesh_formats(
             dependency_hashes = {relative: artifact.sha256 for relative, _, artifact in textures}
             provenance = _source_provenance(source_relative)
             eligible = _source_measurement_eligible(record, source_relative)
-            variant = "inferred" if provenance == "INFERRED" else "visual-mesh"
+            variant = (
+                "completed"
+                if Path(source_relative).name == "completed_geometry.ply"
+                else "inferred"
+                if provenance == "INFERRED"
+                else "visual-mesh"
+            )
+            completion_metadata: dict[str, Any] | None = None
+            if provenance == "INFERRED" and "completion_status.json" in _declared(record):
+                completion_path = _verified_artifact(record, run_dir, "completion_status.json")
+                completion_metadata = json.loads(completion_path.read_text(encoding="utf-8"))
+                dependency_hashes["completion_status.json"] = _declared(record)[
+                    "completion_status.json"
+                ].sha256
             unsupported_attributes = _unsupported_mesh_attributes(mesh)
             common_options = {
                 "source_coordinate_frame": "LOCAL_ENU_METRES",
@@ -1027,6 +1042,7 @@ def _export_mesh_formats(
                     "Property names are disclosed in this hash-bound manifest and values remain "
                     "in the unchanged source PLY; they are not silently relabelled."
                 ),
+                "completion_metadata": completion_metadata,
             }
             obj_exports.append(
                 _publish_package(
@@ -1113,10 +1129,12 @@ def _export_las(
     record: RunRecord,
     run_dir: Path,
     coordinate_contract: dict[str, Any],
+    *,
+    include_inferred: bool = False,
 ) -> dict[str, Any]:
     exports: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
-    for source_relative in _point_candidates(record):
+    for source_relative in _point_candidates(record, include_inferred=include_inferred):
         try:
             source_path = _verified_artifact(record, run_dir, source_relative)
             geometry = _load_ply(source_path)
@@ -1195,7 +1213,9 @@ def _export_las(
     return _format_summary(exports, failures)
 
 
-def build_export_readiness(record: RunRecord, run_dir: Path) -> dict[str, Any]:
+def build_export_readiness(
+    record: RunRecord, run_dir: Path, *, include_inferred: bool = False
+) -> dict[str, Any]:
     """Generate and validate reusable export packages from already-declared geometry."""
 
     declared = _declared(record)
@@ -1230,9 +1250,11 @@ def build_export_readiness(record: RunRecord, run_dir: Path) -> dict[str, Any]:
 
     coordinate_contract = _coordinate_contract(record, run_dir)
     formats["OBJ"], formats["GLB_GLTF"] = _export_mesh_formats(
-        record, run_dir, coordinate_contract
+        record, run_dir, coordinate_contract, include_inferred=include_inferred
     )
-    formats["LAS"] = _export_las(record, run_dir, coordinate_contract)
+    formats["LAS"] = _export_las(
+        record, run_dir, coordinate_contract, include_inferred=include_inferred
+    )
     formats["GEOTIFF"] = {
         "status": "UNAVAILABLE",
         "reason": (
@@ -1270,6 +1292,8 @@ def build_export_readiness(record: RunRecord, run_dir: Path) -> dict[str, Any]:
             "Export never changes geometry provenance or measurement eligibility. The current "
             "measurement API remains bound to declared PLY evidence geometry."
         ),
+        "geometry_selection": "OBSERVED_AND_COMPLETED" if include_inferred else "OBSERVED_ONLY",
+        "completed_geometry_requires_explicit_selection": True,
     }
 
 

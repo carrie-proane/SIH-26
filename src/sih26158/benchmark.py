@@ -150,6 +150,8 @@ def build_benchmark_report(
             "passed": target_passed if target_status in {"PASS", "FAIL"} else None,
         },
         "execution": {
+            "requested_matcher": record.requested_matcher or record.config.matcher,
+            "executed_matcher": record.executed_matcher,
             "source_revision": record.environment.get("git_revision"),
             "source_dirty": record.environment.get("git_dirty"),
             "tool_versions": record.environment,

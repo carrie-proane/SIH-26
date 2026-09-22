@@ -155,6 +155,10 @@ def test_synthetic_pipeline_exercises_exact_states_and_declares_artifacts(tmp_pa
     assert "export_readiness.json" in declared
     assert "benchmark_report.json" in declared
     assert "server_capabilities.json" in declared
+    assert "segmentation_status.json" in declared
+    assert "sparse/mask_usage.json" in declared
+    assert "coverage_report.json" in declared
+    assert "completion_status.json" in declared
     quality = json.loads(
         (store.run_dir(project.project_id, result.run_id) / "quality_report.json").read_text()
     )
@@ -425,7 +429,15 @@ def test_completed_stages_are_checkpointed_but_not_declared_as_evidence(tmp_path
     )
 
     assert result.status == RunStatus.COMPLETED
-    assert set(checkpoint.completed) == {"INGEST", "PREPROCESS", "SPARSE", "REPORT"}
+    assert set(checkpoint.completed) == {
+        "INGEST",
+        "PREPROCESS",
+        "SEGMENTATION",
+        "SPARSE",
+        "COVERAGE",
+        "COMPLETION",
+        "REPORT",
+    }
     assert checkpoint.active_stage is None
     assert ".pipeline_checkpoint.json" not in {
         artifact.relative_path for artifact in result.artifacts

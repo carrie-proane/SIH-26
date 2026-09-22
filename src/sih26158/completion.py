@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,7 @@ from .completion_contract import (
 )
 from .dataset import DatasetAsset, resolve_dataset_asset
 from .exports import _load_ply
+from .process_control import ProcessCancelledError, ProcessTimeoutError
 from .storage import atomic_json, sha256_file
 
 
@@ -197,9 +199,21 @@ def complete_planar_gaps(
     *,
     parameters: CompletionParameters | None = None,
     reviews: tuple[GapReview, ...] = (),
+    cancel_requested: Callable[[], bool] | None = None,
+    timeout_s: float = 60.0,
 ) -> CompletionReport:
     """Write a fresh, external derived bundle; never modify or publish a source run."""
     started = time.monotonic()
+    if not np.isfinite(timeout_s) or not 0 < timeout_s <= 3600:
+        raise ValueError("Invalid completion timeout")
+
+    def check_control() -> None:
+        if cancel_requested and cancel_requested():
+            raise ProcessCancelledError("Completion cancellation requested")
+        if time.monotonic() - started >= timeout_s:
+            raise ProcessTimeoutError("Completion exceeded its cooperative deadline")
+
+    check_control()
     parameters = parameters or CompletionParameters()
     source_root, output_dir = source_root.resolve(), output_dir.resolve()
     if output_dir == source_root or source_root in output_dir.parents:
@@ -212,6 +226,7 @@ def complete_planar_gaps(
     try:
         if source is not None:
             mesh = load_observed_mesh(source_root, source, parameters)
+            check_control()
             loops, edge_faces = boundary_loops(mesh)
             if len(loops) > parameters.max_regions:
                 raise MeshUnavailable("Boundary region limit exceeded")
@@ -222,6 +237,7 @@ def complete_planar_gaps(
             if unknown:
                 raise ValueError("Reviews reference boundaries absent from the source mesh")
             for loop in loops:
+                check_control()
                 region = assess_gap(mesh, loop, edge_faces, parameters)
                 review = review_map.get(region["boundary_id"])
                 if review is None or review.decision != "CONFIRMED_SMALL_GAP":
@@ -253,6 +269,7 @@ def complete_planar_gaps(
                 accepted.append(region)
             verified_asset(source_root, source.artifact)
             verified_asset(source_root, source.coordinates.alignment_evidence)
+            check_control()
             if accepted:
                 patch = trimesh.Trimesh(
                     vertices=generated_vertices, faces=generated_faces, process=False
@@ -290,6 +307,8 @@ def complete_planar_gaps(
                     "REJECTED",
                     "No boundary passed geometry and source-image review gates",
                 )
+    except (ProcessCancelledError, ProcessTimeoutError):
+        raise
     except MeshUnavailable as exc:
         status, reason = "UNAVAILABLE", str(exc)
     except (OSError, ValueError, RuntimeError, IndexError) as exc:

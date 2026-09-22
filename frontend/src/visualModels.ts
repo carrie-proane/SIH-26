@@ -4,6 +4,8 @@ import { modelFormat } from "./modelLoading";
 function modelForMode(mode: VisualMode, manifest: ViewerManifest) {
   if (mode === "TEXTURED") return manifest.visual_models?.textured_mesh;
   if (mode === "PHOTOREAL") return manifest.visual_models?.gaussian_splat;
+  if (mode === "INFERRED") return manifest.visual_models?.inferred_geometry;
+  if (mode === "BOTH") return manifest.visual_models?.completed_geometry;
   return manifest.visual_models?.evidence_cloud;
 }
 
@@ -19,12 +21,19 @@ export function visualModeAvailable(mode: VisualMode, manifest: ViewerManifest):
 }
 
 export function visualModeReason(mode: VisualMode, manifest: ViewerManifest): string {
+  const model = modelForMode(mode, manifest);
   if (mode === "EVIDENCE") {
     return visualModeMeasurementEligible(mode, manifest)
       ? "Default evidence geometry · measurement eligible"
       : "Default evidence geometry · verified measurement unavailable";
   }
-  const model = modelForMode(mode, manifest);
+  if (mode === "INFERRED" || mode === "BOTH") {
+    const label = mode === "INFERRED" ? "Inferred geometry" : "Observed + inferred geometry";
+    if (!model?.available || !model.url) {
+      return model?.statement ?? `${label} is unavailable for this run.`;
+    }
+    return `${label} · AI-assisted visual only · measurement disabled`;
+  }
   if (!model?.available || !model.url) {
     return model?.statement ?? `${mode === "TEXTURED" ? "Textured model" : "Photoreal view"} was not declared by this run.`;
   }

@@ -7,11 +7,14 @@ import type {
   MeasurementCreatePayload,
   MeasurementListResponse,
   MeasurementRecordPayload,
+  ProjectListResponse,
   ProjectManifest,
   ProvenanceOrigin,
   QualityReport,
   RunRecord,
   RunReadiness,
+  RunListResponse,
+  RunConfiguration,
   ViewerBundle,
   ViewerManifest,
 } from "./types";
@@ -66,13 +69,21 @@ export async function uploadProject(input: {
   return request<ProjectManifest>("/api/projects", { method: "POST", body });
 }
 
-export function getProject(projectId: string): Promise<ProjectManifest> {
-  return request<ProjectManifest>(`/api/projects/${projectId}`);
+export function getProjects(signal?: AbortSignal): Promise<ProjectListResponse> {
+  return request<ProjectListResponse>("/api/projects", { signal });
+}
+
+export function getProject(projectId: string, signal?: AbortSignal): Promise<ProjectManifest> {
+  return request<ProjectManifest>(`/api/projects/${projectId}`, { signal });
+}
+
+export function getProjectRuns(projectId: string, signal?: AbortSignal): Promise<RunListResponse> {
+  return request<RunListResponse>(`/api/projects/${projectId}/runs`, { signal });
 }
 
 export async function startRun(
   projectId: string,
-  config: Record<string, unknown>,
+  config: RunConfiguration | Record<string, unknown>,
 ): Promise<RunRecord> {
   return request<RunRecord>(`/api/projects/${projectId}/runs`, {
     method: "POST",
@@ -81,17 +92,17 @@ export async function startRun(
   });
 }
 
-export function getRun(runId: string): Promise<RunRecord> {
-  return request<RunRecord>(`/api/runs/${runId}`);
+export function getRun(runId: string, signal?: AbortSignal): Promise<RunRecord> {
+  return request<RunRecord>(`/api/runs/${runId}`, { signal });
 }
 
-export function getRunReadiness(runId: string): Promise<RunReadiness> {
-  return request<RunReadiness>(`/api/runs/${runId}/readiness`);
+export function getRunReadiness(runId: string, signal?: AbortSignal): Promise<RunReadiness> {
+  return request<RunReadiness>(`/api/runs/${runId}/readiness`, { signal });
 }
 
 export function rerunRun(
   runId: string,
-  config: Record<string, unknown>,
+  config: RunConfiguration | Record<string, unknown>,
 ): Promise<RunRecord> {
   return request<RunRecord>(`/api/runs/${runId}/rerun`, {
     method: "POST",
@@ -100,12 +111,55 @@ export function rerunRun(
   });
 }
 
-export function getExports(runId: string): Promise<ExportReadiness> {
-  return request<ExportReadiness>(`/api/runs/${runId}/exports`);
+export function resumeRun(runId: string): Promise<RunRecord> {
+  return request<RunRecord>(`/api/runs/${runId}/resume`, { method: "POST" });
 }
 
-export function createExports(runId: string): Promise<ExportReadiness> {
-  return request<ExportReadiness>(`/api/runs/${runId}/exports`, { method: "POST" });
+export function getExports(runId: string, signal?: AbortSignal): Promise<ExportReadiness> {
+  return request<ExportReadiness>(`/api/runs/${runId}/exports`, { signal });
+}
+
+export function createExports(
+  runId: string,
+  includeCompletedGeometry = false,
+): Promise<ExportReadiness> {
+  return request<ExportReadiness>(`/api/runs/${runId}/exports`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ include_completed_geometry: includeCompletedGeometry }),
+  });
+}
+
+export function getSegmentationStatus(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/runs/${runId}/segmentation`, { signal });
+}
+
+export function getCoverageStatus(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/runs/${runId}/coverage`, { signal });
+}
+
+export function getCompletionStatus(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/runs/${runId}/completion`, { signal });
+}
+
+export function requestCompletion(
+  runId: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/runs/${runId}/completion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function createMeasurement(
@@ -119,16 +173,19 @@ export function createMeasurement(
   });
 }
 
-export function getMeasurements(runId: string): Promise<MeasurementListResponse> {
-  return request<MeasurementListResponse>(`/api/runs/${runId}/measurements`);
+export function getMeasurements(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<MeasurementListResponse> {
+  return request<MeasurementListResponse>(`/api/runs/${runId}/measurements`, { signal });
 }
 
 export function cancelRun(runId: string): Promise<RunRecord> {
   return request<RunRecord>(`/api/runs/${runId}/cancel`, { method: "POST" });
 }
 
-export function getViewerManifest(runId: string): Promise<ViewerManifest> {
-  return request<ViewerManifest>(`/api/runs/${runId}/viewer-manifest`);
+export function getViewerManifest(runId: string, signal?: AbortSignal): Promise<ViewerManifest> {
+  return request<ViewerManifest>(`/api/runs/${runId}/viewer-manifest`, { signal });
 }
 
 export async function pollRun(
@@ -138,10 +195,20 @@ export async function pollRun(
 ): Promise<RunRecord> {
   for (;;) {
     if (signal?.aborted) throw new DOMException("Run polling cancelled", "AbortError");
-    const record = await getRun(runId);
+    const record = await getRun(runId, signal);
     onUpdate(record);
     if (["COMPLETED", "FAILED", "CANCELLED"].includes(record.status)) return record;
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(resolve, 750);
+      signal?.addEventListener(
+        "abort",
+        () => {
+          window.clearTimeout(timeout);
+          reject(new DOMException("Run polling cancelled", "AbortError"));
+        },
+        { once: true },
+      );
+    });
   }
 }
 
@@ -151,16 +218,21 @@ function numberFrom(row: Record<string, string>, names: string[], fallback = 0):
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export async function loadViewerBundle(manifest: ViewerManifest): Promise<ViewerBundle> {
+export async function loadViewerBundle(
+  manifest: ViewerManifest,
+  signal?: AbortSignal,
+): Promise<ViewerBundle> {
   const [cameraResponse, keyframeResponse, qualityResponse, ingestResponse, confidenceResponse] = await Promise.all([
-    fetch(resolveAssetUrl(manifest.camera_path.url)),
-    fetch(resolveAssetUrl(manifest.selected_frames.url)),
-    fetch(resolveAssetUrl(manifest.quality_report_url)),
+    fetch(resolveAssetUrl(manifest.camera_path.url), { signal }),
+    fetch(resolveAssetUrl(manifest.selected_frames.url), { signal }),
+    manifest.quality_report_url
+      ? fetch(resolveAssetUrl(manifest.quality_report_url), { signal })
+      : Promise.resolve(null),
     manifest.ingest_report_url
-      ? fetch(resolveAssetUrl(manifest.ingest_report_url))
+      ? fetch(resolveAssetUrl(manifest.ingest_report_url), { signal })
       : Promise.resolve(null),
     manifest.confidence.available && manifest.confidence.url
-      ? fetch(resolveAssetUrl(manifest.confidence.url))
+      ? fetch(resolveAssetUrl(manifest.confidence.url), { signal })
       : Promise.resolve(null),
   ]);
   for (const response of [cameraResponse, keyframeResponse, qualityResponse, ingestResponse]) {
@@ -182,7 +254,33 @@ export async function loadViewerBundle(manifest: ViewerManifest): Promise<Viewer
   const keyframes = Array.isArray(keyframePayload)
     ? keyframePayload
     : (keyframePayload.frames ?? []);
-  const quality = (await qualityResponse.json()) as QualityReport;
+  const quality = qualityResponse
+    ? ((await qualityResponse.json()) as QualityReport)
+    : ({
+        schema_version: "1.0",
+        project_id: manifest.project_id,
+        run_id: manifest.run_id,
+        status: "NOT_READY_SPARSE_PREVIEW",
+        synthetic_fixture: manifest.synthetic_fixture,
+        source_provenance: manifest.source_provenance,
+        video_origin: manifest.video_origin,
+        telemetry_origin: manifest.telemetry_origin,
+        genuine_real_evidence: manifest.genuine_real_evidence,
+        metrics: {},
+        warnings: [
+          {
+            code: "QUALITY_REPORT_PENDING",
+            message: "Sparse evidence is available while final quality reporting is still pending.",
+          },
+        ],
+        limitations: ["Final quality, dense, export, and target evaluations are not ready."],
+        confidence_artifact: {
+          available: false,
+          measurement_confidence_available: false,
+          reason: "Final confidence validation is pending.",
+          contract: {},
+        },
+      } satisfies QualityReport);
   const ingest = ingestResponse ? await ingestResponse.json() : null;
   const pointConfidence =
     confidenceResponse?.ok

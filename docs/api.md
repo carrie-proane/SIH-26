@@ -12,6 +12,17 @@ curl -X POST http://127.0.0.1:8000/api/projects \
 The response is the immutable project manifest, including original filenames, sizes, MIME types,
 and SHA-256 checksums.
 
+The operator catalog is server-authoritative and supports refresh/deep-link recovery:
+
+```bash
+curl -f http://127.0.0.1:8000/api/projects
+curl -f http://127.0.0.1:8000/api/projects/PROJECT_ID/runs
+```
+
+The first response contains `projects`; the second contains newest-first `runs`. A run's
+`derived_from_run_id` distinguishes a linked rerun from an original run. The browser stores only
+the selected IDs in `?project=...&run=...`, then refetches these endpoints.
+
 ## Start a run
 
 ```bash
@@ -28,8 +39,12 @@ curl -X POST http://127.0.0.1:8000/api/projects/PROJECT_ID/runs \
   }'
 ```
 
-Poll `GET /api/runs/RUN_ID`. The response contains `stage`, `status`, `progress`, an actionable
+Poll `GET /api/runs/RUN_ID`. The response contains `stage`, `status`, backend-reported `progress`, an actionable
 `failure_reason`, the event history, and declared artifacts.
+
+Only `SIFT` is currently executable. `SUPERPOINT_LIGHTGLUE` remains a proposed experiment and is
+rejected with HTTP 422; no SIFT execution is relabelled as learned matching. Additive run fields
+`requested_matcher` and `executed_matcher` keep configuration and actual execution distinct.
 
 The following run fields are additive and safe for older clients to ignore:
 `processing_started_at`, `processing_completed_at`, `stage_timings_s`, and
@@ -51,14 +66,18 @@ directory listing and will not guess a filesystem path.
 
 ## Open the operator viewer
 
-After the run declares a cloud, camera poses, selected frames and quality report:
+As soon as the run declares a cloud, camera poses and selected frames:
 
 ```bash
 curl http://127.0.0.1:8000/api/runs/RUN_ID/viewer-manifest
 ```
 
-This is Arnav's stable frontend payload. Incomplete runs return HTTP 409 with the exact missing
-artifact classes. The renderer uses declared artifact URLs only and never fabricates success data.
+This is the operator frontend payload. `preview_mode: SPARSE_EARLY` and a null
+`quality_report_url` explicitly mean that observed sparse evidence is viewable while final quality
+reporting is pending. Incomplete runs return HTTP 409 only when a minimum viewer artifact class is
+missing. The renderer uses declared artifact URLs only and never fabricates success data. Optional
+`completion.status: NOT_RUN` keeps future inferred geometry separate without changing the existing
+confidence enum.
 
 ## Automatic preprocessing and optional handoff override
 
@@ -279,6 +298,19 @@ Selected fields from a successful mesh-capable response are:
   }
 }
 ```
+
+`GET /api/runs/RUN_ID/exports` also adds a declared `bundle_url` to each available OBJ package.
+Use it to obtain the OBJ, MTL, textures and provenance manifest together without reconstructing a
+server filesystem path:
+
+```bash
+curl -f http://127.0.0.1:8000/api/runs/RUN_ID/exports -o exports.json
+OBJ_BUNDLE_URL=$(jq -r '.formats.OBJ.exports[0].bundle_url' exports.json)
+curl -f "http://127.0.0.1:8000${OBJ_BUNDLE_URL}" -o model-obj-package.zip
+```
+
+PLY is downloaded through `viewer-manifest.cloud.url`; LAS/OBJ/GLB files, sidecars and manifests
+come only from their declared `url` fields. GeoTIFF and FBX have no download URL while unavailable.
 
 The real response also includes options, coordinate contracts, validation, checksums, sizes and
 media types. Every item in `files` is in the run's declared artifact index. Download a

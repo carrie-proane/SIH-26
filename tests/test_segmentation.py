@@ -329,3 +329,4 @@ def test_class_policy_uses_actual_model_names_and_explicit_predict_settings(tmp_
     assert np.all(mask[:, 0] == 255) and np.all(mask[:, 1] == 0) and np.all(mask[:, 2] == 255)
     assert calls[0]["device"] == "cpu" and calls[0]["retina_masks"] is True
     assert calls[0]["max_det"] == 100 and calls[0]["imgsz"] == 640
+    assert calls[0]["iou"] == 0.7

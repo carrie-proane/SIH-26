@@ -28,12 +28,12 @@ multiple API processes. Neither internal file is registered or downloadable as e
 
 ## Ownership boundary
 
-Jay owns the project/run API, run state, ffprobe report, COLMAP invocation, alignment utilities,
-matcher decision, quality report, known-distance evidence, and end-to-end command. Yosha's frame
-and telemetry modules are integrated into the ordinary upload route; a compatible external handoff
-remains an optional debugging override. Arnav owns the final
-`viewer-manifest` endpoint and browser implementation; `examples/viewer-manifest.json` freezes the
-payload Jay publishes for UI development.
+Jay owns the operator frontend, project/run API, run state, backend integration, measurement policy,
+artifact publication, server execution and final evaluation. Yosha owns dataset/reference
+preparation, segmentation/model improvements, coverage diagnostics and constrained/symmetry
+completion algorithms. Existing frame, telemetry and mask contracts remain integrated; a compatible
+external handoff remains an optional debugging override. Future completion output must be additive,
+separate inferred geometry and remain excluded from verified measurement.
 
 ## Invariants
 

@@ -284,7 +284,21 @@ class ProjectStore:
             raise FileNotFoundError(project_id)
         return ProjectManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def list_projects(self) -> list[ProjectManifest]:
+        projects: list[ProjectManifest] = []
+        for path in sorted(self.root.glob("*/manifest.json")):
+            try:
+                projects.append(ProjectManifest.model_validate_json(path.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                continue
+        return sorted(projects, key=lambda item: item.created_at, reverse=True)
+
     def create_run(self, project_id: str, config: RunConfig) -> RunRecord:
+        if config.matcher != "SIFT":
+            raise ValueError(
+                "SUPERPOINT_LIGHTGLUE is not an executable reconstruction provider; use SIFT. "
+                "The learned matcher remains an offline comparison experiment."
+            )
         project = self.get_project(project_id)
         run_id = self.new_id("run")
         directory = self.run_dir(project_id, run_id)
@@ -301,6 +315,7 @@ class ProjectStore:
             source_provenance=project.source_provenance,
             video_origin=project.video_origin,
             telemetry_origin=project.telemetry_origin,
+            requested_matcher=config.matcher,
         )
         self.save_run(record)
         return record

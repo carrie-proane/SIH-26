@@ -9,8 +9,7 @@
 7. Show registered-frame rate, reprojection error, known-distance error, and the separate limitations.
 8. Open `matcher_benchmark.json` and explain why SIFT or SuperPoint+LightGlue was retained.
 9. Fetch the PLY through the declared artifact URL; demonstrate that undeclared paths return 404.
-10. Hand the stable sample viewer manifest to Arnav's UI and finish with the offline/local boundary.
+10. Open the stable viewer manifest in the operator UI and finish with the offline/server boundary.
 
 If real input or COLMAP is unavailable, use `make demo` only as an orchestration smoke test. State
 clearly that its PLY and metrics are synthetic fixtures and are not feasibility evidence.
-

@@ -50,6 +50,8 @@ interface PointCloudViewerProps {
 
 interface PickedPoint {
   position: THREE.Vector3;
+  sourceCoordinates: [number, number, number];
+  pointId: number | null;
   label?: ConfidenceLabel;
 }
 
@@ -60,6 +62,21 @@ const DISABLED_LABELS = new Set<ConfidenceLabel>([
 
 function scenePosition(x: number, y: number, z: number): THREE.Vector3 {
   return new THREE.Vector3(x, z, -y);
+}
+
+function sourcePosition(position: THREE.Vector3): [number, number, number] {
+  return [position.x, -position.z, position.y];
+}
+
+function disposeGroup(group: THREE.Group) {
+  group.traverse((object) => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points) {
+      object.geometry?.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material?.dispose());
+    }
+  });
+  group.clear();
 }
 
 function makeMarker(position: THREE.Vector3, color: string, radius = 0.075): THREE.Mesh {
@@ -104,6 +121,10 @@ export function PointCloudViewer({
   const framePresentation = coordinateFramePresentation(
     loadedModelMode === "TEXTURED"
       ? manifest.visual_models?.textured_mesh?.coordinate_frame
+      : loadedModelMode === "INFERRED"
+        ? manifest.visual_models?.inferred_geometry?.coordinate_frame
+        : loadedModelMode === "BOTH"
+          ? manifest.visual_models?.completed_geometry?.coordinate_frame
       : manifest.cloud.coordinate_frame,
   );
 
@@ -201,7 +222,7 @@ export function PointCloudViewer({
 
     const clearMeasurement = () => {
       pickedPointsRef.current = [];
-      measurementGroup.clear();
+      disposeGroup(measurementGroup);
     };
 
     const onPointerDown = (event: PointerEvent) => {
@@ -227,7 +248,15 @@ export function PointCloudViewer({
       }
 
       if (pickedPointsRef.current.length >= 2) clearMeasurement();
-      const picked = { position: intersection.point.clone(), label };
+      const localIndex = typeof intersection.index === "number" ? intersection.index : null;
+      const pointIds = intersection.object.userData.pointIds as number[] | undefined;
+      const pointId = localIndex === null ? null : pointIds?.[localIndex] ?? localIndex;
+      const picked = {
+        position: intersection.point.clone(),
+        sourceCoordinates: sourcePosition(intersection.point),
+        pointId,
+        label,
+      };
       pickedPointsRef.current.push(picked);
       measurementGroup.add(makeMarker(picked.position, "#f8fff9"));
 
@@ -239,6 +268,7 @@ export function PointCloudViewer({
           message: confidenceReadyRef.current
             ? "First confidence-qualified point selected. Choose a second point."
             : "Visual estimate - verification confidence unavailable. Choose a second point.",
+          endpoints: undefined,
         });
         return;
       }
@@ -259,6 +289,10 @@ export function PointCloudViewer({
           labels: [],
           status: "CAUTION",
           message: "Visual estimate - verification confidence unavailable",
+          endpoints: [
+            { coordinates: first.sourceCoordinates, point_id: first.pointId },
+            { coordinates: second.sourceCoordinates, point_id: second.pointId },
+          ],
         });
         return;
       }
@@ -277,6 +311,10 @@ export function PointCloudViewer({
             : status === "CONFIRM"
               ? "Low-confidence geometry requires explicit operator confirmation."
               : "Measurement includes medium-confidence geometry; use with caution.",
+        endpoints: [
+          { coordinates: first.sourceCoordinates, point_id: first.pointId },
+          { coordinates: second.sourceCoordinates, point_id: second.pointId },
+        ],
       });
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
@@ -303,7 +341,11 @@ export function PointCloudViewer({
       }
       return mode === "TEXTURED"
         ? manifest.visual_models?.textured_mesh
-        : manifest.visual_models?.gaussian_splat;
+        : mode === "PHOTOREAL"
+          ? manifest.visual_models?.gaussian_splat
+          : mode === "INFERRED"
+            ? manifest.visual_models?.inferred_geometry
+            : manifest.visual_models?.completed_geometry;
     };
 
     const fitLoadedObject = (object: THREE.Object3D, positions?: THREE.BufferAttribute) => {
@@ -369,8 +411,8 @@ export function PointCloudViewer({
         pointConfidence !== null &&
         pointConfidence.points.length === position.count;
       confidenceReadyRef.current = explicitConfidence;
-      if (targetMode === "TEXTURED") {
-        pointGroup.name = "textured-visual-model-not-measurement-evidence";
+      if (targetMode === "TEXTURED" || targetMode === "INFERRED" || targetMode === "BOTH") {
+        pointGroup.name = `${targetMode.toLowerCase()}-visual-model-not-measurement-evidence`;
         const meshGeometry = new THREE.BufferGeometry();
         meshGeometry.setAttribute("position", renderedPosition);
         if (geometry.index) meshGeometry.setIndex(geometry.index.clone());
@@ -425,9 +467,9 @@ export function PointCloudViewer({
         pointGroup.add(mesh);
       } else if (explicitConfidence) {
         pointGroup.name = "explicit-confidence-point-cloud";
-        const grouped = new Map<ConfidenceLabel, { positions: number[]; colors: number[] }>();
+        const grouped = new Map<ConfidenceLabel, { positions: number[]; colors: number[]; pointIds: number[] }>();
         for (const item of manifest.confidence_legend) {
-          grouped.set(item.label, { positions: [], colors: [] });
+          grouped.set(item.label, { positions: [], colors: [], pointIds: [] });
         }
         for (const point of pointConfidence.points) {
           const group = grouped.get(point.confidence_class);
@@ -436,6 +478,7 @@ export function PointCloudViewer({
             renderedPosition.getY(point.point_id),
             renderedPosition.getZ(point.point_id),
           );
+          group?.pointIds.push(point.point_id);
           if (group && color) {
             group.colors.push(
               color.getX(point.point_id),
@@ -465,6 +508,7 @@ export function PointCloudViewer({
             }),
           );
           points.userData.confidence = item.label;
+          points.userData.pointIds = values.pointIds;
           points.visible = visibleLabelsRef.current.has(item.label);
           labelObjectsRef.current.set(item.label, points);
           pointObjectsRef.current.push(points);
@@ -486,6 +530,7 @@ export function PointCloudViewer({
             opacity: 0.95,
           }),
         );
+        points.userData.pointIds = Array.from({ length: renderedPosition.count }, (_, index) => index);
         pointObjectsRef.current.push(points);
         pointGroup.add(points);
       }
@@ -534,7 +579,8 @@ export function PointCloudViewer({
           geometry.dispose();
         } else if (format === "GLB") {
           const glb = await parseGlb(buffer);
-          glb.rotation.x = -Math.PI / 2;
+          // GLB exports already map local ENU to (east, up, -north); applying another
+          // viewer rotation here would corrupt axes and measurements.
           loaded = { object: glb };
           confidenceReadyRef.current = false;
         } else {
@@ -558,7 +604,10 @@ export function PointCloudViewer({
       }
     };
 
-    void loadRequested(visualMode, true);
+    void loadRequested(
+      visualMode,
+      visualMode === "TEXTURED" || visualMode === "PHOTOREAL",
+    );
 
     const animate = () => {
       controls.update();
@@ -578,7 +627,10 @@ export function PointCloudViewer({
         if (object instanceof THREE.Points || object instanceof THREE.Line || object instanceof THREE.Mesh) {
           object.geometry?.dispose();
           const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((material) => material?.dispose());
+          materials.forEach((material) => {
+            if (material && "map" in material) (material as THREE.MeshBasicMaterial).map?.dispose();
+            material?.dispose();
+          });
         }
       });
       renderer.dispose();
@@ -600,7 +652,7 @@ export function PointCloudViewer({
 
   useEffect(() => {
     pickedPointsRef.current = [];
-    measurementGroupRef.current?.clear();
+    if (measurementGroupRef.current) disposeGroup(measurementGroupRef.current);
   }, [measurementResetKey]);
 
   useEffect(() => {
@@ -628,6 +680,10 @@ export function PointCloudViewer({
         <span className="live-dot" />
         <span>{(loadedModelMode === "TEXTURED"
           ? manifest.visual_models?.textured_mesh?.coordinate_frame
+          : loadedModelMode === "INFERRED"
+            ? manifest.visual_models?.inferred_geometry?.coordinate_frame
+            : loadedModelMode === "BOTH"
+              ? manifest.visual_models?.completed_geometry?.coordinate_frame
           : manifest.cloud.coordinate_frame)?.replaceAll("_", " ")}</span>
         <span className="viewport-divider" />
         <span>{visualModelLabel(loadedModelMode)}</span>

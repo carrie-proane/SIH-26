@@ -11,7 +11,7 @@ The seven-day contract is the controlling scope for this repository. Jay owns:
 - End-to-end command, failure diagnostics, run manifest, frozen dependencies, and backend walkthrough.
 
 Yosha owns telemetry parsing, interpolation, frame extraction/scoring/selection, masks, and the
-preprocessing fixtures. Arnav owns the browser UI and final viewer-manifest renderer. This backend
+preprocessing fixtures. Jay now owns the browser UI and final viewer-manifest renderer. This backend
 therefore validates those handoffs but does not silently absorb or impersonate their work.
 
 ## Ultra-detailed playbook

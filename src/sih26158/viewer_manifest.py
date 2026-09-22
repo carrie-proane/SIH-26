@@ -35,7 +35,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
-    """Render Arnav's stable browser payload from Jay's declared artifacts.
+    """Render the stable operator-browser payload from declared run artifacts.
 
     The endpoint deliberately uses only artifacts already declared on the run.
     It does not guess files, publish the run directory, or invent successful
@@ -55,7 +55,6 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "cloud": cloud_path,
         "camera path": "camera_poses.csv" if "camera_poses.csv" in artifacts else None,
         "selected frames": "keyframes.json" if "keyframes.json" in artifacts else None,
-        "quality report": "quality_report.json" if "quality_report.json" in artifacts else None,
     }
     missing = [name for name, relative_path in required.items() if relative_path is None]
     if missing:
@@ -63,7 +62,8 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
             "Viewer is not ready; missing declared artifacts: " + ", ".join(missing)
         )
 
-    quality = _read_json(run_dir / "quality_report.json")
+    quality_ready = "quality_report.json" in artifacts
+    quality = _read_json(run_dir / "quality_report.json") if quality_ready else {}
     known_distance = quality.get("metrics", {}).get("known_distance", {})
     if not isinstance(known_distance, dict):
         known_distance = {}
@@ -115,15 +115,52 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
             candidate = validation.get("viewer_face_filter_contract")
             if isinstance(candidate, dict):
                 texture_validity = candidate
-    evidence_measurement_eligible = record.source_provenance not in {
-        ProvenanceOrigin.SYNTHETIC,
-        ProvenanceOrigin.UNKNOWN,
-    }
+    evidence_measurement_eligible = (
+        cloud_path == "sparse/sparse_local.ply"
+        and record.source_provenance == ProvenanceOrigin.REAL
+        and record.config.execution_mode != "SYNTHETIC_DEMO"
+    )
+    completion_payload: dict[str, Any] = {}
+    if "completion_status.json" in artifacts:
+        try:
+            completion_payload = _read_json(run_dir / "completion_status.json")
+        except ViewerManifestUnavailable:
+            completion_payload = {
+                "status": "failed",
+                "failure_reason": "Declared completion status is unreadable",
+            }
+    completion_status = str(completion_payload.get("status", "not_run")).upper()
+
+    def declared_completion_model(url_key: str, *, completed: bool = False) -> dict[str, Any]:
+        url = completion_payload.get(url_key)
+        relative = (
+            str(url).split("/artifacts/", 1)[1]
+            if isinstance(url, str) and "/artifacts/" in url
+            else None
+        )
+        available = bool(relative and relative in artifacts)
+        return {
+            "available": available,
+            "url": artifacts[relative].url if available and relative else None,
+            "format": "PLY" if available else None,
+            "coordinate_frame": "LOCAL_ENU_METRES" if available else None,
+            "measurement_eligible": False,
+            "statement": (
+                "Observed and purple inferred faces; visual only, never measurement evidence."
+                if completed
+                else "AI-inferred patch only; visual only, never captured or measured geometry."
+            ),
+        }
+
+    completed_model = declared_completion_model("artifact_url", completed=True)
+    inferred_model = declared_completion_model("inferred_artifact_url")
 
     return {
         "schema_version": "1.0",
         "project_id": record.project_id,
         "run_id": record.run_id,
+        "preview_mode": "FINAL_REPORT" if quality_ready else "SPARSE_EARLY",
+        "quality_report_ready": quality_ready,
         "stage": record.stage,
         "status": record.status,
         "synthetic_fixture": record.synthetic_fixture,
@@ -133,10 +170,13 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
         "genuine_real_evidence": record.source_provenance == ProvenanceOrigin.REAL,
         "cloud": {
             "url": artifacts[cloud_path].url,
+            "relative_path": cloud_path,
+            "sha256": artifacts[cloud_path].sha256,
             "format": "PLY",
             "coordinate_frame": coordinate_frame,
             "color_mode": "PHOTOGRAPHIC_RGB",
             "color_mode_label": "Photographic RGB",
+            "measurement_eligible": evidence_measurement_eligible,
         },
         "visual_models": {
             "evidence_cloud": {
@@ -171,6 +211,8 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 "measurement_eligible": False,
                 "statement": "Photoreal View unavailable; no Gaussian Splatting was installed or run.",
             },
+            "completed_geometry": completed_model,
+            "inferred_geometry": inferred_model,
             "dense_report_url": (
                 artifacts["dense_report.json"].url if "dense_report.json" in artifacts else None
             ),
@@ -189,7 +231,9 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
             "contract": confidence_contract(),
         },
         "measurement_reference": measurement_reference,
-        "quality_report_url": artifacts["quality_report.json"].url,
+        "quality_report_url": (
+            artifacts["quality_report.json"].url if quality_ready else None
+        ),
         "ingest_report_url": (
             artifacts["ingest_report.json"].url if "ingest_report.json" in artifacts else None
         ),
@@ -204,11 +248,49 @@ def build_viewer_manifest(record: RunRecord, run_dir: Path) -> dict[str, Any]:
                 if "segmentation_comparison.json" in artifacts
                 else None
             ),
+            "segmentation_status_url": (
+                artifacts["segmentation_status.json"].url
+                if "segmentation_status.json" in artifacts
+                else None
+            ),
+        },
+        "coverage": {
+            "available": "coverage_report.json" in artifacts,
+            "report_url": (
+                artifacts["coverage_report.json"].url
+                if "coverage_report.json" in artifacts
+                else None
+            ),
         },
         "ai_overlay": {
             "available": False,
             "label": "AI_ASSISTED_NOT_MEASURABLE",
             "measurement": "DISABLED",
             "reason": "No declared Depth Anything overlay artifact exists for this run.",
+        },
+        "completion": {
+            "status": completion_status,
+            "available": completed_model["available"],
+            "report_url": (
+                artifacts["completion_status.json"].url
+                if "completion_status.json" in artifacts
+                else None
+            ),
+            "method": completion_payload.get("method"),
+            "confidence": completion_payload.get("confidence"),
+            "warnings": completion_payload.get("warnings", []),
+            "completed_geometry": completed_model,
+            "inferred_geometry": inferred_model
+            | {
+                "provenance": (
+                    "AI_INFERRED" if inferred_model["available"] else "INFERRED_NOT_PRODUCED"
+                )
+            },
+            "reason": completion_payload.get("failure_reason")
+            or (
+                "Completion is available as separate observed-plus-inferred and inferred-only artifacts."
+                if completed_model["available"]
+                else "No completion artifact was declared by this run."
+            ),
         },
     }

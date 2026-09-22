@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -122,7 +123,10 @@ def test_experiment_preserves_raw_float_depth_and_labels_png_visual_only(tmp_pat
             str(model),
         ],
     )
-    assert script.main() == 0
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert script.main() == 0
+    assert not [item for item in caught if issubclass(item.category, DeprecationWarning)]
     saved = np.load(output / "frame_relative_depth.npy", allow_pickle=False)
     assert saved.dtype == np.float32 and np.array_equal(saved, raw[0])
     evidence = json.loads((output / "depth_anything_evidence.json").read_text())

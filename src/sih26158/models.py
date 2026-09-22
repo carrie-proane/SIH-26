@@ -108,6 +108,19 @@ class RunConfig(BaseModel):
     vocab_tree_path: str | None = None
     enable_segmentation: bool = False
     segmentation_model_path: str | None = None
+    segmentation_model_name: str | None = None
+    segmentation_model_version: str | None = None
+    segmentation_device: Literal["cpu", "cuda", "mps"] = "cpu"
+    segmentation_allow_cpu_fallback: bool = False
+    segmentation_confidence: float = Field(default=0.25, gt=0, le=1)
+    segmentation_iou_threshold: float = Field(default=0.7, gt=0, le=1)
+    segmentation_image_size: int = Field(default=640, ge=32, le=4096)
+    segmentation_mask_dilation_px: int = Field(default=0, ge=0, le=64)
+    segmentation_mask_erosion_px: int = Field(default=0, ge=0, le=64)
+    segmentation_excluded_classes: list[str] = Field(
+        default_factory=lambda: ["bicycle", "bus", "car", "motorcycle", "person", "sky", "truck"]
+    )
+    segmentation_timeout_s: float = Field(default=300, gt=0, le=3600)
     reconstruction_target: Literal["FULL_SCENE", "PRIMARY_SUBJECT"] = "FULL_SCENE"
     masking_mode: Literal["OFF", "AUTO", "REQUIRED"] = "OFF"
     enable_dense_reconstruction: bool = False
@@ -120,6 +133,9 @@ class RunConfig(BaseModel):
     processing_max_image_dimension: int | None = Field(default=None, ge=640, le=16384)
     worker_threads: int = Field(default=0, ge=0, le=256)
     coverage_interval_s: float = Field(default=60.0, gt=0, le=600)
+    enable_coverage_analysis: bool = True
+    enable_completion: bool = False
+    completion_timeout_s: float = Field(default=60, gt=0, le=3600)
     dataset_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,80}$")
     dataset_role: Literal["DEVELOPMENT", "VALIDATION", "HELD_OUT"] | None = None
     dataset_manifest_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -156,6 +172,14 @@ class RunConfig(BaseModel):
                 raise ValueError("PRIMARY_SUBJECT reconstruction requires AUTO or REQUIRED masking")
         if self.enable_segmentation and self.masking_mode == "OFF":
             self.masking_mode = "AUTO"
+        if self.segmentation_image_size % 32:
+            raise ValueError("segmentation_image_size must be a multiple of 32")
+        normalized_classes = [item.strip().lower() for item in self.segmentation_excluded_classes]
+        if any(not item for item in normalized_classes) or len(normalized_classes) != len(
+            set(normalized_classes)
+        ):
+            raise ValueError("segmentation_excluded_classes must be unique non-empty names")
+        self.segmentation_excluded_classes = normalized_classes
         if self.max_selected_frames > self.max_candidate_frames:
             raise ValueError("max_selected_frames cannot exceed max_candidate_frames")
         return self
@@ -217,12 +241,23 @@ class RunRecord(BaseModel):
     processing_completed_at: str | None = None
     stage_timings_s: dict[str, float] = Field(default_factory=dict)
     derived_from_run_id: str | None = None
+    requested_matcher: Literal["SIFT", "SUPERPOINT_LIGHTGLUE"] | None = None
+    executed_matcher: Literal["SIFT"] | None = None
 
 
 class StageCheckpoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    stage: Literal["INGEST", "PREPROCESS", "SPARSE", "DENSE", "REPORT"]
+    stage: Literal[
+        "INGEST",
+        "PREPROCESS",
+        "SEGMENTATION",
+        "SPARSE",
+        "DENSE",
+        "COVERAGE",
+        "COMPLETION",
+        "REPORT",
+    ]
     completed_at: str = Field(default_factory=utc_now)
     artifacts: dict[str, str] = Field(default_factory=dict)
     warnings: list[dict[str, str]] = Field(default_factory=list)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -9,7 +11,10 @@ from typing import Annotated
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, ConfigDict
+from starlette.background import BackgroundTask
 
+from .ai_integration import CompletionRequest, run_completion
 from .exports import build_export_readiness, export_artifact_paths, write_export_readiness
 from .models import (
     MeasurementCreate,
@@ -24,6 +29,12 @@ from .pipeline import PipelineRunner
 from .report import measurement_evaluation
 from .storage import ProjectStore
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
+
+
+class ExportCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include_completed_geometry: bool = False
 
 
 def create_app(data_root: str | Path | None = None) -> FastAPI:
@@ -82,12 +93,36 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(status_code=404, detail="Project not found") from exc
 
+    @app.get("/api/projects")
+    def list_projects() -> dict[str, object]:
+        projects = store.list_projects()
+        return {
+            "schema_version": "1.0",
+            "projects": [item.model_dump(mode="json") for item in projects],
+        }
+
+    @app.get("/api/projects/{project_id}/runs")
+    def list_project_runs(project_id: str) -> dict[str, object]:
+        try:
+            store.get_project(project_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Project not found") from exc
+        runs = [item for item in store.list_runs() if item.project_id == project_id]
+        runs.sort(key=lambda item: item.created_at, reverse=True)
+        return {
+            "schema_version": "1.0",
+            "project_id": project_id,
+            "runs": [item.model_dump(mode="json") for item in runs],
+        }
+
     @app.post("/api/projects/{project_id}/runs", response_model=RunRecord, status_code=202)
     def create_run(project_id: str, config: RunConfig) -> RunRecord:
         try:
             record = store.create_run(project_id, config)
-        except (FileNotFoundError, ValueError) as exc:
+        except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Project not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         runner.submit(record.run_id)
         return record
 
@@ -163,10 +198,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Run not found") from exc
         return {
             "run_id": run_id,
-            "artifacts": [
-                item.model_dump(mode="json")
-                for item in record.artifacts
-            ],
+            "artifacts": [item.model_dump(mode="json") for item in record.artifacts],
         }
 
     @app.get("/api/runs/{run_id}/readiness")
@@ -198,6 +230,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 }
             except (OSError, ValueError, json.JSONDecodeError):
                 export_summary = {"REPORT": "INVALID"}
+        ai_summary: dict[str, object] = {}
+        for label, relative in (
+            ("segmentation", "segmentation_status.json"),
+            ("coverage", "coverage_report.json"),
+            ("completion", "completion_status.json"),
+        ):
+            if relative not in artifacts:
+                ai_summary[label] = {"status": "not_ready", "url": None}
+                continue
+            try:
+                path = store.resolve_declared_artifact(run_id, relative)
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                ai_summary[label] = {
+                    "status": payload.get("status", "invalid"),
+                    "url": f"/api/runs/{run_id}/{label}",
+                    "failure_reason": payload.get("failure_reason"),
+                }
+            except (OSError, ValueError, json.JSONDecodeError):
+                ai_summary[label] = {"status": "invalid", "url": None}
         return {
             "schema_version": "1.0",
             "run_id": run_id,
@@ -215,18 +266,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ),
             "dense_visual_artifacts": sorted(dense_visuals),
             "measurement_geometry": (
-                "sparse/sparse_local.ply"
-                if "sparse/sparse_local.ply" in artifacts
-                else None
+                "sparse/sparse_local.ply" if "sparse/sparse_local.ply" in artifacts else None
             ),
             "inferred_geometry_measurement_eligible": False,
             "export_report_ready": "export_readiness.json" in artifacts,
             "export_report_url": (
-                f"/api/runs/{run_id}/exports"
-                if "export_readiness.json" in artifacts
-                else None
+                f"/api/runs/{run_id}/exports" if "export_readiness.json" in artifacts else None
             ),
             "export_status": export_summary,
+            "segmentation": ai_summary["segmentation"],
+            "coverage": ai_summary["coverage"],
+            "completion": ai_summary["completion"],
         }
 
     @app.get("/api/runs/{run_id}/exports")
@@ -244,10 +294,126 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Export report is invalid") from exc
         if not isinstance(payload, dict):
             raise HTTPException(status_code=409, detail="Export report is invalid")
+        formats = payload.get("formats", {})
+        if isinstance(formats, dict):
+            obj = formats.get("OBJ", {})
+            if isinstance(obj, dict):
+                exports = obj.get("exports", [])
+                if isinstance(exports, list):
+                    for index, item in enumerate(exports):
+                        if isinstance(item, dict):
+                            item["bundle_url"] = f"/api/runs/{run_id}/export-bundles/OBJ/{index}"
         return payload
 
+    def ai_status(run_id: str, relative_path: str, label: str) -> dict[str, object]:
+        try:
+            store.get_run(run_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Run not found") from exc
+        try:
+            path = store.resolve_declared_artifact(run_id, relative_path)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=409, detail=f"{label} status is not ready") from exc
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=f"{label} status is invalid") from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=409, detail=f"{label} status is invalid")
+        return payload
+
+    @app.get("/api/runs/{run_id}/segmentation")
+    def get_segmentation(run_id: str) -> dict[str, object]:
+        return ai_status(run_id, "segmentation_status.json", "Segmentation")
+
+    @app.get("/api/runs/{run_id}/coverage")
+    def get_coverage(run_id: str) -> dict[str, object]:
+        return ai_status(run_id, "coverage_report.json", "Coverage")
+
+    @app.get("/api/runs/{run_id}/completion")
+    def get_completion(run_id: str) -> dict[str, object]:
+        return ai_status(run_id, "completion_status.json", "Completion")
+
+    @app.post("/api/runs/{run_id}/completion", status_code=status.HTTP_201_CREATED)
+    def create_completion(run_id: str, request: CompletionRequest) -> dict[str, object]:
+        try:
+            record = store.get_run(run_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Run not found") from exc
+        if record.status not in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}:
+            raise HTTPException(status_code=409, detail="Completion requires a terminal run")
+        with store.execution_lock(run_id) as execution_lock:
+            if not execution_lock.acquired:
+                raise HTTPException(status_code=409, detail="A run or completion job is active")
+            record = store.get_run(run_id)
+            run_dir = store.run_dir(record.project_id, record.run_id)
+            checkpoint = runner._load_checkpoint(record)
+            runner._begin_checkpoint_stage(record, checkpoint, "COMPLETION")
+            try:
+                payload, paths, _ = run_completion(
+                    record,
+                    run_dir,
+                    request,
+                    cancel_requested=lambda: runner._cancel_path(record).exists(),
+                )
+                store.register_artifacts(record, paths)
+                completion_warnings = [
+                    {"code": "COMPLETION_WARNING", "message": str(message)}
+                    for message in payload.get("warnings", [])
+                ]
+                runner._complete_checkpoint_stage(
+                    record, checkpoint, "COMPLETION", paths, completion_warnings
+                )
+            except (OSError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return payload
+
+    @app.get("/api/runs/{run_id}/export-bundles/{format_name}/{export_index}")
+    def download_export_bundle(run_id: str, format_name: str, export_index: int) -> FileResponse:
+        if format_name != "OBJ" or export_index < 0:
+            raise HTTPException(status_code=404, detail="Export bundle not found")
+        payload = export_readiness(run_id)
+        try:
+            item = payload["formats"][format_name]["exports"][export_index]  # type: ignore[index]
+            files = item["files"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise HTTPException(status_code=404, detail="Export bundle not found") from exc
+        if not isinstance(files, list) or not files:
+            raise HTTPException(status_code=409, detail="Export bundle contains no files")
+        with tempfile.NamedTemporaryFile(
+            prefix=f"{run_id}-obj-", suffix=".zip", delete=False
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+        try:
+            resolved: list[tuple[Path, str]] = []
+            relative_paths = [
+                Path(str(file.get("relative_path", ""))) for file in files if isinstance(file, dict)
+            ]
+            if len(relative_paths) != len(files):
+                raise ValueError("Export bundle contains an invalid file entry")
+            common_parent = Path(os.path.commonpath([str(path.parent) for path in relative_paths]))
+            for relative in relative_paths:
+                source = store.resolve_declared_artifact(run_id, relative.as_posix())
+                archive_name = relative.relative_to(common_parent).as_posix()
+                resolved.append((source, archive_name))
+            with zipfile.ZipFile(
+                temporary_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
+            ) as archive:
+                for source, archive_name in resolved:
+                    archive.write(source, archive_name)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            temporary_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return FileResponse(
+            temporary_path,
+            media_type="application/zip",
+            filename=f"{run_id}-obj-{export_index}.zip",
+            background=BackgroundTask(temporary_path.unlink, missing_ok=True),
+        )
+
     @app.post("/api/runs/{run_id}/exports", status_code=status.HTTP_201_CREATED)
-    def create_exports(run_id: str) -> dict[str, object]:
+    def create_exports(
+        run_id: str, request: ExportCreateRequest | None = None
+    ) -> dict[str, object]:
         """Convert already-declared terminal-run geometry without reconstruction."""
 
         try:
@@ -271,7 +437,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
             run_dir = store.run_dir(record.project_id, record.run_id)
             try:
-                payload = build_export_readiness(record, run_dir)
+                payload = build_export_readiness(
+                    record,
+                    run_dir,
+                    include_inferred=bool(request and request.include_completed_geometry),
+                )
                 report_path = run_dir / "export_readiness.json"
                 write_export_readiness(report_path, payload)
                 generated = export_artifact_paths(payload, run_dir)
@@ -289,7 +459,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             return store.add_measurement(run_id, measurement)
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Run or geometry artifact not found") from exc
+            raise HTTPException(
+                status_code=404, detail="Run or geometry artifact not found"
+            ) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 

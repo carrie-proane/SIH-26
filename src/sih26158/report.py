@@ -479,6 +479,8 @@ def build_quality_report(
             ),
         },
         "execution": {
+            "requested_matcher": record.requested_matcher or record.config.matcher,
+            "executed_matcher": record.executed_matcher,
             "stage_timings_s": record.stage_timings_s,
             "processing_started_at": record.processing_started_at,
             "processing_completed_at": record.processing_completed_at,

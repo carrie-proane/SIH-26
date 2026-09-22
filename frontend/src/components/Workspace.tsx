@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { resolveAssetUrl } from "../api";
+import { createExports, createMeasurement, getExports, getMeasurements, resolveAssetUrl } from "../api";
 import type {
   ConfidenceLabel,
+  ExportReadiness,
   Keyframe,
+  MeasurementRecordPayload,
   MeasurementResult,
   ProjectManifest,
+  RunConfiguration,
+  RunReadiness,
   RunRecord,
   VisualMode,
   ViewerBundle,
@@ -22,7 +26,13 @@ interface WorkspaceProps {
   bundle: ViewerBundle;
   project: ProjectManifest | null;
   run: RunRecord | null;
+  readiness: RunReadiness | null;
+  actionBusy: string;
+  globalError: string;
   onReset: () => void;
+  onCancel?: () => void;
+  onResume?: () => void;
+  onRerun: (config: RunConfiguration) => void;
 }
 
 const IDLE_MEASUREMENT: MeasurementResult = {
@@ -37,12 +47,12 @@ const UNVERIFIED_VISUAL_ESTIMATE: MeasurementResult = {
   message: "Visual estimate - verification confidence unavailable",
 };
 
-function displayPercent(value: number | undefined): string {
-  return value === undefined ? "—" : `${(value * 100).toFixed(0)}%`;
+function displayPercent(value: number | null | undefined): string {
+  return value == null ? "Not evaluated" : `${(value * 100).toFixed(0)}%`;
 }
 
-function displayNumber(value: number | undefined, suffix = ""): string {
-  return value === undefined ? "—" : `${value.toFixed(2)}${suffix}`;
+function displayNumber(value: number | null | undefined, suffix = ""): string {
+  return value == null ? "Not evaluated" : `${value.toFixed(2)}${suffix}`;
 }
 
 function displayBytes(value: number): string {
@@ -101,7 +111,7 @@ function SourcePreview({
   );
 }
 
-export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
+export function Workspace({ bundle, project, run, readiness, actionBusy, globalError, onReset, onCancel, onResume, onRerun }: WorkspaceProps) {
   const { manifest, cameraPoses, keyframes, quality, pointConfidence } = bundle;
   const confidenceAvailable = manifest.confidence.available && pointConfidence !== null;
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(
@@ -122,6 +132,32 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
   const [showDepth, setShowDepth] = useState(false);
   const [showMask, setShowMask] = useState(false);
   const [panel, setPanel] = useState<"TRUST" | "SOURCE">("TRUST");
+  const [measurements, setMeasurements] = useState<MeasurementRecordPayload[]>([]);
+  const [measurementError, setMeasurementError] = useState("");
+  const [measurementSaving, setMeasurementSaving] = useState(false);
+  const [referenceId, setReferenceId] = useState("");
+  const [referenceValue, setReferenceValue] = useState("");
+  const [referenceMethod, setReferenceMethod] = useState("");
+  const [referenceRole, setReferenceRole] = useState<"NONE" | "SCALE_CONTROL" | "HELD_OUT_EVALUATION">("NONE");
+  const [exports, setExports] = useState<ExportReadiness | null>(null);
+  const [exportError, setExportError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [rerunInclude, setRerunInclude] = useState("");
+  const [rerunExclude, setRerunExclude] = useState("");
+
+  useEffect(() => {
+    if (!run) return;
+    const controller = new AbortController();
+    void getMeasurements(run.run_id, controller.signal).then((result) => setMeasurements(result.measurements)).catch((cause) => {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) setMeasurementError(cause instanceof Error ? cause.message : "Measurements unavailable.");
+    });
+    if (readiness?.export_report_ready) {
+      void getExports(run.run_id, controller.signal).then(setExports).catch((cause) => {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) setExportError(cause instanceof Error ? cause.message : "Export report unavailable.");
+      });
+    }
+    return () => controller.abort();
+  }, [run?.run_id, readiness?.export_report_ready]);
 
   const selectedFrame = useMemo(
     () => keyframes.find((frame) => frame.frame_index === selectedFrameIndex),
@@ -155,12 +191,42 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
   const measurementGeometryEligible = visualModeMeasurementEligible(visualMode, manifest);
   const framePresentation = coordinateFramePresentation(manifest.cloud.coordinate_frame);
   const inputAssets = project?.assets ?? bundle.ingest?.input_assets ?? [];
-  const liveReferenceError =
-    measurement.distanceM !== null && measurementReference.reference_m
-      ? (Math.abs(measurement.distanceM - measurementReference.reference_m) /
-          measurementReference.reference_m) *
-        100
-      : null;
+  const saveMeasurement = async () => {
+    if (!run || !measurement.endpoints || !manifest.cloud.relative_path || !manifest.cloud.sha256) return;
+    setMeasurementSaving(true); setMeasurementError("");
+    try {
+      const saved = await createMeasurement(run.run_id, {
+        geometry_artifact_path: manifest.cloud.relative_path,
+        geometry_artifact_sha256: manifest.cloud.sha256,
+        start: measurement.endpoints[0], end: measurement.endpoints[1],
+        coordinate_frame: manifest.cloud.coordinate_frame, units: "m", measurement_kind: "DISTANCE_3D",
+        reference_id: referenceId.trim() || null,
+        reference_value_m: referenceRole === "NONE" || !referenceValue ? null : Number(referenceValue),
+        reference_method: referenceRole === "NONE" ? null : referenceMethod.trim() || null,
+        reference_role: referenceRole,
+      });
+      setMeasurements((previous) => [saved, ...previous.filter((item) => item.measurement_id !== saved.measurement_id)]);
+    } catch (cause) { setMeasurementError(cause instanceof Error ? cause.message : "Backend rejected the measurement."); }
+    finally { setMeasurementSaving(false); }
+  };
+
+  const prepareExports = async () => {
+    if (!run) return;
+    setExportBusy(true); setExportError("");
+    try { await createExports(run.run_id); setExports(await getExports(run.run_id)); }
+    catch (cause) { setExportError(cause instanceof Error ? cause.message : "Export preparation failed."); }
+    finally { setExportBusy(false); }
+  };
+
+  const parseRerunIndices = (value: string) => value.trim() ? value.split(",").map((item) => Number(item.trim())) : [];
+  const submitRerun = () => {
+    if (!run) return;
+    const include = parseRerunIndices(rerunInclude); const exclude = parseRerunIndices(rerunExclude);
+    if ([...include, ...exclude].some((item) => !Number.isInteger(item) || item < 0) || include.some((item) => exclude.includes(item))) {
+      setMeasurementError("Rerun frame overrides must be non-negative integers and cannot overlap."); return;
+    }
+    onRerun({ ...(run.config as unknown as RunConfiguration), matcher: "SIFT", execution_mode: "COLMAP", force_include_frame_indices: include, force_exclude_frame_indices: exclude });
+  };
 
   return (
     <main className="workspace">
@@ -170,7 +236,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
           <h2>{project?.name ?? "Offline viewer fixture"}</h2>
           <code>{manifest.run_id}</code>
           <div className="identity-badges">
-            <span className="status-badge status-badge--ready"><i /> COMPLETED</span>
+            <span className="status-badge status-badge--ready"><i /> {run?.status ?? manifest.status ?? "FIXTURE"}</span>
             <span className={`status-badge status-badge--${provenance.toLowerCase()}`}>
               PROVENANCE: {provenance}
             </span>
@@ -214,6 +280,10 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
       </aside>
 
       <section className="viewport-section">
+        {manifest.preview_mode === "SPARSE_EARLY" && (
+          <div className="truth-banner truth-banner--preview"><strong>Early sparse preview</strong><span>Observed sparse evidence is ready; final quality and optional dense results are still pending.</span></div>
+        )}
+        {readiness && <div className="workspace-readiness" aria-label="Current result readiness"><span>Sparse: {readiness.sparse_preview_ready ? "AVAILABLE" : "NOT READY"}</span><span>Dense: {readiness.dense_status}</span><span>Quality: {readiness.quality_report_ready ? "AVAILABLE" : "PENDING"}</span></div>}
         {synthetic && (
           <div className="truth-banner">
             <strong>UI / orchestration fixture</strong>
@@ -226,7 +296,25 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
             className={visualMode === "EVIDENCE" ? "is-active" : ""}
             onClick={() => selectVisualMode("EVIDENCE")}
           >
-            Evidence Cloud
+            Observed
+          </button>
+          <button
+            type="button"
+            className={visualMode === "INFERRED" ? "is-active" : ""}
+            disabled={!visualModeAvailable("INFERRED", manifest)}
+            title={visualModeReason("INFERRED", manifest)}
+            onClick={() => selectVisualMode("INFERRED")}
+          >
+            Inferred
+          </button>
+          <button
+            type="button"
+            className={visualMode === "BOTH" ? "is-active" : ""}
+            disabled={!visualModeAvailable("BOTH", manifest)}
+            title={visualModeReason("BOTH", manifest)}
+            onClick={() => selectVisualMode("BOTH")}
+          >
+            Both
           </button>
           <button
             type="button"
@@ -320,10 +408,16 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
           <strong>{measurement.distanceM === null ? "—" : `${measurement.distanceM.toFixed(3)} m`}</strong>
           <small>
             {measurement.message}
-            {liveReferenceError !== null
-              ? ` Interactive error: ${liveReferenceError.toFixed(1)}% vs ${measurementReference.reference_m?.toFixed(3)} m reference.`
-              : ""}
           </small>
+          {run && measurement.endpoints && manifest.cloud.measurement_eligible && (
+            <div className="measurement-save-controls">
+              <label><span>Reference ID <small>optional dataset reference</small></span><input value={referenceId} onChange={(event) => setReferenceId(event.target.value)} placeholder="reference identifier" /></label>
+              <label><span>Reference role</span><select value={referenceRole} onChange={(event) => setReferenceRole(event.target.value as typeof referenceRole)}><option value="NONE">Computed only</option><option value="SCALE_CONTROL">Scale control</option><option value="HELD_OUT_EVALUATION">Held-out evaluation</option></select></label>
+              {referenceRole !== "NONE" && <><label><span>Independent value <small>metres</small></span><input type="number" min="0.001" step="0.001" required value={referenceValue} onChange={(event) => setReferenceValue(event.target.value)} /></label><label><span>Reference method</span><input value={referenceMethod} onChange={(event) => setReferenceMethod(event.target.value)} placeholder="laser, tape, survey…" /></label></>}
+              <button type="button" onClick={() => void saveMeasurement()} disabled={measurementSaving}>{measurementSaving ? "Saving…" : "Save backend measurement"}</button>
+            </div>
+          )}
+          {measurementError && <span className="inline-error" role="alert">{measurementError}</span>}
         </div>
       </section>
 
@@ -357,6 +451,10 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
                 <div><dt>Blur score</dt><dd>{displayNumber(selectedFrame?.blur_score)}</dd></div>
                 <div><dt>Exposure</dt><dd>{displayNumber(selectedFrame?.exposure_score)}</dd></div>
                 <div><dt>Dynamic mask</dt><dd>{displayPercent(selectedFrame?.dynamic_mask_fraction)}</dd></div>
+                <div><dt>Selection</dt><dd>{selectedFrame?.selected ? "SELECTED" : "REJECTED"}{selectedFrame?.override && selectedFrame.override !== "NONE" ? ` · ${selectedFrame.override}` : ""}</dd></div>
+                <div><dt>Quality eligibility</dt><dd>{selectedFrame?.quality_eligible === undefined ? "Not reported" : selectedFrame.quality_eligible ? "ELIGIBLE" : `INELIGIBLE · ${selectedFrame.quality_rejection_reasons || "reason not reported"}`}</dd></div>
+                <div><dt>Registration</dt><dd>{selectedFrame?.reconstruction_status ?? "Not evaluated"}</dd></div>
+                <div><dt>Exclusion reason</dt><dd>{selectedFrame?.reconstruction_exclusion_reason ?? "—"}</dd></div>
                 <div><dt>Source</dt><dd>{selectedFrame?.source ?? "declared artifact"}</dd></div>
               </dl>
             </section>
@@ -401,7 +499,7 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
                 <div>
                   <span>Runtime</span>
                   <strong>{displayNumber(quality.metrics.runtime_s, " s")}</strong>
-                  <small>local pipeline</small>
+                  <small>server pipeline</small>
                 </div>
               </div>
               {synthetic && (
@@ -499,6 +597,52 @@ export function Workspace({ bundle, project, run, onReset }: WorkspaceProps) {
                 <p>Fixture values are illustrative and cannot validate scale.</p>
               )}
             </section>
+
+            <section className="inspector-section">
+              <div className="section-title-row"><span>Persisted measurements</span><b>{measurements.length}</b></div>
+              <p className="metric-disclaimer">The backend distance is authoritative. Confidence describes support, not accuracy; independent evaluation requires a matching dataset reference.</p>
+              <div className="asset-list">
+                {measurements.map((item) => <div key={item.measurement_id}><span>{item.measurement_kind ?? "DISTANCE_3D"}</span><strong>{item.backend_distance_m.toFixed(3)} {item.units ?? "m"}</strong><small>{item.measurement_eligible ? "Eligible observed geometry" : `Not eligible: ${item.eligibility_reason}`} · {item.geometry_artifact_path} · SHA {item.geometry_artifact_sha256.slice(0, 12)}…{item.reference_id ? ` · reference ${item.reference_id}` : " · computed, not independently evaluated"}</small></div>)}
+                {!measurements.length && <p>No saved measurements for this run.</p>}
+              </div>
+            </section>
+
+            <section className="inspector-section">
+              <div className="section-title-row"><span>Geometry exports</span><b>{exports?.available_validated_formats.length ?? 0}</b></div>
+              <a className="download-link" href={resolveAssetUrl(manifest.cloud.url)} download>Download observed PLY</a>
+              {exports ? <div className="export-list">{[["LAS", "LAS"], ["OBJ", "OBJ"], ["GLB", "GLB_GLTF"], ["GeoTIFF", "GEOTIFF"], ["FBX", "FBX"]].map(([label, key]) => {
+                const info = exports.formats[key]; const available = info?.status === "AVAILABLE_VALIDATED";
+                return <div key={key}><strong>{label}</strong><span>{info?.status ?? "UNAVAILABLE"}</span>{available && info.exports?.map((item, index) => <div className="export-package" key={`${key}-${index}`}>{key === "OBJ" && item.bundle_url && <a href={resolveAssetUrl(item.bundle_url)} download>Complete OBJ + MTL + textures (.zip)</a>}{item.files.map((file) => <a key={file.relative_path} href={resolveAssetUrl(file.url)} download>{file.relative_path.split("/").at(-1)} · {displayBytes(file.size_bytes)}</a>)}<a href={resolveAssetUrl(item.manifest_url)} download>Provenance manifest</a><small>{String(item.coordinate_contract?.units ?? "units declared in manifest")} · {item.geometry_provenance} · source SHA {item.source_artifact.sha256.slice(0, 12)}…</small></div>)}{!available && <small>{info?.reason ?? "No validated export is declared for this run."}</small>}</div>;
+              })}</div> : <p className="metric-disclaimer">No export report is ready. Preparation converts declared terminal geometry only; it does not rerun reconstruction.</p>}
+              {run && ["COMPLETED", "FAILED", "CANCELLED"].includes(run.status) && <button type="button" className="secondary-action" onClick={() => void prepareExports()} disabled={exportBusy}>{exportBusy ? "Preparing…" : exports ? "Revalidate exports" : "Prepare exports"}</button>}
+              {exportError && <p className="inline-error" role="alert">{exportError}</p>}
+            </section>
+
+            <section className="inspector-section quality-sections">
+              <div className="section-title-row"><span>Requirement evidence</span><b>{manifest.quality_report_ready ? "FINAL" : "PENDING"}</b></div>
+              <dl className="detail-list">
+                <div><dt>Registration / reprojection</dt><dd>{quality.metrics.registered_frame_rate == null ? "Not evaluated: final report pending or metric unavailable" : `${displayPercent(quality.metrics.registered_frame_rate)} registered; ${displayNumber(quality.metrics.median_reprojection_error_px, " px")} median`}</dd></div>
+                <div><dt>Alignment / synchronization</dt><dd>{quality.metrics.metric_alignment || quality.metrics.telemetry_sync ? "See declared quality report details" : "Not evaluated: no defensible alignment/sync result"}</dd></div>
+                <div><dt>Relative-distance evaluation</dt><dd>{measurementReference.percent_error === null ? "Not evaluated: no independent matched reference" : `${measurementReference.percent_error.toFixed(1)}% error on the declared reference`}</dd></div>
+                <div><dt>Positional ≤1 m target</dt><dd>Not evaluated: official statistic is unspecified</dd></div>
+                <div><dt>Visible-scene coverage</dt><dd>{quality.metrics.coverage ? "Diagnostics declared; registration is not completeness" : "Not evaluated: no coverage artifact"}</dd></div>
+                <div><dt>Runtime / resources</dt><dd>{quality.metrics.runtime_s == null ? "Not evaluated: final runtime unavailable" : `${quality.metrics.runtime_s.toFixed(1)} s server pipeline; full-length target requires representative uncached input`}</dd></div>
+              </dl>
+            </section>
+
+            <section className="inspector-section">
+              <div className="section-title-row"><span>Completion boundary</span><b>{manifest.completion?.status ?? "NOT RUN"}</b></div>
+              <p className="metric-disclaimer">{manifest.completion?.reason ?? "No completion report or inferred geometry was declared."} Observed geometry remains usable; inferred geometry is separate and never measurement eligible.</p>
+            </section>
+
+            {run && <details className="inspector-section"><summary>Run actions and linked rerun</summary>
+              <p className="metric-disclaimer">Frame changes create a new linked run; this evidence remains immutable.</p>
+              <label className="field"><span>Force include frame indices</span><input value={rerunInclude} onChange={(event) => setRerunInclude(event.target.value)} placeholder="e.g. 12, 18" /></label>
+              <label className="field"><span>Force exclude frame indices</span><input value={rerunExclude} onChange={(event) => setRerunExclude(event.target.value)} placeholder="e.g. 20" /></label>
+              <div className="run-actions">{run.status === "COMPLETED" ? <button type="button" className="secondary-action" onClick={submitRerun} disabled={Boolean(actionBusy)}>{actionBusy === "rerun" ? "Creating linked run…" : "Create linked rerun"}</button> : <span className="metric-disclaimer">Linked reruns are available after the source run completes.</span>}{onCancel && !["COMPLETED", "FAILED", "CANCELLED"].includes(run.status) && <button type="button" onClick={onCancel} disabled={Boolean(actionBusy)}>Cancel active run</button>}{onResume && ["FAILED", "CANCELLED"].includes(run.status) && <button type="button" onClick={onResume} disabled={Boolean(actionBusy)}>Resume checkpoint</button>}</div>
+            </details>}
+
+            {globalError && <div className="form-error" role="alert">{globalError}</div>}
 
             {!!quality.warnings?.length && (
               <section className="inspector-section">

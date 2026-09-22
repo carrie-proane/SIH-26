@@ -3,6 +3,7 @@ import json
 import struct
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -192,8 +193,13 @@ def test_colmap_sparse_feature_extraction_consumes_complete_masks(tmp_path: Path
     masks = tmp_path / "masks" / "reconstruction"
     frames.mkdir()
     masks.mkdir(parents=True)
-    (frames / "frame.jpg").write_bytes(b"image")
-    (masks / "frame.jpg.png").write_bytes(b"mask")
+    frame_path = frames / "frame.jpg"
+    mask_path = masks / "frame.jpg.png"
+    cv2.imwrite(str(frame_path), np.zeros((10, 12, 3), dtype=np.uint8))
+    cv2.imwrite(str(mask_path), np.full((10, 12), 255, dtype=np.uint8))
+    (tmp_path / "segmentation_status.json").write_text(
+        json.dumps({"status": "completed"}), encoding="utf-8"
+    )
 
     feature_command = ColmapRunner().build_commands(frames, tmp_path, RunConfig())[0]
 

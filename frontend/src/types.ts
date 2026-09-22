@@ -91,6 +91,54 @@ export interface RunRecord {
   capability_profile_path?: string | null;
   effective_sparse_gpu?: boolean;
   selected_dense_provider?: "colmap" | "openmvs" | null;
+  requested_matcher?: "SIFT" | "SUPERPOINT_LIGHTGLUE" | null;
+  executed_matcher?: "SIFT" | null;
+}
+
+export interface ProjectListResponse {
+  schema_version: "1.0";
+  projects: ProjectManifest[];
+}
+
+export interface RunListResponse {
+  schema_version: "1.0";
+  project_id: string;
+  runs: RunRecord[];
+}
+
+export interface RunConfiguration {
+  config_version?: "1.0";
+  profile: "smoke" | "preview" | "balanced" | "accurate" | "diagnostic";
+  matcher: "SIFT";
+  execution_mode: "COLMAP";
+  reconstruction_target: "FULL_SCENE" | "PRIMARY_SUBJECT";
+  masking_mode: "OFF" | "AUTO" | "REQUIRED";
+  enable_segmentation: boolean;
+  segmentation_model_path?: string | null;
+  enable_dense_reconstruction: boolean;
+  dense_provider: "auto" | "colmap" | "openmvs";
+  use_gpu: boolean;
+  telemetry_offset_s?: number | null;
+  telemetry_offset_source?: "manual" | "calibrated" | null;
+  camera_model: "SIMPLE_RADIAL" | "RADIAL" | "OPENCV";
+  camera_model_policy: "AUTO" | "FIXED";
+  camera_params?: string | null;
+  camera_params_reference: "PROCESSED_FRAMES" | "SOURCE_VIDEO";
+  refine_intrinsics: boolean;
+  force_include_frame_indices: number[];
+  force_exclude_frame_indices: number[];
+  max_candidate_frames: number;
+  max_selected_frames: number;
+  processing_max_image_dimension?: number | null;
+  worker_threads: number;
+  sequential_overlap: number;
+  matching_strategy: "AUTO" | "SEQUENTIAL" | "EXHAUSTIVE";
+  sparse_timeout_s: number;
+  dense_timeout_s: number;
+  command_heartbeat_s: number;
+  coverage_interval_s: number;
+  known_distance_m?: number | null;
+  preprocessing_run?: string | null;
 }
 
 export interface RunReadiness {
@@ -108,6 +156,15 @@ export interface RunReadiness {
   export_report_ready: boolean;
   export_report_url: string | null;
   export_status: Record<string, string>;
+  segmentation: AiStageSummary;
+  coverage: AiStageSummary;
+  completion: AiStageSummary;
+}
+
+export interface AiStageSummary {
+  status: string;
+  url: string | null;
+  failure_reason?: string | null;
 }
 
 export interface ExportFile {
@@ -131,6 +188,7 @@ export interface GeometryExport {
   reused: boolean;
   files: ExportFile[];
   manifest_url: string;
+  bundle_url?: string;
 }
 
 export interface ExportFormatStatus {
@@ -159,6 +217,8 @@ export interface ExportReadiness {
   generated_files: ExportFile[];
   partial_success: boolean;
   measurement_eligibility_statement: string;
+  geometry_selection?: "OBSERVED_ONLY" | "OBSERVED_AND_COMPLETED";
+  completed_geometry_requires_explicit_selection?: true;
 }
 
 export interface MeasurementEndpointPayload {
@@ -175,6 +235,7 @@ export interface MeasurementCreatePayload {
   coordinate_frame?: string;
   units?: "m";
   measurement_kind?: "DISTANCE_3D" | "HORIZONTAL" | "VERTICAL" | "RELATIVE_DIMENSION";
+  reference_id?: string | null;
   reference_value_m?: number | null;
   reference_method?: string | null;
   reference_evidence?: string | null;
@@ -209,6 +270,8 @@ export interface ViewerManifest {
   schema_version: string;
   project_id: string;
   run_id: string;
+  preview_mode?: "SPARSE_EARLY" | "FINAL_REPORT";
+  quality_report_ready?: boolean;
   stage?: RunStatus;
   status?: RunStatus;
   synthetic_fixture: boolean;
@@ -218,10 +281,13 @@ export interface ViewerManifest {
   genuine_real_evidence: boolean;
   cloud: {
     url: string;
+    relative_path?: string;
+    sha256?: string;
     format: "PLY";
     coordinate_frame: string;
     color_mode: "PHOTOGRAPHIC_RGB";
     color_mode_label: "Photographic RGB";
+    measurement_eligible?: boolean;
   };
   visual_models?: {
     evidence_cloud: VisualModel;
@@ -231,6 +297,8 @@ export interface ViewerManifest {
       texture_validity?: TextureValidityContract | null;
     };
     gaussian_splat: VisualModel;
+    completed_geometry?: VisualModel;
+    inferred_geometry?: VisualModel;
     dense_report_url?: string | null;
   };
   camera_path: {
@@ -262,14 +330,16 @@ export interface ViewerManifest {
     passes_10_percent_gate?: boolean | null;
     synthetic_fixture: boolean;
   };
-  quality_report_url: string;
+  quality_report_url?: string | null;
   ingest_report_url?: string;
   scene_policy?: {
     target: "FULL_SCENE" | "PRIMARY_SUBJECT";
     masking_mode: "OFF" | "AUTO" | "REQUIRED";
     analysis_url?: string | null;
     segmentation_report_url?: string | null;
+    segmentation_status_url?: string | null;
   };
+  coverage?: { available: boolean; report_url?: string | null };
   ai_overlay?: {
     available: boolean;
     label: "AI_ASSISTED_NOT_MEASURABLE";
@@ -277,6 +347,30 @@ export interface ViewerManifest {
     url?: string;
     reason?: string;
     model?: string;
+  };
+  completion?: {
+    status:
+      | "NOT_RUN"
+      | "QUEUED"
+      | "RUNNING"
+      | "COMPLETED"
+      | "PARTIAL"
+      | "FAILED"
+      | "UNAVAILABLE"
+      | "REFUSED";
+    available: boolean;
+    report_url?: string | null;
+    reason?: string;
+    method?: string | null;
+    confidence?: Record<string, unknown> | null;
+    warnings?: string[];
+    completed_geometry?: VisualModel;
+    inferred_geometry: {
+      available: boolean;
+      url?: string | null;
+      provenance: string;
+      measurement_eligible: false;
+    };
   };
 }
 
@@ -297,7 +391,7 @@ export interface TextureValidityContract {
   minimum_supported_samples: number;
 }
 
-export type VisualMode = "EVIDENCE" | "TEXTURED" | "PHOTOREAL";
+export type VisualMode = "EVIDENCE" | "TEXTURED" | "PHOTOREAL" | "INFERRED" | "BOTH";
 
 export interface Keyframe {
   frame_index: number;
@@ -346,15 +440,19 @@ export interface QualityReport {
   video_origin: ProvenanceOrigin;
   telemetry_origin: ProvenanceOrigin;
   genuine_real_evidence: boolean;
+  status?: string;
+  completion_summary?: Record<string, unknown>;
+  execution?: Record<string, unknown>;
+  official_targets?: Record<string, unknown>;
   metrics: {
-    eligible_frames?: number;
-    registered_frames?: number;
-    registered_frame_rate?: number;
+    eligible_frames?: number | null;
+    registered_frames?: number | null;
+    registered_frame_rate?: number | null;
     registered_frame_gate_80_percent?: boolean;
-    median_reprojection_error_px?: number;
-    p95_reprojection_error_px?: number;
+    median_reprojection_error_px?: number | null;
+    p95_reprojection_error_px?: number | null;
     reprojection_gate_1_5_px?: boolean;
-    runtime_s?: number;
+    runtime_s?: number | null;
     metric_alignment?: Record<string, unknown>;
     telemetry_sync?: Record<string, unknown>;
     known_distance?: Record<string, unknown>;
@@ -418,4 +516,5 @@ export interface MeasurementResult {
   labels: ConfidenceLabel[];
   status: "IDLE" | "SELECTING" | "ALLOWED" | "CAUTION" | "CONFIRM" | "BLOCKED";
   message: string;
+  endpoints?: [MeasurementEndpointPayload, MeasurementEndpointPayload];
 }

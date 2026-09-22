@@ -29,17 +29,25 @@ class SegmentationSettings:
     device: str = "cpu"
     image_size: int = 640
     confidence: float = 0.25
+    iou_threshold: float = 0.7
     max_detections: int = 100
     max_frames: int = 1000
     timeout_s: float = 300.0
     review_sample_size: int = 6
+    mask_dilation_px: int = 0
+    mask_erosion_px: int = 0
+    excluded_classes: tuple[str, ...] = tuple(sorted(DYNAMIC_CLASSES | SKY_CLASSES))
 
     def __post_init__(self) -> None:
         if not self.device or self.device == "auto":
             raise ValueError("Select an explicit inference device")
         if not 32 <= self.image_size <= 4096 or self.image_size % 32:
             raise ValueError("image_size must be a multiple of 32 between 32 and 4096")
-        if not 0 < self.confidence <= 1 or not 1 <= self.max_detections <= 1000:
+        if (
+            not 0 < self.confidence <= 1
+            or not 0 < self.iou_threshold <= 1
+            or not 1 <= self.max_detections <= 1000
+        ):
             raise ValueError("Invalid confidence or detection limit")
         if (
             not 1 <= self.max_frames <= 1000
@@ -49,6 +57,11 @@ class SegmentationSettings:
             raise ValueError("Invalid frame limit or inference deadline")
         if not 0 <= self.review_sample_size <= 12:
             raise ValueError("review_sample_size must be between 0 and 12")
+        if not 0 <= self.mask_dilation_px <= 64 or not 0 <= self.mask_erosion_px <= 64:
+            raise ValueError("Mask morphology radii must be between 0 and 64 pixels")
+        normalized = tuple(item.strip().lower() for item in self.excluded_classes)
+        if any(not item for item in normalized) or len(normalized) != len(set(normalized)):
+            raise ValueError("excluded_classes must contain unique non-empty names")
 
 
 def _versions() -> dict[str, str | None]:
@@ -74,7 +87,7 @@ def segmentation_fingerprint_inputs(
         "model_sha256": sha256_file(candidate) if candidate and candidate.is_file() else None,
         "settings": asdict(settings or SegmentationSettings()),
         "versions": _versions(),
-        "excluded_classes": sorted(DYNAMIC_CLASSES | SKY_CLASSES),
+        "excluded_classes": sorted((settings or SegmentationSettings()).excluded_classes),
     }
 
 
@@ -109,6 +122,7 @@ def _ultralytics_provider(
             device=settings.device,
             imgsz=settings.image_size,
             conf=settings.confidence,
+            iou=settings.iou_threshold,
             max_det=settings.max_detections,
             retina_masks=True,
             save=False,
@@ -150,7 +164,7 @@ def _ultralytics_provider(
 
         excluded = np.zeros(image.shape[:2], dtype=np.uint8)
         for class_name, mask in candidates:
-            if class_name in DYNAMIC_CLASSES | SKY_CLASSES:
+            if class_name in settings.excluded_classes:
                 excluded[mask] = 255
         return excluded
 
@@ -348,6 +362,19 @@ def run_optional_segmentation(
                     (image.shape[1], image.shape[0]),
                     interpolation=cv2.INTER_NEAREST,
                 )
+            excluded = np.where(excluded > 0, 255, 0).astype(np.uint8)
+            if settings.mask_dilation_px:
+                radius = settings.mask_dilation_px
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_ELLIPSE, (radius * 2 + 1, radius * 2 + 1)
+                )
+                excluded = cv2.dilate(excluded, kernel)
+            if settings.mask_erosion_px:
+                radius = settings.mask_erosion_px
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_ELLIPSE, (radius * 2 + 1, radius * 2 + 1)
+                )
+                excluded = cv2.erode(excluded, kernel)
             excluded = np.where(excluded > 0, 255, 0).astype(np.uint8)
             included = cv2.bitwise_not(excluded)
             fraction = float(np.count_nonzero(excluded) / excluded.size)

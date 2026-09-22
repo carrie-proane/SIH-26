@@ -49,6 +49,40 @@ def test_upload_run_poll_and_artifact_index(tmp_path: Path) -> None:
         assert client.get(f"/api/runs/{run_id}/artifacts/../run_manifest.json").status_code == 404
 
 
+def test_project_run_catalog_and_unsupported_matcher_are_truthful(
+    tmp_path: Path, monkeypatch
+) -> None:
+    app = create_app(tmp_path / "projects")
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/projects",
+            data={"name": "catalog fixture"},
+            files={
+                "video": ("fixture.mp4", b"fixture", "video/mp4"),
+                "telemetry": ("fixture.csv", b"timestamp_s,lat,lon,alt_m\n", "text/csv"),
+            },
+        ).json()
+        monkeypatch.setattr(app.state.runner, "submit", lambda _: True)
+        accepted = client.post(
+            f"/api/projects/{created['project_id']}/runs",
+            json={"execution_mode": "COLMAP", "matcher": "SIFT"},
+        )
+        rejected = client.post(
+            f"/api/projects/{created['project_id']}/runs",
+            json={"execution_mode": "COLMAP", "matcher": "SUPERPOINT_LIGHTGLUE"},
+        )
+
+        assert accepted.status_code == 202
+        assert accepted.json()["requested_matcher"] == "SIFT"
+        assert accepted.json()["executed_matcher"] is None
+        assert rejected.status_code == 422
+        assert "not an executable reconstruction provider" in rejected.json()["detail"]
+        projects = client.get("/api/projects").json()["projects"]
+        assert [item["project_id"] for item in projects] == [created["project_id"]]
+        runs = client.get(f"/api/projects/{created['project_id']}/runs").json()["runs"]
+        assert [item["run_id"] for item in runs] == [accepted.json()["run_id"]]
+
+
 def test_failed_run_can_be_queued_for_checkpoint_resume(
     tmp_path: Path, monkeypatch
 ) -> None:

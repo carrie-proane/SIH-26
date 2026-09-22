@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import struct
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -348,7 +349,12 @@ def test_inferred_mesh_remains_inferred_and_measurement_disabled(tmp_path: Path)
         mesh_relative="completion/inferred_mesh.ply",
     )
 
-    report = build_export_readiness(record, run_dir)
+    observed_only = build_export_readiness(record, run_dir)
+    assert observed_only["geometry_selection"] == "OBSERVED_ONLY"
+    assert observed_only["formats"]["OBJ"]["exports"] == []
+
+    report = build_export_readiness(record, run_dir, include_inferred=True)
+    assert report["geometry_selection"] == "OBSERVED_AND_COMPLETED"
 
     for name in ("OBJ", "GLB_GLTF"):
         exported = report["formats"][name]["exports"][0]
@@ -438,6 +444,32 @@ def test_exports_endpoint_builds_without_reconstruction_and_serves_declared_urls
         assert readiness["export_report_ready"] is True
         assert readiness["export_report_url"] == f"/api/runs/{record.run_id}/exports"
         assert readiness["export_status"]["LAS"] == "AVAILABLE_VALIDATED"
+
+
+def test_obj_bundle_contains_complete_relative_package(tmp_path: Path) -> None:
+    store, record, run_dir = _record_with_geometry(tmp_path)
+    record.stage = RunStatus.COMPLETED
+    record.status = RunStatus.COMPLETED
+    store.save_run(record)
+    report = build_export_readiness(store.get_run(record.run_id), run_dir)
+    report_path = run_dir / "export_readiness.json"
+    write_export_readiness(report_path, report)
+    store.register_artifacts(record, [report_path, *export_artifact_paths(report, run_dir)])
+    app = create_app(tmp_path / "projects")
+    with TestClient(app) as client:
+        payload = client.get(f"/api/runs/{record.run_id}/exports").json()
+        obj = payload["formats"]["OBJ"]["exports"][0]
+        response = client.get(obj["bundle_url"])
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        archive_path = tmp_path / "bundle.zip"
+        archive_path.write_bytes(response.content)
+        with zipfile.ZipFile(archive_path) as archive:
+            names = set(archive.namelist())
+            assert any(name.endswith(".obj") for name in names)
+            assert any(name.endswith(".mtl") for name in names)
+            assert any(name.endswith(".png") for name in names)
 
 
 def test_exports_endpoint_is_not_fabricated_before_report_exists(tmp_path: Path) -> None:

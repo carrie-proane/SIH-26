@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv
 .venv/
+venv
 venv/
 
 # Contract §8: no raw data, artifacts, model weights or secrets in git
@@ -35,6 +37,7 @@ RefineMesh-*.log
 TextureMesh-*.log
 
 # Arnav frontend build/test outputs
+frontend/node_modules
 frontend/node_modules/
 frontend/dist/
 frontend/test-results/

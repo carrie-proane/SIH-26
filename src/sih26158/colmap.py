@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 from .confidence import classify_observed_point
@@ -168,9 +169,7 @@ class ColmapRunner:
             ),
         ]
         if config.worker_threads:
-            feature_command.extend(
-                ["--FeatureExtraction.num_threads", str(config.worker_threads)]
-            )
+            feature_command.extend(["--FeatureExtraction.num_threads", str(config.worker_threads)])
         if recovery:
             feature_command.extend(["--SiftExtraction.peak_threshold", "0.003"])
         if config.profile == "accurate":
@@ -194,7 +193,29 @@ class ColmapRunner:
             if frames.is_dir()
             else []
         )
-        if image_names and all((mask_dir / f"{name}.png").is_file() for name in image_names):
+        segmentation_status_path = run_dir / "segmentation_status.json"
+        segmentation_status: dict[str, object] = {}
+        if segmentation_status_path.is_file():
+            try:
+                candidate = json.loads(segmentation_status_path.read_text(encoding="utf-8"))
+                if isinstance(candidate, dict):
+                    segmentation_status = candidate
+            except (OSError, json.JSONDecodeError):
+                segmentation_status = {}
+        masks_required = segmentation_status.get("status") == "completed"
+        if masks_required:
+            if not image_names:
+                raise ExternalToolError("Applied segmentation has no reconstruction frames")
+            for name in image_names:
+                image = cv2.imread(str(frames / name), cv2.IMREAD_GRAYSCALE)
+                mask_path = mask_dir / f"{name}.png"
+                mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                if image is None or mask is None or image.shape != mask.shape:
+                    raise ExternalToolError(
+                        f"Applied segmentation mask is missing or malformed for {name}"
+                    )
+                if not set(np.unique(mask).tolist()).issubset({0, 255}):
+                    raise ExternalToolError(f"Applied segmentation mask is not binary for {name}")
             feature_command.extend(["--ImageReader.mask_path", str(mask_dir)])
         exhaustive = (
             recovery
@@ -214,9 +235,7 @@ class ColmapRunner:
             "3",
         ]
         if config.worker_threads:
-            matching_command.extend(
-                ["--FeatureMatching.num_threads", str(config.worker_threads)]
-            )
+            matching_command.extend(["--FeatureMatching.num_threads", str(config.worker_threads)])
         if not exhaustive:
             matching_command.extend(
                 [
@@ -584,9 +603,9 @@ class ColmapRunner:
         sparse = attempt.sparse_model
         component_report = attempt.workspace / "sparse" / "model_selection.json"
         try:
-            component_candidates = json.loads(
-                component_report.read_text(encoding="utf-8")
-            ).get("candidates", [])
+            component_candidates = json.loads(component_report.read_text(encoding="utf-8")).get(
+                "candidates", []
+            )
         except (OSError, json.JSONDecodeError):
             component_candidates = []
         return {
@@ -755,10 +774,7 @@ class ColmapRunner:
                     "camera_model": attempt.camera_model,
                     "path": str(
                         (
-                            attempt.workspace
-                            / "sparse"
-                            / "model"
-                            / str(component.get("path"))
+                            attempt.workspace / "sparse" / "model" / str(component.get("path"))
                         ).relative_to(run_dir / "sparse")
                     ),
                     "registered_images": component.get("registered_images"),
@@ -854,7 +870,7 @@ class ColmapRunner:
         median_error = float(np.median(refined_errors)) if refined_errors else None
         p95_error = float(np.percentile(refined_errors, 95)) if refined_errors else None
         metrics = MatcherMetrics(
-            matcher=config.matcher,
+            matcher="SIFT",
             eligible_frames=len(images),
             registered_frames=registered,
             median_reprojection_error_px=max(

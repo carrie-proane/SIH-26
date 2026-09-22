@@ -173,7 +173,9 @@ def main() -> int:
         overlay_path = args.output_dir / f"{source.stem}_overlay.png"
         depth.save(depth_path)
 
-        colors = Image.fromarray(colorize_depth(np.asarray(depth)), mode="RGB")
+        # The uint8 array already carries an RGB channel dimension. Passing ``mode`` is
+        # deprecated in Pillow 11 and is scheduled for removal in Pillow 13.
+        colors = Image.fromarray(colorize_depth(np.asarray(depth)))
         Image.blend(image, colors, 0.46).save(overlay_path)
         samples.append(
             {

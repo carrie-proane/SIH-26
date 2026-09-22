@@ -27,6 +27,16 @@ from telemetry.models import sha256_file as telemetry_sha256_file
 from telemetry.models import write_csv as write_telemetry_csv
 from telemetry.srt_parser import parse_srt
 
+from .ai_integration import (
+    CompletionRequest,
+    resolve_segmentation_device,
+    run_completion,
+    segmentation_fingerprint,
+    segmentation_settings,
+    write_completion_not_run,
+    write_coverage_report,
+    write_segmentation_status,
+)
 from .benchmark import build_benchmark_report
 from .capabilities import collect_server_capabilities, synthetic_capability_profile
 from .colmap import ColmapRunner, ExternalToolError, ReconstructionResult, write_matcher_benchmark
@@ -132,7 +142,9 @@ def _temporal_coverage(
 ) -> dict[str, object]:
     """Report time-binned candidate/selection/registration coverage without inventing area coverage."""
 
-    duration_s = max(duration_s, max((float(row.get("timestamp_s", 0)) for row in frames), default=0))
+    duration_s = max(
+        duration_s, max((float(row.get("timestamp_s", 0)) for row in frames), default=0)
+    )
     interval_count = max(1, int(np.ceil(max(duration_s, 0.001) / interval_s)))
     intervals: list[dict[str, object]] = []
     for index in range(interval_count):
@@ -153,8 +165,7 @@ def _temporal_coverage(
         }
         if registered_names is not None:
             item["registered_count"] = sum(
-                Path(str(row.get("image_name", ""))).name in registered_names
-                for row in selected
+                Path(str(row.get("image_name", ""))).name in registered_names for row in selected
             )
         intervals.append(item)
 
@@ -329,11 +340,21 @@ class PipelineRunner:
         ancestor_names = {
             "INGEST": (),
             "PREPROCESS": ("INGEST",),
-            "SPARSE": ("PREPROCESS",),
+            "SEGMENTATION": ("PREPROCESS",),
+            "SPARSE": ("PREPROCESS", "SEGMENTATION"),
             # Dense consumes selected frames/masks as well as the sparse model.
-            "DENSE": ("PREPROCESS", "SPARSE"),
+            "DENSE": ("PREPROCESS", "SEGMENTATION", "SPARSE"),
+            "COVERAGE": ("PREPROCESS", "SPARSE", "DENSE"),
+            "COMPLETION": ("COVERAGE", "DENSE", "SPARSE"),
             # Reporting consumes frame/coverage diagnostics even when dense is disabled.
-            "REPORT": ("PREPROCESS", "SPARSE", "DENSE"),
+            "REPORT": (
+                "PREPROCESS",
+                "SEGMENTATION",
+                "SPARSE",
+                "DENSE",
+                "COVERAGE",
+                "COMPLETION",
+            ),
         }[stage]
         dependencies = {
             name: checkpoint.completed[name].artifacts
@@ -353,13 +374,28 @@ class PipelineRunner:
                 "frame_min_feature_count",
                 "frame_min_feature_grid_coverage",
                 "frame_max_parallax_fraction",
-                "enable_segmentation",
-                "segmentation_model_path",
                 "reconstruction_target",
                 "masking_mode",
                 "max_candidate_frames",
                 "max_selected_frames",
                 "processing_max_image_dimension",
+            ),
+            "SEGMENTATION": (
+                "enable_segmentation",
+                "segmentation_model_path",
+                "segmentation_model_name",
+                "segmentation_model_version",
+                "segmentation_device",
+                "segmentation_allow_cpu_fallback",
+                "segmentation_confidence",
+                "segmentation_iou_threshold",
+                "segmentation_image_size",
+                "segmentation_mask_dilation_px",
+                "segmentation_mask_erosion_px",
+                "segmentation_excluded_classes",
+                "segmentation_timeout_s",
+                "reconstruction_target",
+                "masking_mode",
             ),
             "SPARSE": (
                 "profile",
@@ -391,13 +427,18 @@ class PipelineRunner:
                 "reconstruction_target",
                 "masking_mode",
             ),
+            "COVERAGE": ("enable_coverage_analysis",),
+            "COMPLETION": ("enable_completion", "completion_timeout_s"),
             "REPORT": ("known_distance_m", "measured_distance_m", "coverage_interval_s"),
         }[stage]
         tool_names = {
             "INGEST": ("ffprobe",),
             "PREPROCESS": ("ffmpeg", "ffprobe"),
+            "SEGMENTATION": (),
             "SPARSE": ("colmap",),
             "DENSE": ("colmap", "InterfaceCOLMAP", "DensifyPointCloud", "TextureMesh"),
+            "COVERAGE": (),
+            "COMPLETION": (),
             "REPORT": (),
         }[stage]
         input_material: dict[str, object] = {"project_inputs": project_inputs}
@@ -414,23 +455,22 @@ class PipelineRunner:
                     "normalized_telemetry.meta.json",
                 )
             }
-        if stage == "PREPROCESS" and record.config.segmentation_model_path:
-            model = Path(record.config.segmentation_model_path)
-            input_material["segmentation_model"] = (
-                sha256_file(model) if model.is_file() else "UNAVAILABLE"
+        if stage == "SEGMENTATION":
+            input_material["segmentation"] = segmentation_fingerprint(
+                record, self.store.run_dir(record.project_id, record.run_id)
             )
         resource_signature = (
             {
-                "effective_worker_threads": _effective_worker_threads(
-                    record.config.worker_threads
-                ),
+                "effective_worker_threads": _effective_worker_threads(record.config.worker_threads),
                 "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
                 "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
             }
-            if stage in {"SPARSE", "DENSE"}
+            if stage in {"SEGMENTATION", "SPARSE", "DENSE", "COMPLETION"}
             else {}
         )
-        stage_contract = "3.0" if stage == "REPORT" else "2.0"
+        stage_contract = (
+            "3.0" if stage in {"SEGMENTATION", "COVERAGE", "COMPLETION", "REPORT"} else "2.0"
+        )
         return (
             self._fingerprint(input_material),
             self._fingerprint(
@@ -450,7 +490,11 @@ class PipelineRunner:
             checkpoint = RunCheckpoint.model_validate_json(path.read_text(encoding="utf-8"))
         except (OSError, ValueError, json.JSONDecodeError):
             return RunCheckpoint(run_id=record.run_id)
-        return checkpoint if checkpoint.run_id == record.run_id else RunCheckpoint(run_id=record.run_id)
+        return (
+            checkpoint
+            if checkpoint.run_id == record.run_id
+            else RunCheckpoint(run_id=record.run_id)
+        )
 
     def _save_checkpoint(self, record: RunRecord, checkpoint: RunCheckpoint) -> None:
         checkpoint.updated_at = utc_now()
@@ -499,8 +543,8 @@ class PipelineRunner:
                 artifact = declared.get(relative_path)
                 if artifact is not None:
                     prior.artifacts[relative_path] = artifact.sha256
-        input_fingerprint, config_fingerprint, environment_fingerprint = (
-            self._stage_fingerprints(record, checkpoint, stage)
+        input_fingerprint, config_fingerprint, environment_fingerprint = self._stage_fingerprints(
+            record, checkpoint, stage
         )
         started = self._stage_started_monotonic.pop((record.run_id, stage), None)
         duration_s = max(0.0, time.monotonic() - started) if started is not None else None
@@ -671,9 +715,7 @@ class PipelineRunner:
             "heavy_job_limit": self.heavy_job_limit,
             "heavy_job_limit_source": "SIH_HEAVY_JOB_LIMIT",
             "worker_threads_requested": record.config.worker_threads,
-            "worker_threads_effective": _effective_worker_threads(
-                record.config.worker_threads
-            ),
+            "worker_threads_effective": _effective_worker_threads(record.config.worker_threads),
             "scheduler_environment": {
                 name: os.environ.get(name)
                 for name in (
@@ -1455,7 +1497,9 @@ class PipelineRunner:
             }
         sync_report["out_of_range_frame_indices"] = out_of_range
         sync_report["selected_keyframe_count"] = len(selected_keyframes)
-        sync_report["telemetry_covered_keyframe_count"] = len(selected_keyframes) - len(out_of_range)
+        sync_report["telemetry_covered_keyframe_count"] = len(selected_keyframes) - len(
+            out_of_range
+        )
         sync_report["telemetry_coverage_fraction"] = (
             (len(selected_keyframes) - len(out_of_range)) / len(selected_keyframes)
             if selected_keyframes
@@ -1523,6 +1567,14 @@ class PipelineRunner:
                 runtime_s=0.01,
             )
             return ReconstructionResult(metrics, [ply, poses], [])
+        if record.config.matcher != "SIFT":
+            raise PipelineError(
+                "Requested matcher SUPERPOINT_LIGHTGLUE is not implemented. No fallback was "
+                "executed; create a linked rerun configured with SIFT."
+            )
+        record.requested_matcher = record.config.matcher
+        record.executed_matcher = "SIFT"
+        self.store.save_run(record)
         if record.config.camera_params and record.config.camera_params_reference == "SOURCE_VIDEO":
             payload = json.loads((run_dir / "keyframes.json").read_text(encoding="utf-8"))
             selected = [
@@ -1555,6 +1607,46 @@ class PipelineRunner:
         return ColmapRunner(
             executor=self._managed_executor(record, record.config.sparse_timeout_s)
         ).run(run_dir / "frames", run_dir, effective_config)
+
+    def _write_sparse_mask_usage(self, record: RunRecord, result: ReconstructionResult) -> Path:
+        run_dir = self.store.run_dir(record.project_id, record.run_id)
+        segmentation_path = run_dir / "segmentation_status.json"
+        segmentation = (
+            json.loads(segmentation_path.read_text(encoding="utf-8"))
+            if segmentation_path.is_file()
+            else {}
+        )
+        applied = any("--ImageReader.mask_path" in command for command in result.commands)
+        expected = segmentation.get("status") == "completed"
+        if expected and not applied and not record.synthetic_fixture:
+            raise PipelineError(
+                "Segmentation completed but sparse reconstruction did not receive the mask path"
+            )
+        payload = {
+            "schema_version": "1.0",
+            "segmentation_status_sha256": (
+                sha256_file(segmentation_path) if segmentation_path.is_file() else None
+            ),
+            "masking_expected": expected,
+            "masks_passed_to_sparse_backend": applied,
+            "backend": "SYNTHETIC_DEMO" if record.synthetic_fixture else "COLMAP",
+            "mask_flag": "--ImageReader.mask_path" if applied else None,
+            "status": (
+                "NOT_APPLICABLE_SYNTHETIC"
+                if record.synthetic_fixture
+                else "APPLIED"
+                if applied
+                else "EXPLICIT_UNMASKED"
+            ),
+            "warning": (
+                "Synthetic execution does not prove real backend mask consumption."
+                if record.synthetic_fixture
+                else None
+            ),
+        }
+        path = run_dir / "sparse" / "mask_usage.json"
+        atomic_json(path, payload)
+        return path
 
     def _run_optional_dense(
         self,
@@ -1633,9 +1725,7 @@ class PipelineRunner:
         selected_preference = record.config.dense_provider
         if selected_preference == "auto":
             selected_preference = (
-                "auto"
-                if mask_dir is not None
-                else record.selected_dense_provider or "unavailable"
+                "auto" if mask_dir is not None else record.selected_dense_provider or "unavailable"
             )
         if selected_preference == "unavailable":
             gate_reasons.append("server capability snapshot found no executable dense provider")
@@ -1684,7 +1774,9 @@ class PipelineRunner:
             else:
                 resume_chain = False
                 self._begin_checkpoint_stage(record, checkpoint, "INGEST")
-                self._transition(record, RunStatus.INGESTING, 10, "Inspecting immutable input assets.")
+                self._transition(
+                    record, RunStatus.INGESTING, 10, "Inspecting immutable input assets."
+                )
                 ingest, warnings = self._probe(record)
                 capabilities = self._capture_capabilities(record)
                 capability_payload = json.loads(capabilities.read_text(encoding="utf-8"))
@@ -1721,47 +1813,116 @@ class PipelineRunner:
                 )
                 warnings.extend(scene_warnings)
                 self.store.register_artifacts(record, [scene_path])
-                segmentation_artifacts: list[Path] = []
-                if record.config.enable_segmentation:
-                    segmentation_artifacts, segmentation_warnings = run_optional_segmentation(
-                        run_dir,
-                        record.run_id,
-                        frame_rows,
-                        record.config.segmentation_model_path,
-                        reconstruction_target=record.config.reconstruction_target,
-                        masking_mode=record.config.masking_mode,
-                    )
-                    warnings.extend(segmentation_warnings)
-                    atomic_json(keyframes_path, keyframe_payload)
-                    self.store.register_artifacts(
-                        record, [keyframes_path, scene_path, *segmentation_artifacts]
-                    )
-                    blocking = [
-                        warning["message"]
-                        for warning in segmentation_warnings
-                        if warning["code"].startswith("REQUIRED_SEGMENTATION")
-                    ]
-                    if blocking:
-                        raise PipelineError(
-                            "Required reconstruction masking is unavailable: " + blocking[0]
-                        )
-                elif scene_warnings:
-                    warnings.append(
-                        {
-                            "code": "SCENE_MASK_RECOMMENDATION_NOT_APPLIED",
-                            "message": (
-                                "Scene analysis recommended masking, but optional segmentation was "
-                                "not enabled; reconstruction will remain unmasked and dense gates may block."
-                            ),
-                        }
-                    )
                 updated_ingest = self._merge_telemetry_metadata(record, warnings)
                 self.store.register_artifacts(record, [updated_ingest])
                 self._complete_checkpoint_stage(
                     record,
                     checkpoint,
                     "PREPROCESS",
-                    [*handoff, scene_path, *segmentation_artifacts, updated_ingest],
+                    [*handoff, scene_path, updated_ingest],
+                    warnings,
+                )
+
+            self._raise_if_cancelled(record)
+            if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "SEGMENTATION"):
+                reused_stages.append("SEGMENTATION")
+                warnings = list(checkpoint.completed["SEGMENTATION"].warnings)
+            else:
+                resume_chain = False
+                self._begin_checkpoint_stage(record, checkpoint, "SEGMENTATION")
+                keyframes_path = run_dir / "keyframes.json"
+                keyframe_payload = json.loads(keyframes_path.read_text(encoding="utf-8"))
+                frame_rows = keyframe_payload.get("frames", [])
+                segmentation_artifacts: list[Path] = []
+                segmentation_warnings: list[dict[str, str]] = []
+                requested_device = record.config.segmentation_device
+                executed_device: str | None = None
+                comparison: dict[str, object] | None = None
+                if record.config.enable_segmentation:
+                    executed_device, device_warnings = resolve_segmentation_device(record.config)
+                    segmentation_warnings.extend(device_warnings)
+                    if executed_device is not None:
+                        settings = segmentation_settings(record.config, device=executed_device)
+                        segmentation_artifacts, provider_warnings = run_optional_segmentation(
+                            run_dir,
+                            record.run_id,
+                            frame_rows,
+                            record.config.segmentation_model_path,
+                            reconstruction_target=record.config.reconstruction_target,
+                            masking_mode=record.config.masking_mode,
+                            settings=settings,
+                            cancel_requested=lambda: self._cancel_path(record).exists(),
+                            accelerator_authorized=executed_device != "cpu",
+                        )
+                        segmentation_warnings.extend(provider_warnings)
+                        comparison_path = run_dir / "segmentation_comparison.json"
+                        if comparison_path.is_file():
+                            comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+                    else:
+                        comparison = {
+                            "status": "BLOCKED"
+                            if record.config.masking_mode == "REQUIRED"
+                            else "UNAVAILABLE_FALLBACK",
+                            "selected_frame_count": sum(
+                                bool(item.get("selected", True))
+                                for item in frame_rows
+                                if isinstance(item, dict)
+                            ),
+                            "comparison": device_warnings[0]["message"],
+                            "execution": {},
+                        }
+                else:
+                    comparison = {
+                        "status": "DISABLED",
+                        "selected_frame_count": sum(
+                            bool(item.get("selected", True))
+                            for item in frame_rows
+                            if isinstance(item, dict)
+                        ),
+                        "comparison": "Segmentation was not enabled for this run.",
+                        "execution": {},
+                    }
+                    if any(item.get("code", "").startswith("SCENE_") for item in warnings):
+                        segmentation_warnings.append(
+                            {
+                                "code": "SCENE_MASK_RECOMMENDATION_NOT_APPLIED",
+                                "message": (
+                                    "Scene analysis recommended masking, but segmentation was not "
+                                    "enabled; reconstruction remains explicitly unmasked."
+                                ),
+                            }
+                        )
+                status_path = write_segmentation_status(
+                    record,
+                    run_dir,
+                    comparison,
+                    segmentation_warnings,
+                    requested_device=requested_device,
+                    executed_device=executed_device,
+                )
+                warnings.extend(segmentation_warnings)
+                atomic_json(keyframes_path, keyframe_payload)
+                self.store.register_artifacts(
+                    record, [keyframes_path, status_path, *segmentation_artifacts]
+                )
+                blocking = [
+                    warning["message"]
+                    for warning in segmentation_warnings
+                    if warning["code"].startswith("REQUIRED_SEGMENTATION")
+                    or (
+                        warning["code"] == "SEGMENTATION_DEVICE_UNAVAILABLE"
+                        and record.config.masking_mode == "REQUIRED"
+                    )
+                ]
+                if blocking:
+                    raise PipelineError(
+                        "Required reconstruction masking is unavailable: " + blocking[0]
+                    )
+                self._complete_checkpoint_stage(
+                    record,
+                    checkpoint,
+                    "SEGMENTATION",
+                    [keyframes_path, status_path, *segmentation_artifacts],
                     warnings,
                 )
 
@@ -1771,7 +1932,9 @@ class PipelineRunner:
             if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "SPARSE"):
                 reused_stages.append("SPARSE")
                 warnings = list(checkpoint.completed["SPARSE"].warnings)
-                metrics = MatcherMetrics.model_validate_json(metrics_path.read_text(encoding="utf-8"))
+                metrics = MatcherMetrics.model_validate_json(
+                    metrics_path.read_text(encoding="utf-8")
+                )
                 result = ReconstructionResult(metrics, [], [])
                 alignment_report = json.loads(alignment_path.read_text(encoding="utf-8"))
             else:
@@ -1782,7 +1945,8 @@ class PipelineRunner:
                 )
                 with self._heavy_job_slot(record):
                     result = self._reconstruct(record)
-                self.store.register_artifacts(record, result.artifacts)
+                mask_usage_path = self._write_sparse_mask_usage(record, result)
+                self.store.register_artifacts(record, [*result.artifacts, mask_usage_path])
                 alignment = self._align_to_local_metric(record, warnings)
                 self.store.register_artifacts(record, alignment)
                 atomic_json(
@@ -1801,7 +1965,13 @@ class PipelineRunner:
                     record,
                     checkpoint,
                     "SPARSE",
-                    [*result.artifacts, *alignment, metrics_path, benchmark_path],
+                    [
+                        *result.artifacts,
+                        mask_usage_path,
+                        *alignment,
+                        metrics_path,
+                        benchmark_path,
+                    ],
                     warnings,
                 )
 
@@ -1827,6 +1997,65 @@ class PipelineRunner:
                     self._complete_checkpoint_stage(
                         record, checkpoint, "DENSE", dense_artifacts, warnings
                     )
+
+            self._raise_if_cancelled(record)
+            if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "COVERAGE"):
+                reused_stages.append("COVERAGE")
+                warnings = list(checkpoint.completed["COVERAGE"].warnings)
+            else:
+                resume_chain = False
+                self._begin_checkpoint_stage(record, checkpoint, "COVERAGE")
+                coverage_path = write_coverage_report(record, run_dir)
+                self.store.register_artifacts(record, [coverage_path])
+                coverage_payload = json.loads(coverage_path.read_text(encoding="utf-8"))
+                if coverage_payload.get("status") != "COMPLETED":
+                    warnings.append(
+                        {
+                            "code": "COVERAGE_UNAVAILABLE",
+                            "message": str(
+                                coverage_payload.get("failure_reason")
+                                or "Coverage analysis was unavailable"
+                            ),
+                        }
+                    )
+                self._complete_checkpoint_stage(
+                    record, checkpoint, "COVERAGE", [coverage_path], warnings
+                )
+
+            self._raise_if_cancelled(record)
+            if resume_chain and self._checkpoint_stage_valid(record, checkpoint, "COMPLETION"):
+                reused_stages.append("COMPLETION")
+                warnings = list(checkpoint.completed["COMPLETION"].warnings)
+            else:
+                resume_chain = False
+                self._begin_checkpoint_stage(record, checkpoint, "COMPLETION")
+                if record.config.enable_completion:
+                    completion_payload, completion_paths, _ = run_completion(
+                        record,
+                        run_dir,
+                        CompletionRequest(),
+                        cancel_requested=lambda: self._cancel_path(record).exists(),
+                    )
+                else:
+                    completion_path = write_completion_not_run(
+                        record, run_dir, "Completion was disabled by configuration."
+                    )
+                    completion_payload = json.loads(completion_path.read_text(encoding="utf-8"))
+                    completion_paths = [completion_path]
+                self.store.register_artifacts(record, completion_paths)
+                if completion_payload.get("status") not in {"completed", "not_run"}:
+                    warnings.append(
+                        {
+                            "code": "COMPLETION_NOT_PRODUCED",
+                            "message": str(
+                                completion_payload.get("failure_reason")
+                                or "No inferred completion geometry was produced"
+                            ),
+                        }
+                    )
+                self._complete_checkpoint_stage(
+                    record, checkpoint, "COMPLETION", completion_paths, warnings
+                )
 
             self._raise_if_cancelled(record)
             quality_path = run_dir / "quality_report.json"

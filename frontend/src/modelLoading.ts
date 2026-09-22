@@ -17,6 +17,8 @@ export function declaredVisualArtifactUrls(manifest: ViewerManifest): Set<string
   add(manifest.visual_models?.dense_cloud);
   add(manifest.visual_models?.textured_mesh);
   add(manifest.visual_models?.gaussian_splat);
+  add(manifest.visual_models?.completed_geometry);
+  add(manifest.visual_models?.inferred_geometry);
   for (const texture of manifest.visual_models?.textured_mesh?.texture_urls ?? []) {
     if (texture) urls.add(texture);
   }
@@ -48,9 +50,11 @@ export function formatByteSize(bytes: number | null | undefined): string {
   return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
 }
 
-export function visualModelLabel(mode: "EVIDENCE" | "TEXTURED" | "PHOTOREAL"): string {
+export function visualModelLabel(mode: import("./types").VisualMode): string {
   if (mode === "TEXTURED") return "Textured Model";
   if (mode === "PHOTOREAL") return "Photoreal View";
+  if (mode === "INFERRED") return "Inferred Only";
+  if (mode === "BOTH") return "Observed + Inferred";
   return "Evidence Cloud";
 }
 

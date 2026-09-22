@@ -4,10 +4,11 @@ Real capture intake and server execution are documented in
 [`docs/real-dataset-validation.md`](docs/real-dataset-validation.md). The preparation command is
 safe to run before COLMAP/GPU access and does not start reconstruction.
 
-This repository implements Jay's seven-day contract scope for the trustworthy single-pass drone
+This repository implements the operator and backend scope for the trustworthy single-pass drone
 video reconstruction prototype: immutable ingest, FastAPI orchestration, exact run states, COLMAP
-execution, local-metric alignment utilities, SIFT-vs-learned matcher selection, declared artifact
-serving, and quality/known-distance reporting.
+SIFT execution, local-metric alignment utilities, declared artifact serving, persisted measurements,
+geometry exports, and quality/known-distance reporting. Learned matching remains an unimplemented
+experiment and is rejected rather than silently falling back or being misreported.
 
 It does not claim that a reconstruction has been produced without real synchronized drone data and
 COLMAP. `SYNTHETIC_DEMO` is only a deterministic orchestration fixture and is labeled in its PLY,
@@ -202,13 +203,14 @@ files and are never declared or served as reconstruction evidence.
 - `docs/architecture.md` - ownership boundary and invariants.
 - `docs/api.md` - endpoint and preprocessing handoff contract.
 - `docs/matcher-benchmark.md` - SIFT/SuperPoint+LightGlue promotion rule.
-- `examples/viewer-manifest.json` - exact frontend payload sample for Arnav.
+- `examples/viewer-manifest.json` - frontend payload fixture.
 
-## Arnav operator frontend
+## Operator frontend
 
-The React/TypeScript/Three.js workspace lives in `frontend/`. It provides upload/demo selection,
-exact pipeline progress, PLY + flight-path viewing, source-frame inspection, confidence filters,
-confidence-aware measurement and the quality/limitations report.
+The React/TypeScript/Three.js workspace lives in `frontend/`. It provides server project/run
+navigation, refresh recovery, supported run configuration, early sparse access, source-frame and
+confidence inspection, backend-persisted measurement, linked reruns, cancellation/resume, and
+declared export/report downloads.
 
 ```bash
 make ui-install
@@ -218,8 +220,8 @@ make ui
 For deterministic browser QA without the API, open `http://127.0.0.1:5173/?fixture=1`. It is
 prominently labelled as a synthetic UI fixture and does not count as reconstruction evidence.
 
-Arnav's delivery ledger and cross-team review are in `docs/arnav-seven-day-evidence.md` and
-`docs/arnav-integration-review.md`.
+The older Arnav delivery ledgers are historical first-round notes; current ownership and contracts
+are authoritative in `docs/architecture.md` and `docs/api.md`.
 
 ## Honest limitations
 
