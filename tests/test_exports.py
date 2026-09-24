@@ -346,7 +346,7 @@ def test_inferred_mesh_remains_inferred_and_measurement_disabled(tmp_path: Path)
     _, record, run_dir = _record_with_geometry(
         tmp_path,
         mesh=UNTEXTURED_MESH_PLY,
-        mesh_relative="completion/inferred_mesh.ply",
+        mesh_relative="completion/fixture/inferred_geometry.ply",
     )
 
     observed_only = build_export_readiness(record, run_dir)
@@ -355,12 +355,61 @@ def test_inferred_mesh_remains_inferred_and_measurement_disabled(tmp_path: Path)
 
     report = build_export_readiness(record, run_dir, include_inferred=True)
     assert report["geometry_selection"] == "OBSERVED_AND_COMPLETED"
+    assert report["completed_export_contract"]["representation"] == (
+        "SEPARATE_OBSERVED_AND_INFERRED_PACKAGES"
+    )
+    assert report["completed_export_contract"]["combined_completed_geometry_exported"] is False
 
     for name in ("OBJ", "GLB_GLTF"):
         exported = report["formats"][name]["exports"][0]
         assert exported["geometry_provenance"] == "INFERRED"
         assert exported["measurement_eligible"] is False
         assert exported["measurement_api_supported"] is False
+
+
+def test_completed_selection_reopens_separate_observed_and_inferred_meshes(
+    tmp_path: Path,
+) -> None:
+    store, record, run_dir = _record_with_geometry(tmp_path, mesh=UNTEXTURED_MESH_PLY)
+    inferred = run_dir / "completion" / "fixture" / "inferred_geometry.ply"
+    inferred.parent.mkdir(parents=True)
+    inferred.write_text(UNTEXTURED_MESH_PLY, encoding="ascii")
+    status = run_dir / "completion_status.json"
+    atomic_json(
+        status,
+        {
+            "status": "completed",
+            "method": "BOUNDED_PLANAR_GAP",
+            "source_geometry_sha256": next(
+                item.sha256
+                for item in record.artifacts
+                if item.relative_path == "dense/textured/model.ply"
+            ),
+            "inferred_artifact_url": (
+                f"/api/runs/{record.run_id}/artifacts/completion/fixture/inferred_geometry.ply"
+            ),
+            "inferred_face_count": 2,
+            "eligible_for_measurement": False,
+        },
+    )
+    store.register_artifacts(record, [inferred, status])
+    record = store.get_run(record.run_id)
+
+    report = build_export_readiness(record, run_dir, include_inferred=True)
+    for name, suffix in (("OBJ", "model.obj"), ("GLB_GLTF", "model.glb")):
+        exports = report["formats"][name]["exports"]
+        assert {item["geometry_provenance"] for item in exports} == {
+            "DERIVED_OBSERVED_VISUAL",
+            "INFERRED",
+        }
+        for item in exports:
+            reopened = trimesh.load(run_dir / _file(item, suffix), process=False)
+            if isinstance(reopened, trimesh.Scene):
+                assert len(reopened.geometry) == 1
+                reopened = next(iter(reopened.geometry.values()))
+            assert len(reopened.vertices) == 4
+            assert len(reopened.faces) == 2
+            assert item["measurement_eligible"] is False
 
 
 def test_non_finite_geometry_is_rejected_without_publishing_exports(tmp_path: Path) -> None:
@@ -376,6 +425,17 @@ def test_non_finite_geometry_is_rejected_without_publishing_exports(tmp_path: Pa
     assert "non-finite" in report["formats"]["LAS"]["reason"]
     assert report["generated_files"] == []
     assert sha256_file(source) == original_hash
+
+
+def test_mesh_export_scene_limit_fails_before_publication(tmp_path: Path, monkeypatch) -> None:
+    from sih26158 import exports as export_module
+
+    _, record, run_dir = _record_with_geometry(tmp_path, mesh=UNTEXTURED_MESH_PLY)
+    monkeypatch.setattr(export_module, "MAX_EXPORT_VERTICES", 3)
+    report = build_export_readiness(record, run_dir)
+    assert report["formats"]["OBJ"]["status"] == "INVALID_OR_UNSUPPORTED"
+    assert "vertex/face export limits" in report["formats"]["OBJ"]["reason"]
+    assert not (run_dir / "exports" / "obj").exists()
 
 
 @pytest.mark.parametrize(

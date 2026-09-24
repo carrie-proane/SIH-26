@@ -1,10 +1,22 @@
 import json
+import sys
+import time
 from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 
-from sih26158.segmentation import run_optional_segmentation
+from sih26158.process_control import (
+    ManagedProcessExecutor,
+    ProcessCancelledError,
+    ProcessTimeoutError,
+)
+from sih26158.segmentation import (
+    SegmentationSettings,
+    run_managed_segmentation,
+    run_optional_segmentation,
+)
 
 
 def test_mocked_segmentation_declares_masks_without_model_download(tmp_path: Path) -> None:
@@ -248,8 +260,6 @@ def test_off_does_not_load_weights_and_cleans_previous_masks(tmp_path, monkeypat
 
 
 def test_cancellation_timeout_limits_and_accelerator_allocation(tmp_path):
-    import pytest
-
     from sih26158.process_control import ProcessCancelledError, ProcessTimeoutError
     from sih26158.segmentation import SegmentationSettings
 
@@ -330,3 +340,41 @@ def test_class_policy_uses_actual_model_names_and_explicit_predict_settings(tmp_
     assert calls[0]["device"] == "cpu" and calls[0]["retina_masks"] is True
     assert calls[0]["max_det"] == 100 and calls[0]["imgsz"] == 640
     assert calls[0]["iou"] == 0.7
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_managed_segmentation_kills_blocked_worker_and_cleans_partial_outputs(
+    tmp_path: Path, cancel: bool
+) -> None:
+    frames = _frames(tmp_path)
+    (tmp_path / "keyframes.json").write_text(json.dumps({"frames": frames}))
+    partial = tmp_path / "masks" / "frame_0_dynamic.png"
+    script = (
+        "from pathlib import Path; import time; "
+        f"p=Path({str(partial)!r}); p.parent.mkdir(parents=True, exist_ok=True); "
+        "p.write_bytes(b'partial'); time.sleep(30)"
+    )
+    started = time.monotonic()
+    executor = ManagedProcessExecutor(
+        timeout_s=5 if cancel else 0.2,
+        cancel_requested=(lambda: time.monotonic() - started > 0.1) if cancel else (lambda: False),
+        heartbeat=lambda: None,
+        poll_interval_s=0.02,
+        terminate_grace_s=0.1,
+    )
+    expected = ProcessCancelledError if cancel else ProcessTimeoutError
+    with pytest.raises(expected):
+        run_managed_segmentation(
+            tmp_path,
+            "run_test",
+            frames,
+            None,
+            reconstruction_target="FULL_SCENE",
+            masking_mode="AUTO",
+            settings=SegmentationSettings(timeout_s=5),
+            executor=executor,
+            worker_command=[sys.executable, "-c", script],
+        )
+    assert time.monotonic() - started < 3
+    assert not partial.exists()
+    assert not (tmp_path / ".segmentation-worker-outcome.json").exists()

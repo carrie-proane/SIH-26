@@ -60,9 +60,11 @@ PYTHONPATH=src .venv/bin/python -m uvicorn sih26158.app:app \
   --host 127.0.0.1 --port 8000
 ```
 
-No separate worker is required. The API runner uses per-run filesystem locks and a separate
-cross-run heavy-job slot. Kernel locks recover after a process crash; a surviving managed child PID
-marker conservatively prevents a duplicate reconstruction.
+No separate worker service is required. The API runner uses per-run filesystem locks and a
+cross-run heavy-job slot for sparse, dense, segmentation and completion. Segmentation inference
+runs in a managed child process group so timeout/cancellation can terminate a blocked provider.
+Kernel locks recover after a process crash; a surviving managed child PID marker conservatively
+prevents duplicate work.
 
 For approved remote access, tunnel rather than binding publicly:
 
@@ -77,6 +79,8 @@ PYTHONPATH=src .venv/bin/python -m sih26158.cli run \
   --video /approved/short.mp4 --telemetry /approved/short.srt \
   --video-origin REAL --telemetry-origin REAL \
   --profile smoke --matching-strategy SEQUENTIAL \
+  --masking-mode REQUIRED --segmentation-model /approved/models/segmentation.pt \
+  --segmentation-device cpu \
   --max-candidate-frames 40 --max-selected-frames 24 \
   --processing-max-image-dimension 1280 --worker-threads 4 \
   --sparse-timeout 1800
@@ -94,6 +98,8 @@ PYTHONPATH=src .venv/bin/python -m sih26158.cli run \
   --video-origin REAL --telemetry-origin REAL \
   --profile accurate --matching-strategy SEQUENTIAL --sequential-overlap 15 \
   --use-gpu --dense --dense-provider auto \
+  --masking-mode REQUIRED --segmentation-model /approved/models/segmentation.pt \
+  --segmentation-device cuda \
   --max-candidate-frames 480 --max-selected-frames 180 \
   --processing-max-image-dimension 3840 --worker-threads 8 \
   --sparse-timeout 14400 --dense-timeout 28800 --coverage-interval 60
@@ -131,3 +137,36 @@ Before creating a Slurm script, obtain the institute partition/QOS, wall-time li
 syntax, GPU generic-resource syntax, local scratch path, module/container policy, network policy, and
 job-step rules. Do not bypass allocation or assume a GPU/VRAM/driver. Set worker threads and
 `SIH_HEAVY_JOB_LIMIT` within the assigned resources; leave `CUDA_VISIBLE_DEVICES` unchanged.
+
+## College allocation validation still pending
+
+Run these only after an allocation exists; do not report them as passed from a laptop fixture:
+
+```bash
+nvidia-smi
+printf 'CUDA_VISIBLE_DEVICES=%s\n' "${CUDA_VISIBLE_DEVICES-<unset>}"
+PYTHONPATH=src .venv/bin/python -m sih26158.cli doctor \
+  --video /approved/short.mp4 --telemetry /approved/short.srt \
+  --minimum-free-disk-gb 50 --output college-preflight.json
+PYTHONPATH=src .venv/bin/python -m sih26158.cli execution-probe \
+  --use-gpu --output college-execution-probe.json
+make verify
+```
+
+Then run the tiny real integration above with approved local segmentation weights once on the
+allocated CUDA device by replacing `--segmentation-device cpu` with `cuda`, and once with explicit
+CPU fallback by also adding `--segmentation-allow-cpu-fallback`. Before either run verify the local
+checkpoint without downloading anything:
+
+```bash
+test -r /approved/models/segmentation.pt
+shasum -a 256 /approved/models/segmentation.pt
+```
+
+While a provider call is active, submit
+a second segmentation/completion request to verify the global heavy-job limit, and cancel one run
+to verify the managed child is gone and no partial masks are declared. Preserve capability,
+segmentation, coverage, completion, export, benchmark and operation-timing artifacts. Finally run
+the representative fresh ten-minute command. Large-scene memory, third-party LAS/OBJ/GLB reader
+interoperability, real completion accuracy, GPU behavior and the under-15-minute target remain
+unvalidated until those commands produce reviewed artifacts.

@@ -67,7 +67,7 @@ from .process_control import (
 )
 from .report import build_quality_report, write_quality_report
 from .scene_policy import analyze_scene
-from .segmentation import run_optional_segmentation
+from .segmentation import run_managed_segmentation
 from .storage import ProjectStore, atomic_json, sha256_file
 from .sync import calibrate_telemetry_offset
 
@@ -615,6 +615,29 @@ class PipelineRunner:
             if time.monotonic() - started >= self.heavy_job_wait_timeout_s:
                 raise PipelineError(
                     "Timed out waiting for a global heavy-job slot; another run may still be active."
+                )
+            self._heartbeat(record.run_id)
+            time.sleep(0.1)
+
+    @contextmanager
+    def _accelerator_slot(self, record: RunRecord, device: str):
+        """Serialize use of one scheduler-visible accelerator allocation across runs."""
+
+        if device == "cpu":
+            yield None
+            return
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES", "scheduler-default")
+        identity = hashlib.sha256(f"{device}:{visible}".encode()).hexdigest()[:16]
+        started = time.monotonic()
+        while True:
+            self._raise_if_cancelled(record)
+            with self.store.resource_lock(f"accelerator-{identity}") as slot:
+                if slot.acquired:
+                    yield f"{device}:{visible}"
+                    return
+            if time.monotonic() - started >= self.heavy_job_wait_timeout_s:
+                raise PipelineError(
+                    f"Timed out waiting for the allocated {device} device; another run is active."
                 )
             self._heartbeat(record.run_id)
             time.sleep(0.1)
@@ -1843,17 +1866,22 @@ class PipelineRunner:
                     segmentation_warnings.extend(device_warnings)
                     if executed_device is not None:
                         settings = segmentation_settings(record.config, device=executed_device)
-                        segmentation_artifacts, provider_warnings = run_optional_segmentation(
-                            run_dir,
-                            record.run_id,
-                            frame_rows,
-                            record.config.segmentation_model_path,
-                            reconstruction_target=record.config.reconstruction_target,
-                            masking_mode=record.config.masking_mode,
-                            settings=settings,
-                            cancel_requested=lambda: self._cancel_path(record).exists(),
-                            accelerator_authorized=executed_device != "cpu",
-                        )
+                        with self._heavy_job_slot(record), self._accelerator_slot(
+                            record, executed_device
+                        ):
+                            segmentation_artifacts, provider_warnings = run_managed_segmentation(
+                                run_dir,
+                                record.run_id,
+                                frame_rows,
+                                record.config.segmentation_model_path,
+                                reconstruction_target=record.config.reconstruction_target,
+                                masking_mode=record.config.masking_mode,
+                                settings=settings,
+                                executor=self._managed_executor(
+                                    record, record.config.segmentation_timeout_s
+                                ),
+                                accelerator_authorized=executed_device != "cpu",
+                            )
                         segmentation_warnings.extend(provider_warnings)
                         comparison_path = run_dir / "segmentation_comparison.json"
                         if comparison_path.is_file():
@@ -2005,7 +2033,11 @@ class PipelineRunner:
             else:
                 resume_chain = False
                 self._begin_checkpoint_stage(record, checkpoint, "COVERAGE")
-                coverage_path = write_coverage_report(record, run_dir)
+                project = self.store.get_project(record.project_id)
+                raw_video = next(asset for asset in project.assets if asset.role == "video")
+                coverage_path = write_coverage_report(
+                    record, run_dir, video_sha256=raw_video.sha256
+                )
                 self.store.register_artifacts(record, [coverage_path])
                 coverage_payload = json.loads(coverage_path.read_text(encoding="utf-8"))
                 if coverage_payload.get("status") != "COMPLETED":
@@ -2030,12 +2062,13 @@ class PipelineRunner:
                 resume_chain = False
                 self._begin_checkpoint_stage(record, checkpoint, "COMPLETION")
                 if record.config.enable_completion:
-                    completion_payload, completion_paths, _ = run_completion(
-                        record,
-                        run_dir,
-                        CompletionRequest(),
-                        cancel_requested=lambda: self._cancel_path(record).exists(),
-                    )
+                    with self._heavy_job_slot(record):
+                        completion_payload, completion_paths, _ = run_completion(
+                            record,
+                            run_dir,
+                            CompletionRequest(),
+                            cancel_requested=lambda: self._cancel_path(record).exists(),
+                        )
                 else:
                     completion_path = write_completion_not_run(
                         record, run_dir, "Completion was disabled by configuration."

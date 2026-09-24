@@ -32,8 +32,8 @@ Jay owns the operator frontend, project/run API, run state, backend integration,
 artifact publication, server execution and final evaluation. Yosha owns dataset/reference
 preparation, segmentation/model improvements, coverage diagnostics and constrained/symmetry
 completion algorithms. Existing frame, telemetry and mask contracts remain integrated; a compatible
-external handoff remains an optional debugging override. Future completion output must be additive,
-separate inferred geometry and remain excluded from verified measurement.
+external handoff remains an optional debugging override. Bounded completion is now integrated as
+additive, separately versioned inferred geometry and remains excluded from verified measurement.
 
 ## Invariants
 
@@ -49,11 +49,12 @@ separate inferred geometry and remain excluded from verified measurement.
   be submitted again.
 - An interrupted COLMAP attempt restarts only its private scratch workspace so a partial SQLite
   database cannot contaminate the retry. Previously declared evidence remains untouched.
-- Separate `.resource_locks/heavy-N.lock` slots limit expensive work across different runs; the
+- Separate `.resource_locks/heavy-N.lock` slots limit sparse, dense, segmentation and completion
+  work across different runs; the
   default is one slot and `SIH_HEAVY_JOB_LIMIT` may raise it within scheduler allocations.
 - A live `.active_process.json` PID marker blocks crash recovery while a managed child survives;
   heartbeat expiry alone never authorizes duplicate execution.
-- Long COLMAP/OpenMVS commands execute in isolated process groups with a shared stage deadline,
+- Long COLMAP/OpenMVS commands and the segmentation worker execute in isolated process groups with a shared stage deadline,
   periodic manifest heartbeat, and cross-process cancellation marker. Cancellation terminates the
   process group and records `CANCELLED` without relabeling it as reconstruction failure.
 - `server_capabilities.json` freezes the host preflight used to choose CPU/GPU sparse execution and
@@ -74,6 +75,12 @@ separate inferred geometry and remain excluded from verified measurement.
 - Export success does not change the source provenance or measurement eligibility. Sparse points
   are never triangulated into an observed mesh, and unsupported attributes are disclosed rather
   than silently relabelled or dropped.
+- Coverage is topology-only unless a declared, raw-video-bound camera-Z metric depth contract with
+  calibrated intrinsics and rigid poses validates. Relative depth cannot become metric evidence.
+- Completion decisions cite only hash-matched selected frames. Status is versioned per fingerprint;
+  a new decision supersedes the current pointer without deleting earlier attempt evidence.
+- Completed OBJ/GLB selection uses separate observed and inferred packages, avoiding fragile
+  cross-format face-index claims. Symmetry remains explicitly unsupported.
 
 ## Local coordinate alignment
 

@@ -1,5 +1,9 @@
 # Data, segmentation and bounded-completion handoff
 
+> Historical delivery note: the “not wired” statements below describe Yosha's original branch at
+> handoff time. The current `jay/yosha-integration` state supersedes them; see
+> `completion-contract.md`, `architecture.md` and `requirements-matrix.md` for integrated status.
+
 Working branch: `yosha/data-ai-completion`.
 Baseline fetched from `origin/jay/real-dataset-workflow`:
 `8080847469a8fe0f20d816ec5629fdb300e53063` (exactly the pinned handoff).

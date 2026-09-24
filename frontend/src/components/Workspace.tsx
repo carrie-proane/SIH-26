@@ -21,6 +21,7 @@ import {
 } from "../visualModels";
 import { coordinateFramePresentation } from "../coordinateFrame";
 import { PointCloudViewer } from "./PointCloudViewer";
+import { GapReviewPanel } from "./GapReviewPanel";
 
 interface WorkspaceProps {
   bundle: ViewerBundle;
@@ -33,6 +34,7 @@ interface WorkspaceProps {
   onCancel?: () => void;
   onResume?: () => void;
   onRerun: (config: RunConfiguration) => void;
+  onCompletionChanged?: () => void;
 }
 
 const IDLE_MEASUREMENT: MeasurementResult = {
@@ -111,7 +113,7 @@ function SourcePreview({
   );
 }
 
-export function Workspace({ bundle, project, run, readiness, actionBusy, globalError, onReset, onCancel, onResume, onRerun }: WorkspaceProps) {
+export function Workspace({ bundle, project, run, readiness, actionBusy, globalError, onReset, onCancel, onResume, onRerun, onCompletionChanged }: WorkspaceProps) {
   const { manifest, cameraPoses, keyframes, quality, pointConfidence } = bundle;
   const confidenceAvailable = manifest.confidence.available && pointConfidence !== null;
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(
@@ -458,6 +460,8 @@ export function Workspace({ bundle, project, run, readiness, actionBusy, globalE
                 <div><dt>Source</dt><dd>{selectedFrame?.source ?? "declared artifact"}</dd></div>
               </dl>
             </section>
+
+            {run && readiness?.coverage?.url && <GapReviewPanel runId={run.run_id} onCompleted={() => onCompletionChanged?.()} />}
             {showDepth && (
               <div className="ai-caveat">
                 <strong>AI visual assistance only</strong>

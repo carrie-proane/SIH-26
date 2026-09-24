@@ -691,6 +691,16 @@ def test_global_heavy_job_slots_are_distinct_from_per_run_lock(tmp_path: Path) -
             assert competing.acquired is False
 
 
+def test_named_accelerator_lock_prevents_same_allocation_contention(tmp_path: Path) -> None:
+    store = ProjectStore(tmp_path / "projects")
+    with store.resource_lock("accelerator-fixture") as held:
+        assert held.acquired is True
+        with store.resource_lock("accelerator-fixture") as competing:
+            assert competing.acquired is False
+        with store.resource_lock("accelerator-other") as other:
+            assert other.acquired is True
+
+
 def test_worker_threads_are_clamped_to_scheduler_allocation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

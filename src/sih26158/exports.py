@@ -25,6 +25,9 @@ EXPORTER_NAME = "sih26158.geometry_exports"
 EXPORTER_VERSION = "1.0"
 EXPORT_CONTRACT_VERSION = "2.0"
 LAS_TARGET_SCALE_M = 0.0001
+MAX_EXPORT_SOURCE_BYTES = 500_000_000
+MAX_EXPORT_VERTICES = 5_000_000
+MAX_EXPORT_FACES = 10_000_000
 
 # Local evidence is right-handed ENU: X east, Y north, Z up. glTF is
 # conventionally consumed as X right, Y up, -Z forward. This proper rotation
@@ -286,11 +289,17 @@ def _mesh_context(
     record: RunRecord, run_dir: Path, relative_path: str
 ) -> tuple[trimesh.Trimesh, Path, list[tuple[str, Path, ArtifactEntry]]]:
     source = _verified_artifact(record, run_dir, relative_path)
+    if source.stat().st_size > MAX_EXPORT_SOURCE_BYTES:
+        raise ExportUnavailable("Mesh exceeds the configured export source-byte limit")
     textures = _texture_dependencies(record, run_dir, relative_path, source)
     geometry = _load_ply(source)
     if not isinstance(geometry, trimesh.Trimesh) or len(geometry.faces) == 0:
         raise ExportUnavailable(
             "Source is a point cloud without declared faces; sparse points are not triangulated."
+        )
+    if len(geometry.vertices) > MAX_EXPORT_VERTICES or len(geometry.faces) > MAX_EXPORT_FACES:
+        raise ExportUnavailable(
+            "Mesh exceeds configured vertex/face export limits; use a validated bounded input"
         )
     if textures:
         uv = getattr(geometry.visual, "uv", None)
@@ -951,8 +960,7 @@ def _mesh_candidates(record: RunRecord, *, include_inferred: bool = False) -> li
     inferred = [
         path
         for path in sorted(declared)
-        if path.lower().endswith(".ply")
-        and any(token in path.lower() for token in ("inferred", "completion", "generated"))
+        if Path(path).name.lower() == "inferred_geometry.ply"
     ]
     return list(dict.fromkeys([*candidates, *inferred] if include_inferred else candidates))
 
@@ -967,8 +975,7 @@ def _point_candidates(record: RunRecord, *, include_inferred: bool = False) -> l
     inferred = [
         path
         for path in sorted(declared)
-        if path.lower().endswith(".ply")
-        and any(token in path.lower() for token in ("inferred", "completion", "generated"))
+        if Path(path).name.lower() == "inferred_geometry.ply"
         and path not in candidates
     ]
     if include_inferred and inferred:
@@ -1027,6 +1034,17 @@ def _export_mesh_formats(
             if provenance == "INFERRED" and "completion_status.json" in _declared(record):
                 completion_path = _verified_artifact(record, run_dir, "completion_status.json")
                 completion_metadata = json.loads(completion_path.read_text(encoding="utf-8"))
+                inferred_url = completion_metadata.get("inferred_artifact_url")
+                expected_relative = (
+                    str(inferred_url).split("/artifacts/", 1)[1]
+                    if isinstance(inferred_url, str) and "/artifacts/" in inferred_url
+                    else None
+                )
+                if completion_metadata.get("status") != "completed" or expected_relative != source_relative:
+                    raise ExportUnavailable(
+                        "Inferred geometry is not selected by the current completed attempt; "
+                        "choose or rerun that attempt before exporting it."
+                    )
                 dependency_hashes["completion_status.json"] = _declared(record)[
                     "completion_status.json"
                 ].sha256
@@ -1294,6 +1312,20 @@ def build_export_readiness(
         ),
         "geometry_selection": "OBSERVED_AND_COMPLETED" if include_inferred else "OBSERVED_ONLY",
         "completed_geometry_requires_explicit_selection": True,
+        "completed_export_contract": (
+            {
+                "representation": "SEPARATE_OBSERVED_AND_INFERRED_PACKAGES",
+                "reason": (
+                    "Separate packages preserve provenance without relying on fragile face-index "
+                    "ranges after independent format readers reorder geometry."
+                ),
+                "observed_geometry_provenance": "DERIVED_OBSERVED_VISUAL",
+                "inferred_geometry_provenance": "INFERRED",
+                "combined_completed_geometry_exported": False,
+            }
+            if include_inferred
+            else None
+        ),
     }
 
 

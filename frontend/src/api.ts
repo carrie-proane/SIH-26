@@ -2,6 +2,9 @@ import { parseCsv } from "./csv";
 import { parsePointConfidence } from "./confidence";
 import type {
   CameraPose,
+  CompletionRequestPayload,
+  CompletionStatus,
+  CoverageStatus,
   ExportReadiness,
   Keyframe,
   MeasurementCreatePayload,
@@ -140,22 +143,22 @@ export function getSegmentationStatus(
 export function getCoverageStatus(
   runId: string,
   signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>(`/api/runs/${runId}/coverage`, { signal });
+): Promise<CoverageStatus> {
+  return request<CoverageStatus>(`/api/runs/${runId}/coverage`, { signal });
 }
 
 export function getCompletionStatus(
   runId: string,
   signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>(`/api/runs/${runId}/completion`, { signal });
+): Promise<CompletionStatus> {
+  return request<CompletionStatus>(`/api/runs/${runId}/completion`, { signal });
 }
 
 export function requestCompletion(
   runId: string,
-  payload: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>(`/api/runs/${runId}/completion`, {
+  payload: CompletionRequestPayload,
+): Promise<CompletionStatus> {
+  return request<CompletionStatus>(`/api/runs/${runId}/completion`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

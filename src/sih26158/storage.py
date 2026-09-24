@@ -360,6 +360,13 @@ class ProjectStore:
         directory = self.root / ".resource_locks"
         return [RunExecutionLock(directory / f"heavy-{index}.lock") for index in range(limit)]
 
+    def resource_lock(self, name: str) -> RunExecutionLock:
+        """Return one named cross-process allocation lock (for example a visible GPU set)."""
+
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", name):
+            raise ValueError("Invalid resource lock name")
+        return RunExecutionLock(self.root / ".resource_locks" / f"{name}.lock")
+
     def save_run(self, record: RunRecord) -> None:
         record.updated_at = utc_now()
         with self._lock:

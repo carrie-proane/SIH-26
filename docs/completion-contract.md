@@ -1,9 +1,9 @@
-# Proposed completion and surface-support contract, version 1.0
+# Integrated bounded completion and surface-support contract, version 1.0
 
-Status: **PROPOSED_NOT_INTEGRATED**. Yosha supplies these algorithms and schemas. Jay owns
-orchestration, configuration, resources, lifecycle, artifact publication, exporters and all frontend
-work. No agreement with Jay is implied by this implementation. Existing run statuses and confidence
-enums are unchanged. The modules do not modify `pipeline.py`, `viewer_manifest.py` or `exports.py`.
+Status: **INTEGRATED_WITH_CONSERVATIVE_LIMITS**. The pipeline, API, viewer manifest, operator gap
+review and exporters share this contract. Existing run statuses and confidence enums remain
+unchanged. Fixture tests establish contract behavior only; they do not establish real completion
+accuracy.
 
 ## Inputs and lifecycle
 
@@ -15,10 +15,10 @@ resolution. Missing meshes, checksum mismatches and sparse point clouds return `
 A declaration is an integration trust boundary: Jay must construct it from the artifact index and
 validated alignment, never from arbitrary user assertions or a filename.
 
-`output_dir` must be new and outside the immutable source run, including through symlinks. The
-original mesh is loaded with the foundation's PLY reader, without processing, reordering or welding.
-It is checked again before output. This creates a standalone derived bundle, not a published run.
-Jay must choose a linked run or approved derived-artifact lifecycle before publication.
+The original mesh is loaded without processing, reordering or welding and checked again before
+output. Published completion attempts use source/request/dependency fingerprints. Every decision
+has an immutable versioned status; the current status is a pointer, so a later refusal does not
+erase an earlier successful attempt. Original geometry is never overwritten.
 
 ## Bounded planar algorithm
 
@@ -63,12 +63,14 @@ No ENU-to-GLB transform, texture transfer or observed-face replacement happens h
 | `completion/report.json` | Always: schema/status/reason, source, parameters, timing, counts, accepted/rejected regions, warnings, `measurement_eligible=false` |
 | `completion/generated_mesh.ply` | Only on `COMPLETED`: generated faces only, original ENU coordinate convention |
 | `completion/provenance.json` | Source run and hash, output hash, exhaustive zero-based generated face IDs and region mappings, source vertices/support faces/review images, assumptions, `geometry_source=AI_INFERRED`, `measurable=false` |
-| `coverage/report.json` | Caller serializes `CoverageReport` with existing `atomic_json`; no automatic pipeline publication |
+| `coverage_report.json` | Integrated topology candidates, boundary ENU coordinates, selected-frame evidence options and optional metric-depth support |
 
 The score records plane residual relative to the configured threshold. It is a rule-based score,
 not a calibrated probability. The viewer can map inferred geometry to the existing
 `AI_ASSISTED_NOT_MEASURABLE` label. RGB values are never interpreted as confidence. Any later
 simplification, reordering or conversion must preserve/remap face provenance or refuse export.
+OBJ/GLB completed selection therefore publishes observed and inferred geometry as separate
+packages, so an independent reader need not trust face-index stability after conversion.
 
 Machine-readable proposed schemas are in [schemas/](schemas/): completion source, gap review,
 report, provenance and coverage report. The Pydantic models in `completion_contract.py` and
@@ -94,30 +96,19 @@ areas, percentages and the denominator remain `null` with a reason: centroid sup
 reconstruction is not a reference domain for visible-scene completeness. Inferred patches never
 enter this calculation. Existing temporal coverage diagnostics remain untouched.
 
-## Integration dependencies to freeze with Jay
+## Integrated lifecycle and deferred work
 
-1. PREPROCESS must hash `segmentation_fingerprint_inputs(model_path, settings)`, including resolved
-   environment weights, checkpoint bytes, versions and every setting; bump the stage contract.
-   The existing fingerprint still hashes only the explicit model path. Until integrated, use fresh
-   runs for segmentation comparisons and never claim environment-weight cache invalidation works.
-2. Plumb the segmentation settings/cancellation callback and existing scheduler allocation. CPU is
-   the default. Accelerator use requires explicit caller authorization after resource allocation.
-   Cooperative checks cannot interrupt a blocked model call; use the existing managed process
-   executor for hard timeouts. Do not introduce another scheduler or runner.
-3. Completion cache inputs: source run/artifact and alignment hashes, coordinate contract, every
-   threshold, code/schema version, numpy/trimesh versions, source-image hashes and review decisions.
-   Coverage adds video/frame association, depth hashes, poses/intrinsics, depth semantics,
-   selected-frame flags, depth tolerance and proposal limits.
-4. Add all returned segmentation review artifacts to the existing artifact list (the current call
-   already registers returned paths). Add new completion/coverage schemas only after agreement.
-   Include enabled inference/completion and publication work in end-to-end timing.
-5. `RunConfig` currently accepts `SUPERPOINT_LIGHTGLUE` without an implemented execution path.
-   Jay must reject it or report requested/executed matchers separately. This delivery uses SIFT.
-6. FFprobe sees a -180° display-matrix rotation in DJI_0574 while preparation reports rotation null.
-   Existing extraction correctly records/applies 180°; the preparation metadata needs reconciliation.
-   The resulting preview also looks sideways and needs capture/orientation review before calibration.
+- Completion cache inputs include source run/artifact and alignment hashes, coordinate contract,
+  every threshold, code/schema and NumPy/trimesh versions, source-image hashes and review decisions.
+- Post-run completion shares the global heavy-job limit, records separate operation timing and
+  invalidates the current export-readiness pointer when the selected attempt changes. Previous
+  export/completion evidence remains declared and traceable. An identical fingerprint is idempotent.
+- Relative monocular depth is rejected. Metric support requires a declared
+  `coverage_depth_views.json`, raw-video hash, processed-grid intrinsics, rigid poses and hash-bound
+  camera-Z metre arrays. Topology remains available when this evidence is missing or rejected; no
+  completeness percentage or reference denominator is invented.
 
-Symmetry, terrain interpolation and learned depth fusion are deferred: no stable real observed mesh,
+Symmetry remains an explicit refusal, and terrain interpolation and learned depth fusion are deferred: no stable real observed mesh,
 real gap references, symmetric building or asymmetric counterexample was supplied. Synthetic patch
 checks establish behavior only. A real segmentation A/B and target-server performance are still
 required before promoting completion into the runtime.

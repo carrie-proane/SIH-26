@@ -214,6 +214,43 @@ curl -f -X POST http://127.0.0.1:8000/api/runs/RUN_ID/rerun \
 The endpoint returns 409 unless the source run is completed; it never mutates or resumes the source
 run.
 
+## Coverage review and bounded completion
+
+Fetch the declared candidate regions and current completion decision:
+
+```bash
+curl -f http://127.0.0.1:8000/api/runs/RUN_ID/coverage -o coverage.json
+curl -f http://127.0.0.1:8000/api/runs/RUN_ID/completion -o completion.json
+```
+
+`coverage.json` gives `boundary_id`, ENU-metre boundary coordinates, geometric refusal reasons,
+the observed source hash and `review_evidence_options`. Those evidence options are the only image
+path/hash pairs accepted for a confirmed gap. The UI records reviewer, explanation and one of
+`CONFIRMED_SMALL_GAP`, `STRUCTURAL_OPENING`, or `UNKNOWN` and submits, for example:
+
+```bash
+curl -f -X POST http://127.0.0.1:8000/api/runs/RUN_ID/completion \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "method": "BOUNDED_PLANAR_GAP",
+    "source_geometry_sha256": "SOURCE_HASH_FROM_COVERAGE",
+    "reviews": [{
+      "boundary_id": "BOUNDARY_ID_FROM_COVERAGE",
+      "decision": "CONFIRMED_SMALL_GAP",
+      "reviewer": "operator-name",
+      "explanation": "Small occluded patch, not a door/window/scene edge",
+      "source_images": [{"path": "frames/frame_000123.jpg", "sha256": "DECLARED_FRAME_HASH"}]
+    }]
+  }'
+```
+
+Missing evidence, a stale source hash, a frame hash mismatch, unsupported geometry and symmetry are
+explicit refusals. Structural/unknown decisions produce no faces. Successful inferred geometry is
+separate and never measurement eligible. Each attempt has a fingerprinted versioned status. A
+changed attempt invalidates current export readiness; fetch readiness again and POST `/exports` to
+regenerate packages. Partial completion success does not change observed coverage or sparse
+readiness.
+
 ## Geometry export availability and download
 
 Newly reported runs create exports automatically. For a completed, failed, or cancelled run that
@@ -356,6 +393,11 @@ OBJ/GLB. Observed, derived-observed visual, and inferred sources remain distinct
 OBJ text and LAS point records are streamed while writing, but the current PLY reader and GLB
 encoder still materialize geometry in memory. Multi-atlas PLY texturing and LAS classification
 outside the standard 0-31 range fail explicitly rather than dropping data.
+
+With `{"include_completed_geometry": true}`, completed selection is explicit. OBJ/GLB publish
+separate observed and inferred packages; they do not export the combined completion PLY because
+face reordering by independent readers could make index-range provenance fragile. The top-level
+`completed_export_contract` describes this representation.
 
 ## Traceable multiple measurements
 

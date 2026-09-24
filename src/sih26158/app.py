@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
+import time
 import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,9 +27,10 @@ from .models import (
     RunRecord,
     RunStatus,
 )
-from .pipeline import PipelineRunner
+from .pipeline import PipelineError, PipelineRunner
+from .process_control import ProcessCancelledError, ProcessTimeoutError
 from .report import measurement_evaluation
-from .storage import ProjectStore
+from .storage import ProjectStore, atomic_json
 from .viewer_manifest import ViewerManifestUnavailable, build_viewer_manifest
 
 
@@ -349,13 +352,65 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             checkpoint = runner._load_checkpoint(record)
             runner._begin_checkpoint_stage(record, checkpoint, "COMPLETION")
             try:
-                payload, paths, _ = run_completion(
-                    record,
-                    run_dir,
-                    request,
-                    cancel_requested=lambda: runner._cancel_path(record).exists(),
-                )
-                store.register_artifacts(record, paths)
+                started = time.monotonic()
+                with runner._heavy_job_slot(record):
+                    payload, paths, reused = run_completion(
+                        record,
+                        run_dir,
+                        request,
+                        cancel_requested=lambda: runner._cancel_path(record).exists(),
+                    )
+                additional_paths: list[Path] = []
+                if not reused:
+                    old_export = next(
+                        (
+                            item
+                            for item in record.artifacts
+                            if item.relative_path == "export_readiness.json"
+                        ),
+                        None,
+                    )
+                    if old_export is not None:
+                        archive = (
+                            run_dir
+                            / "reports"
+                            / f"export_readiness-before-completion-{old_export.sha256[:16]}.json"
+                        )
+                        archive.parent.mkdir(parents=True, exist_ok=True)
+                        if not archive.exists():
+                            shutil.copyfile(run_dir / old_export.relative_path, archive)
+                        additional_paths.append(archive)
+                        record.artifacts = [
+                            item
+                            for item in record.artifacts
+                            if item.relative_path != "export_readiness.json"
+                        ]
+                    operations_path = run_dir / "post_run_operations.json"
+                    operations: list[dict[str, object]] = []
+                    if operations_path.is_file():
+                        try:
+                            existing = json.loads(operations_path.read_text(encoding="utf-8"))
+                            if isinstance(existing, dict) and isinstance(
+                                existing.get("operations"), list
+                            ):
+                                operations = existing["operations"]
+                        except (OSError, json.JSONDecodeError):
+                            operations = []
+                    operations.append(
+                        {
+                            "operation": "COMPLETION",
+                            "fingerprint": payload.get("fingerprint"),
+                            "status": payload.get("status"),
+                            "duration_s": max(0.0, time.monotonic() - started),
+                            "export_readiness_invalidated": old_export is not None,
+                        }
+                    )
+                    atomic_json(
+                        operations_path,
+                        {"schema_version": "1.0", "operations": operations},
+                    )
+                    additional_paths.append(operations_path)
+                store.register_artifacts(record, [*paths, *additional_paths])
                 completion_warnings = [
                     {"code": "COMPLETION_WARNING", "message": str(message)}
                     for message in payload.get("warnings", [])
@@ -363,6 +418,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 runner._complete_checkpoint_stage(
                     record, checkpoint, "COMPLETION", paths, completion_warnings
                 )
+            except (ProcessCancelledError, ProcessTimeoutError, PipelineError) as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
             except (OSError, ValueError) as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
         return payload

@@ -91,6 +91,8 @@ def _run(args: argparse.Namespace) -> int:
         vocab_tree_path=args.vocab_tree,
         enable_segmentation=args.masking_mode != "OFF",
         segmentation_model_path=args.segmentation_model,
+        segmentation_device=args.segmentation_device,
+        segmentation_allow_cpu_fallback=args.segmentation_allow_cpu_fallback,
         reconstruction_target=args.reconstruction_target,
         masking_mode=args.masking_mode,
         enable_dense_reconstruction=args.dense,
@@ -312,6 +314,14 @@ def parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--masking-mode", choices=["OFF", "AUTO", "REQUIRED"], default="AUTO")
     run.add_argument("--segmentation-model", help="Path to local segmentation weights")
+    run.add_argument(
+        "--segmentation-device", choices=["cpu", "cuda", "mps"], default="cpu"
+    )
+    run.add_argument(
+        "--segmentation-allow-cpu-fallback",
+        action="store_true",
+        help="Explicitly permit CPU segmentation when the requested accelerator is unavailable.",
+    )
     run.add_argument(
         "--dense", action="store_true", help="Attempt optional visual-only dense reconstruction"
     )

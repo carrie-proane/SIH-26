@@ -16,8 +16,15 @@ from sih26158.app import create_app
 from sih26158.colmap import ColmapRunner, ExternalToolError
 from sih26158.completion import boundary_id
 from sih26158.completion_contract import GapReview
+from sih26158.coverage import depth_array_sha256
 from sih26158.dataset import DatasetAsset
-from sih26158.models import MeasurementCreate, MeasurementEndpoint, ProvenanceOrigin, RunConfig
+from sih26158.models import (
+    MeasurementCreate,
+    MeasurementEndpoint,
+    ProvenanceOrigin,
+    RunConfig,
+    RunStatus,
+)
 from sih26158.pipeline import PipelineRunner
 from sih26158.process_control import ProcessCancelledError, ProcessTimeoutError
 from sih26158.storage import ProjectStore, atomic_json, sha256_file
@@ -49,8 +56,13 @@ def prepare_frames(run_dir: Path) -> None:
     )
 
 
-def prepare_dense_run(tmp_path: Path, *, completion_timeout_s: float = 60):
-    store = ProjectStore(tmp_path / "projects")
+def prepare_dense_run(
+    tmp_path: Path,
+    *,
+    completion_timeout_s: float = 60,
+    store: ProjectStore | None = None,
+):
+    store = store or ProjectStore(tmp_path / "projects")
     project = make_project(store, tmp_path)
     record = store.create_run(
         project.project_id,
@@ -71,8 +83,7 @@ def prepare_dense_run(tmp_path: Path, *, completion_timeout_s: float = 60):
             "translation_m": [0, 0, 0],
         },
     )
-    image = run_dir / "source.png"
-    cv2.imwrite(str(image), np.zeros((12, 12, 3), np.uint8))
+    image = run_dir / "frames" / "frame.png"
     store.register_artifacts(record, [run_dir / "keyframes.json", mesh, transform, image])
     return store, record, run_dir, mesh, image
 
@@ -149,7 +160,11 @@ def test_coverage_and_completion_publish_separate_ineligible_geometry(tmp_path: 
     assert coverage["sufficient_for_completion"] is True
 
     source_hash = sha256_file(source_mesh)
-    image_asset = DatasetAsset(path="source.png", sha256=sha256_file(image))
+    assert coverage["review_evidence_options"][0]["artifact_path"] == "frames/frame.png"
+    assert coverage["candidate_missing_region_statistics"]["regions"][0][
+        "boundary_coordinates_enu_m"
+    ]
+    image_asset = DatasetAsset(path="frames/frame.png", sha256=sha256_file(image))
     request = CompletionRequest(
         source_geometry_sha256=source_hash,
         reviews=(
@@ -208,14 +223,116 @@ def test_completion_refuses_missing_hash_mismatch_and_ambiguous_symmetry(tmp_pat
     assert unavailable["status"] == "unavailable"
 
 
+def test_completion_requires_hash_bound_selected_frame_evidence(tmp_path: Path) -> None:
+    _, record, run_dir, source_mesh, image = prepare_dense_run(tmp_path)
+    write_coverage_report(record, run_dir)
+    boundary = boundary_id(list(range(8)))
+    no_image, _, _ = run_completion(
+        record,
+        run_dir,
+        CompletionRequest(
+            reviews=(
+                GapReview(
+                    boundary_id=boundary,
+                    decision="CONFIRMED_SMALL_GAP",
+                    reviewer="operator",
+                    explanation="appears bounded",
+                ),
+            )
+        ),
+    )
+    assert no_image["status"] == "refused"
+    mismatched, _, _ = run_completion(
+        record,
+        run_dir,
+        CompletionRequest(
+            source_geometry_sha256=sha256_file(source_mesh),
+            reviews=(
+                GapReview(
+                    boundary_id=boundary,
+                    decision="CONFIRMED_SMALL_GAP",
+                    reviewer="operator",
+                    explanation="appears bounded",
+                    source_images=(
+                        DatasetAsset(path="frames/frame.png", sha256="0" * 64),
+                    ),
+                ),
+            ),
+        ),
+    )
+    assert mismatched["status"] == "refused"
+    assert "hash-matched" in mismatched["failure_reason"]
+    structural, _, _ = run_completion(
+        record,
+        run_dir,
+        CompletionRequest(
+            reviews=(
+                GapReview(
+                    boundary_id=boundary,
+                    decision="STRUCTURAL_OPENING",
+                    reviewer="operator",
+                    explanation="doorway",
+                ),
+            )
+        ),
+    )
+    assert structural["status"] == "refused"
+    assert structural["inferred_regions_present"] is False
+    assert image.is_file()
+
+
+def test_coverage_uses_only_hash_bound_metric_camera_z_depth(tmp_path: Path) -> None:
+    store, record, run_dir, _, _ = prepare_dense_run(tmp_path)
+    video_hash = next(
+        item.sha256 for item in store.get_project(record.project_id).assets if item.role == "video"
+    )
+    depth = np.full((40, 40), 2.0, dtype=np.float32)
+    depth_path = run_dir / "coverage" / "depth.npy"
+    depth_path.parent.mkdir()
+    np.save(depth_path, depth, allow_pickle=False)
+    contract = run_dir / "coverage_depth_views.json"
+    row = {
+        "frame_id": "frame.png",
+        "video_sha256": video_hash,
+        "selected": True,
+        "world_to_camera": [
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 2],
+            [0, 0, 0, 1],
+        ],
+        "intrinsics": [[10, 0, 20], [0, 10, 20], [0, 0, 1]],
+        "depth_artifact_path": "coverage/depth.npy",
+        "depth_artifact_sha256": sha256_file(depth_path),
+        "depth_array_sha256": depth_array_sha256(depth),
+        "depth_semantics": "CAMERA_Z_METRES",
+    }
+    atomic_json(contract, {"schema_version": "1.0", "video_sha256": video_hash, "views": [row]})
+    store.register_artifacts(record, [depth_path, contract])
+    payload = json.loads(write_coverage_report(record, run_dir, video_sha256=video_hash).read_text())
+    assert payload["metric_depth_status"] == "COMPLETED"
+    assert "CAMERA_Z" in payload["method"]
+
+    row["depth_semantics"] = "RELATIVE_MONOCULAR"
+    atomic_json(contract, {"schema_version": "1.0", "video_sha256": video_hash, "views": [row]})
+    store.register_artifacts(record, [contract])
+    rejected = json.loads(
+        write_coverage_report(record, run_dir, video_sha256=video_hash).read_text()
+    )
+    assert rejected["status"] == "COMPLETED"
+    assert rejected["metric_depth_status"] == "REJECTED"
+    assert "camera-Z" in rejected["warnings"][0]["message"]
+
+
 def test_completion_cancellation_and_timeout_are_cooperative(tmp_path: Path) -> None:
     _, record, run_dir, _, image = prepare_dense_run(tmp_path)
+    write_coverage_report(record, run_dir)
     review = GapReview(
         boundary_id=boundary_id(list(range(8))),
         decision="CONFIRMED_SMALL_GAP",
         reviewer="fixture",
         explanation="fixture",
-        source_images=(DatasetAsset(path="source.png", sha256=sha256_file(image)),),
+        source_images=(DatasetAsset(path="frames/frame.png", sha256=sha256_file(image)),),
     )
     with pytest.raises(ProcessCancelledError):
         run_completion(
@@ -248,3 +365,84 @@ def test_ai_status_api_and_duplicate_completion_lock(tmp_path: Path) -> None:
                 json={"method": "BOUNDED_PLANAR_GAP"},
             )
         assert response.status_code == 409
+        assert client.post(f"/api/runs/{record.run_id}/exports").status_code == 201
+        completion = client.post(
+            f"/api/runs/{record.run_id}/completion",
+            json={"method": "BOUNDED_PLANAR_GAP"},
+        )
+        assert completion.status_code == 201
+        assert completion.json()["status"] == "unavailable"
+        assert client.get(f"/api/runs/{record.run_id}/exports").status_code == 409
+        updated = app.state.store.get_run(record.run_id)
+        declared = {item.relative_path for item in updated.artifacts}
+        assert "post_run_operations.json" in declared
+        assert "export_readiness.json" not in declared
+        assert any(path.startswith("reports/export_readiness-before-completion-") for path in declared)
+        versioned = completion.json()["versioned_status_url"].split("/artifacts/", 1)[1]
+        assert versioned in declared
+
+
+def test_post_run_success_export_then_refusal_preserves_versioned_attempt(
+    tmp_path: Path,
+) -> None:
+    app = create_app(tmp_path / "post-run-projects")
+    with TestClient(app) as client:
+        store, record, run_dir, mesh, image = prepare_dense_run(
+            tmp_path, store=app.state.store
+        )
+        coverage_path = write_coverage_report(record, run_dir)
+        store.register_artifacts(record, [coverage_path])
+        record.status = record.stage = RunStatus.COMPLETED
+        store.save_run(record)
+        accepted_request = {
+            "method": "BOUNDED_PLANAR_GAP",
+            "source_geometry_sha256": sha256_file(mesh),
+            "reviews": [
+                {
+                    "boundary_id": boundary_id(list(range(8))),
+                    "decision": "CONFIRMED_SMALL_GAP",
+                    "reviewer": "fixture",
+                    "explanation": "bounded removed patch",
+                    "source_images": [
+                        {"path": "frames/frame.png", "sha256": sha256_file(image)}
+                    ],
+                }
+            ],
+        }
+        accepted = client.post(
+            f"/api/runs/{record.run_id}/completion", json=accepted_request
+        )
+        assert accepted.status_code == 201 and accepted.json()["status"] == "completed"
+        inferred_relative = accepted.json()["inferred_artifact_url"].split(
+            "/artifacts/", 1
+        )[1]
+        assert client.post(
+            f"/api/runs/{record.run_id}/exports",
+            json={"include_completed_geometry": True},
+        ).status_code == 201
+
+        refused_request = {
+            "method": "BOUNDED_PLANAR_GAP",
+            "source_geometry_sha256": "0" * 64,
+            "reviews": [],
+        }
+        refused = client.post(
+            f"/api/runs/{record.run_id}/completion", json=refused_request
+        )
+        assert refused.status_code == 201 and refused.json()["status"] == "refused"
+        assert refused.json()["previous_completed_attempt"]["fingerprint"] == accepted.json()[
+            "fingerprint"
+        ]
+        assert client.get(f"/api/runs/{record.run_id}/exports").status_code == 409
+        updated = store.get_run(record.run_id)
+        assert inferred_relative in {item.relative_path for item in updated.artifacts}
+        operation_count = len(
+            json.loads((run_dir / "post_run_operations.json").read_text())["operations"]
+        )
+        repeated = client.post(
+            f"/api/runs/{record.run_id}/completion", json=refused_request
+        )
+        assert repeated.json()["fingerprint"] == refused.json()["fingerprint"]
+        assert len(
+            json.loads((run_dir / "post_run_operations.json").read_text())["operations"]
+        ) == operation_count

@@ -167,6 +167,61 @@ export interface AiStageSummary {
   failure_reason?: string | null;
 }
 
+export interface GapEvidenceOption {
+  image_name: string;
+  artifact_path: string;
+  artifact_url: string;
+  sha256: string;
+  frame_index?: number | null;
+}
+
+export interface GapCandidateRegion {
+  boundary_id: string;
+  area_m2?: number;
+  diameter_m?: number;
+  reasons?: string[];
+  boundary_coordinates_enu_m?: number[][];
+  eligible_for_operator_review?: boolean;
+}
+
+export interface CoverageStatus {
+  status: string;
+  source_geometry_sha256?: string | null;
+  source_frame_set_sha256?: string | null;
+  metric_depth_status?: string;
+  candidate_missing_region_statistics?: {
+    regions?: GapCandidateRegion[];
+  };
+  review_evidence_options?: GapEvidenceOption[];
+  warnings?: Array<{ code?: string; message?: string }>;
+  limitations?: string[];
+}
+
+export type GapDecision = "CONFIRMED_SMALL_GAP" | "STRUCTURAL_OPENING" | "UNKNOWN";
+
+export interface CompletionRequestPayload {
+  method: "BOUNDED_PLANAR_GAP";
+  source_geometry_sha256?: string;
+  reviews: Array<{
+    boundary_id: string;
+    decision: GapDecision;
+    reviewer: string;
+    explanation: string;
+    source_images: Array<{ path: string; sha256: string }>;
+  }>;
+}
+
+export interface CompletionStatus {
+  status: string;
+  fingerprint?: string;
+  failure_reason?: string | null;
+  artifact_url?: string | null;
+  inferred_artifact_url?: string | null;
+  inferred_regions_present?: boolean;
+  eligible_for_measurement?: false;
+  warnings?: string[];
+}
+
 export interface ExportFile {
   relative_path: string;
   url: string;

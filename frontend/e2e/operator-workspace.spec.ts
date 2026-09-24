@@ -10,7 +10,7 @@ test("offline fixture opens the WebGL operator workspace", async ({ page }, test
   await expect(page.getByText("90%", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /AI depth/i })).toBeDisabled();
   await expect(page.getByRole("button", { name: /Photographic RGB/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Evidence Cloud/i })).toHaveClass(/is-active/);
+  await expect(page.getByRole("button", { name: /^Observed$/i })).toHaveClass(/is-active/);
   await expect(page.getByRole("button", { name: /Textured Model/i })).toBeDisabled();
   await expect(page.getByRole("button", { name: /Photoreal View/i })).toBeDisabled();
   await expect(page.getByText("Confidence unavailable for this run")).toBeVisible();

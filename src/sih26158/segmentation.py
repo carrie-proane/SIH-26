@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -13,7 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .process_control import ProcessCancelledError, ProcessTimeoutError
+from .process_control import ManagedProcessExecutor, ProcessCancelledError, ProcessTimeoutError
 from .scene_policy import update_masking_decision
 from .storage import atomic_json, sha256_file
 
@@ -178,6 +180,103 @@ def _write_report(run_dir: Path, payload: dict[str, object]) -> Path:
     return report_path
 
 
+def clear_segmentation_outputs(
+    run_dir: Path, keyframes: list[dict[str, object]]
+) -> None:
+    """Remove a partial mask set so downstream tools can never consume it."""
+
+    for frame in keyframes:
+        name = Path(str(frame.get("image_name", ""))).name
+        if name:
+            for relative in (
+                f"masks/{Path(name).stem}_dynamic.png",
+                f"masks/reconstruction/{name}.png",
+                f"masks/reconstruction/{name}.mask.png",
+            ):
+                (run_dir / relative).unlink(missing_ok=True)
+        for key in ("dynamic_mask_fraction", "mask_url", "mask_semantics"):
+            frame.pop(key, None)
+    for name in (
+        "segmentation_contact_sheet.jpg",
+        "segmentation_review.json",
+        "segmentation_comparison.json",
+    ):
+        (run_dir / name).unlink(missing_ok=True)
+
+
+def run_managed_segmentation(
+    run_dir: Path,
+    run_id: str,
+    keyframes: list[dict[str, object]],
+    model_path: str | None,
+    *,
+    reconstruction_target: str,
+    masking_mode: str,
+    settings: SegmentationSettings,
+    executor: ManagedProcessExecutor,
+    accelerator_authorized: bool = False,
+    worker_command: list[str] | None = None,
+) -> tuple[list[Path], list[dict[str, str]]]:
+    """Run the model in a managed process group with hard cancellation and timeout."""
+
+    if settings.device != "cpu" and not accelerator_authorized:
+        raise ValueError("Accelerator inference requires an explicit scheduler allocation")
+    outcome = run_dir / ".segmentation-worker-outcome.json"
+    outcome.unlink(missing_ok=True)
+    command = worker_command or [
+        sys.executable,
+        "-m",
+        "sih26158.segmentation_worker",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--reconstruction-target",
+        reconstruction_target,
+        "--masking-mode",
+        masking_mode,
+        "--settings-json",
+        json.dumps(asdict(settings), sort_keys=True),
+        "--outcome",
+        str(outcome),
+    ]
+    if model_path:
+        command.extend(("--model-path", model_path))
+    try:
+        completed = executor.run(command, capture_output=True)
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or "worker exited without diagnostics").strip()
+            raise RuntimeError(f"Segmentation worker failed ({completed.returncode}): {detail[-1000:]}")
+        payload = json.loads(outcome.read_text(encoding="utf-8"))
+        relative_paths = payload.get("artifacts", [])
+        if not isinstance(relative_paths, list):
+            raise TypeError("Segmentation worker returned an invalid artifact list")
+        artifacts: list[Path] = []
+        root = run_dir.resolve()
+        for relative in relative_paths:
+            candidate = (run_dir / str(relative)).resolve()
+            if candidate != root and root not in candidate.parents:
+                raise ValueError("Segmentation worker returned an unsafe artifact path")
+            if not candidate.is_file():
+                raise ValueError(f"Segmentation worker artifact is missing: {relative}")
+            artifacts.append(candidate)
+        updated = json.loads((run_dir / "keyframes.json").read_text(encoding="utf-8"))
+        rows = updated.get("frames", []) if isinstance(updated, dict) else []
+        if not isinstance(rows, list):
+            raise TypeError("Segmentation worker produced invalid keyframes")
+        keyframes[:] = rows
+        warnings = payload.get("warnings", [])
+        if not isinstance(warnings, list):
+            raise TypeError("Segmentation worker returned invalid warnings")
+        return artifacts, warnings
+    except Exception:
+        clear_segmentation_outputs(run_dir, keyframes)
+        outcome.unlink(missing_ok=True)
+        raise
+    finally:
+        outcome.unlink(missing_ok=True)
+
+
 def run_optional_segmentation(
     run_dir: Path,
     run_id: str,
@@ -214,26 +313,7 @@ def run_optional_segmentation(
         if time.monotonic() - started >= settings.timeout_s:
             raise ProcessTimeoutError("Segmentation exceeded its cooperative deadline")
 
-    def clear_outputs() -> None:
-        for frame in keyframes:
-            name = Path(str(frame.get("image_name", ""))).name
-            if name:
-                for relative in (
-                    f"masks/{Path(name).stem}_dynamic.png",
-                    f"masks/reconstruction/{name}.png",
-                    f"masks/reconstruction/{name}.mask.png",
-                ):
-                    (run_dir / relative).unlink(missing_ok=True)
-            for key in ("dynamic_mask_fraction", "mask_url", "mask_semantics"):
-                frame.pop(key, None)
-        for name in (
-            "segmentation_contact_sheet.jpg",
-            "segmentation_review.json",
-            "segmentation_comparison.json",
-        ):
-            (run_dir / name).unlink(missing_ok=True)
-
-    clear_outputs()
+    clear_segmentation_outputs(run_dir, keyframes)
     selected_count = sum(bool(frame.get("selected", True)) for frame in keyframes)
     base_report: dict[str, object] = {
         "schema_version": "2.1",
@@ -451,7 +531,7 @@ def run_optional_segmentation(
     except Exception as exc:  # Cleanup is required even for unexpected provider failures.
         for artifact in artifacts:
             artifact.unlink(missing_ok=True)
-        clear_outputs()
+        clear_segmentation_outputs(run_dir, keyframes)
         if isinstance(exc, (ProcessCancelledError, ProcessTimeoutError)):
             raise
         blocked = masking_mode == "REQUIRED" or reconstruction_target == "PRIMARY_SUBJECT"

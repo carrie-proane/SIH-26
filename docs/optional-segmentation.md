@@ -15,16 +15,16 @@ Missing packages, unreadable/invalid checkpoints and wrong model tasks produce e
 blocker reports. No model is fetched; automatic dependency installation is disabled before loading
 Ultralytics. Use only approved local weights. No checkpoint or model execution is included here.
 
-`SegmentationSettings` adds explicit device (CPU by default), inference size, confidence,
-max detections, max frames, cooperative deadline and contact-sheet sample count. Accelerator use
-requires caller authorization after scheduler allocation. The caller must pass its cancellation
-callback; cancellation/timeouts propagate and remove partial masks. Checks run before and after
-model calls. A stuck call needs Jay's existing managed-process isolation for a hard timeout; this
-module does not create another runner. The current pipeline does not yet wire these new controls.
+`SegmentationSettings` provides an explicit device (CPU by default), inference size, confidence,
+max detections, max frames, deadline and contact-sheet sample count. The integrated pipeline runs
+the local model in a child process group through the existing managed executor and global
+heavy-job slot. Cancellation, heartbeat failure or deadline expiry terminates the process tree and
+removes partial masks before downstream reconstruction can see them. Accelerator use requires the
+pipeline's scheduler allocation; `CUDA_VISIBLE_DEVICES` values that hide CUDA are respected. CPU
+fallback occurs only when `segmentation_allow_cpu_fallback` is explicitly enabled.
 
-The PREPROCESS integration must consume `segmentation_fingerprint_inputs` so environment-resolved
-weights and all new settings invalidate caches. That helper is tested but intentionally not wired
-into Jay's pipeline here. Use fresh runs until the integration is complete.
+The SEGMENTATION checkpoint fingerprint consumes `segmentation_fingerprint_inputs`, so resolved
+weights, model bytes, dependency versions, selected-frame hashes and all settings invalidate reuse.
 
 ## Mask and review artifacts
 

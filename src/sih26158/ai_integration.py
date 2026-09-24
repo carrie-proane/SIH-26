@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .completion import assess_gap, boundary_loops, complete_planar_gaps, load_observed_mesh
 from .completion_contract import CompletionParameters, GapReview, MeshCoordinates, MeshSource
+from .coverage import DepthView, analyze_surface_support
 from .dataset import DatasetAsset
 from .exports import ExportUnavailable, _load_ply
 from .models import RunConfig, RunRecord
@@ -30,6 +31,7 @@ from .segmentation import SegmentationSettings, segmentation_fingerprint_inputs
 from .storage import atomic_json, sha256_file
 
 AI_STAGE_CONTRACT_VERSION = "1.0"
+MAX_METRIC_DEPTH_ARTIFACT_BYTES = 134_217_728
 
 
 def canonical_hash(value: object) -> str:
@@ -58,10 +60,14 @@ def resolve_segmentation_device(config: RunConfig) -> tuple[str | None, list[dic
     if requested == "cpu":
         return "cpu", []
     available = False
+    cuda_visibility = os.environ.get("CUDA_VISIBLE_DEVICES")
+    cuda_explicitly_hidden = requested == "cuda" and cuda_visibility is not None and (
+        not cuda_visibility.strip() or cuda_visibility.strip() == "-1"
+    )
     try:
         import torch
 
-        available = (
+        available = not cuda_explicitly_hidden and (
             bool(torch.cuda.is_available())
             if requested == "cuda"
             else bool(hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
@@ -101,6 +107,10 @@ def selected_frame_evidence(run_dir: Path) -> dict[str, object]:
                 "frame_index": frame.get("frame_index"),
                 "image_name": name,
                 "sha256": sha256_file(path) if name and path.is_file() else None,
+                "artifact_path": f"frames/{name}" if name and path.is_file() else None,
+                "artifact_url": f"/api/runs/{{run_id}}/artifacts/frames/{name}"
+                if name and path.is_file()
+                else None,
             }
         )
     return {
@@ -247,9 +257,63 @@ def observed_mesh_source(record: RunRecord, run_dir: Path) -> tuple[MeshSource |
     )
 
 
-def write_coverage_report(record: RunRecord, run_dir: Path) -> Path:
+def _declared_metric_depth_views(
+    record: RunRecord, run_dir: Path, video_sha256: str
+) -> tuple[DepthView, ...]:
+    contract_relative = "coverage_depth_views.json"
+    declared = _declared(record)
+    contract_artifact = declared.get(contract_relative)
+    if contract_artifact is None:
+        return ()
+    contract_path = run_dir / contract_relative
+    if not contract_path.is_file() or sha256_file(contract_path) != contract_artifact.sha256:
+        raise ValueError("Declared metric-depth contract checksum mismatch")
+    payload = json.loads(contract_path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != "1.0" or payload.get("video_sha256") != video_sha256:
+        raise ValueError("Metric-depth contract is not bound to this run's raw video hash")
+    rows = payload.get("views")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Metric-depth contract contains no views")
+    views: list[DepthView] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise TypeError("Metric-depth view must be an object")
+        relative = str(row.get("depth_artifact_path", ""))
+        artifact = declared.get(relative)
+        path = (run_dir / relative).resolve()
+        if (
+            artifact is None
+            or not path.is_relative_to(run_dir.resolve())
+            or not path.is_file()
+            or path.stat().st_size > MAX_METRIC_DEPTH_ARTIFACT_BYTES
+            or sha256_file(path) != artifact.sha256
+            or row.get("depth_artifact_sha256") != artifact.sha256
+        ):
+            raise ValueError(
+                "Metric-depth view is not a bounded, hash-matched declared artifact"
+            )
+        depth = np.load(path, allow_pickle=False)
+        views.append(
+            DepthView(
+                frame_id=str(row.get("frame_id", "")),
+                video_sha256=str(row.get("video_sha256", "")),
+                world_to_camera=np.asarray(row.get("world_to_camera"), dtype=float),
+                intrinsics=np.asarray(row.get("intrinsics"), dtype=float),
+                depth_m=depth,
+                depth_sha256=str(row.get("depth_array_sha256", "")),
+                selected=bool(row.get("selected", False)),
+                depth_semantics=str(row.get("depth_semantics", "")),
+            )
+        )
+    return tuple(views)
+
+
+def write_coverage_report(
+    record: RunRecord, run_dir: Path, *, video_sha256: str | None = None
+) -> Path:
     source, reason = observed_mesh_source(record, run_dir)
     frame_evidence = selected_frame_evidence(run_dir)
+    declared_artifacts = _declared(record)
     payload: dict[str, object] = {
         "schema_version": "2.0",
         "contract_status": "INTEGRATED",
@@ -258,6 +322,17 @@ def write_coverage_report(record: RunRecord, run_dir: Path) -> Path:
         "method_version": AI_STAGE_CONTRACT_VERSION,
         "source_geometry_sha256": source.artifact.sha256 if source else None,
         "source_frame_set_sha256": frame_evidence["selected_frame_set_sha256"],
+        "review_evidence_options": [
+            {
+                **item,
+                "artifact_url": str(item["artifact_url"]).format(run_id=record.run_id),
+            }
+            for item in frame_evidence["selected_frames"]
+            if item.get("sha256")
+            and item.get("artifact_path")
+            and (declared_item := declared_artifacts.get(str(item["artifact_path"]))) is not None
+            and declared_item.sha256 == item["sha256"]
+        ],
         "observed_region_statistics": {},
         "candidate_missing_region_statistics": {},
         "disconnected_components": None,
@@ -267,6 +342,7 @@ def write_coverage_report(record: RunRecord, run_dir: Path) -> Path:
         "reference_surface_area_m2": None,
         "denominator": None,
         "warnings": [],
+        "metric_depth_status": "NOT_DECLARED",
         "limitations": [
             "Topology can identify bounded holes but cannot prove that unseen surfaces exist.",
             "No defensible visible-scene reference denominator is available.",
@@ -285,7 +361,14 @@ def write_coverage_report(record: RunRecord, run_dir: Path) -> Path:
             mesh = load_observed_mesh(run_dir, source)
             loops, edge_faces = boundary_loops(mesh)
             parameters = CompletionParameters()
-            regions = [assess_gap(mesh, loop, edge_faces, parameters) for loop in loops]
+            regions = []
+            for loop in loops:
+                region = assess_gap(mesh, loop, edge_faces, parameters)
+                region["boundary_coordinates_enu_m"] = np.asarray(
+                    mesh.vertices[np.asarray(loop, dtype=int)]
+                ).tolist()
+                region["eligible_for_operator_review"] = not bool(region.get("reasons"))
+                regions.append(region)
             eligible = [item for item in regions if not item.get("reasons")]
             components = trimesh.graph.connected_components(
                 mesh.face_adjacency, nodes=np.arange(len(mesh.faces)), min_len=1
@@ -310,6 +393,22 @@ def write_coverage_report(record: RunRecord, run_dir: Path) -> Path:
                 },
                 sufficient_for_completion=bool(eligible),
             )
+            if video_sha256 and "coverage_depth_views.json" in _declared(record):
+                try:
+                    depth_views = _declared_metric_depth_views(record, run_dir, video_sha256)
+                    depth_support = analyze_surface_support(
+                        run_dir, source, depth_views, video_sha256=video_sha256
+                    )
+                    payload["method"] = (
+                        "OBSERVED_MESH_TOPOLOGY_AND_RECTIFIED_CAMERA_Z_DEPTH_CONSISTENCY"
+                    )
+                    payload["metric_depth_status"] = depth_support.status
+                    payload["depth_support"] = depth_support.model_dump(mode="json")
+                except (OSError, ValueError, TypeError) as exc:
+                    payload["metric_depth_status"] = "REJECTED"
+                    payload["warnings"].append(
+                        {"code": "METRIC_DEPTH_REJECTED", "message": str(exc)}
+                    )
         except (ExportUnavailable, OSError, ValueError, RuntimeError, IndexError) as exc:
             payload["failure_reason"] = str(exc)
             payload["warnings"] = [{"code": "COVERAGE_ANALYSIS_UNAVAILABLE", "message": str(exc)}]
@@ -378,6 +477,49 @@ def _completion_status(
     }
 
 
+def _publish_completion_status(
+    record: RunRecord, run_dir: Path, payload: dict[str, object]
+) -> tuple[dict[str, object], list[Path]]:
+    """Version every decision while exposing one declared current-status pointer."""
+
+    current = run_dir / "completion_status.json"
+    previous: dict[str, object] = {}
+    if current.is_file():
+        try:
+            parsed = json.loads(current.read_text(encoding="utf-8"))
+            if isinstance(parsed, dict):
+                previous = parsed
+        except (OSError, json.JSONDecodeError):
+            pass
+    if previous.get("status") == "completed" and previous.get("fingerprint") != payload.get(
+        "fingerprint"
+    ):
+        payload["previous_completed_attempt"] = {
+            key: previous.get(key)
+            for key in (
+                "fingerprint",
+                "artifact_url",
+                "artifact_sha256",
+                "inferred_artifact_url",
+                "inferred_artifact_sha256",
+                "face_provenance_url",
+            )
+        }
+    fingerprint = str(payload["fingerprint"])
+    attempt_dir = run_dir / "completion" / "requests" / fingerprint
+    attempt_dir.mkdir(parents=True, exist_ok=True)
+    decision_hash = canonical_hash(payload)[:16]
+    versioned = attempt_dir / f"status-{decision_hash}.json"
+    versioned_url = (
+        f"/api/runs/{record.run_id}/artifacts/"
+        f"{versioned.relative_to(run_dir).as_posix()}"
+    )
+    payload["versioned_status_url"] = versioned_url
+    atomic_json(versioned, payload)
+    atomic_json(current, payload)
+    return payload, [current, versioned]
+
+
 def write_completion_not_run(record: RunRecord, run_dir: Path, reason: str) -> Path:
     source, _ = observed_mesh_source(record, run_dir)
     fingerprint = completion_fingerprint(source, CompletionRequest())
@@ -389,9 +531,8 @@ def write_completion_not_run(record: RunRecord, run_dir: Path, reason: str) -> P
         fingerprint=fingerprint,
         failure_reason=reason,
     )
-    path = run_dir / "completion_status.json"
-    atomic_json(path, payload)
-    return path
+    _, paths = _publish_completion_status(record, run_dir, payload)
+    return paths[0]
 
 
 def run_completion(
@@ -440,8 +581,8 @@ def run_completion(
             fingerprint=fingerprint,
             failure_reason=source_reason,
         )
-        atomic_json(status_path, payload)
-        return payload, [status_path], False
+        payload, status_paths = _publish_completion_status(record, run_dir, payload)
+        return payload, status_paths, False
     if request.source_geometry_sha256 and request.source_geometry_sha256 != source.artifact.sha256:
         payload = _completion_status(
             record,
@@ -451,8 +592,50 @@ def run_completion(
             fingerprint=fingerprint,
             failure_reason="Requested source geometry hash does not match the declared observed mesh",
         )
-        atomic_json(status_path, payload)
-        return payload, [status_path], False
+        payload, status_paths = _publish_completion_status(record, run_dir, payload)
+        return payload, status_paths, False
+    coverage_path = run_dir / "coverage_report.json"
+    try:
+        coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        coverage = {}
+    declared = _declared(record)
+    allowed_evidence = {
+        (str(item.get("artifact_path")), str(item.get("sha256")))
+        for item in coverage.get("review_evidence_options", [])
+        if isinstance(item, dict)
+        and (artifact := declared.get(str(item.get("artifact_path")))) is not None
+        and artifact.sha256 == item.get("sha256")
+    }
+    for review in request.reviews:
+        if review.decision == "CONFIRMED_SMALL_GAP" and not review.source_images:
+            payload = _completion_status(
+                record,
+                status="refused",
+                method=request.method,
+                source_hash=source.artifact.sha256,
+                fingerprint=fingerprint,
+                failure_reason=(
+                    f"Confirmed gap {review.boundary_id} requires declared selected-frame evidence"
+                ),
+            )
+            payload, status_paths = _publish_completion_status(record, run_dir, payload)
+            return payload, status_paths, False
+        for image in review.source_images:
+            if (image.path, image.sha256) not in allowed_evidence:
+                payload = _completion_status(
+                    record,
+                    status="refused",
+                    method=request.method,
+                    source_hash=source.artifact.sha256,
+                    fingerprint=fingerprint,
+                    failure_reason=(
+                        f"Review evidence for {review.boundary_id} is not a hash-matched "
+                        "declared selected frame"
+                    ),
+                )
+                payload, status_paths = _publish_completion_status(record, run_dir, payload)
+                return payload, status_paths, False
     if request.method == "SYMMETRY":
         reason = "Symmetry completion is not implemented and no inferred geometry was produced"
         if request.symmetry_plane is None or (request.symmetry_confidence or 0) < 0.8:
@@ -465,8 +648,8 @@ def run_completion(
             fingerprint=fingerprint,
             failure_reason=reason,
         )
-        atomic_json(status_path, payload)
-        return payload, [status_path], False
+        payload, status_paths = _publish_completion_status(record, run_dir, payload)
+        return payload, status_paths, False
 
     with tempfile.TemporaryDirectory(prefix=f"sih-completion-{record.run_id}-") as temporary:
         bundle = Path(temporary) / "bundle"
@@ -491,8 +674,8 @@ def run_completion(
                 warnings=engine.warnings,
             )
             payload["candidate_regions"] = engine.rejected_regions
-            atomic_json(status_path, payload)
-            return payload, [status_path], False
+            payload, status_paths = _publish_completion_status(record, run_dir, payload)
+            return payload, status_paths, False
 
         observed = load_observed_mesh(run_dir, source, request.parameters)
         inferred = _load_ply(bundle / "completion" / "generated_mesh.ply")
@@ -574,6 +757,6 @@ def run_completion(
                 "value": None,
             },
         )
-        atomic_json(status_path, payload)
-        paths = [status_path, *sorted(path for path in final.iterdir() if path.is_file())]
+        payload, status_paths = _publish_completion_status(record, run_dir, payload)
+        paths = [*status_paths, *sorted(path for path in final.iterdir() if path.is_file())]
         return payload, paths, False
